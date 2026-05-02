@@ -1,3 +1,4 @@
+import { DEMO_USER_ID } from "@/lib/constants";
 import { useState } from "react";
 import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
@@ -32,14 +33,14 @@ export default function DocumentLab() {
     const finalName = contractName.trim() || "Untitled Contract";
 
     analyzeContract(
-      { data: { contractText, userId: "demo-user", contractName: finalName } },
+      { data: { contractText, userId: DEMO_USER_ID, contractName: finalName } },
       {
         onSuccess: (result) => {
           setScanResult(result);
           // Auto-save
           saveScan({
             data: {
-              userId: "demo-user",
+              userId: DEMO_USER_ID,
               contractName: finalName,
               contractText,
               result

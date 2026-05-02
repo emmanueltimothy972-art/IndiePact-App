@@ -29,24 +29,22 @@ router.get("/dashboard/summary", async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch summary" });
   }
 
-  const scans = data ?? [];
+  const scans = (data ?? []) as Array<Record<string, unknown>>;
   const totalScans = scans.length;
+
   const totalMoneyProtected = scans.reduce(
-    (sum: number, s: Record<string, unknown>) => sum + (Number(s["revenue_at_risk_max"]) || 0),
+    (sum, s) => sum + (Number(s["money_risk"]) || 0),
     0
   );
+
   const averageProtectionScore =
     totalScans > 0
-      ? scans.reduce(
-          (sum: number, s: Record<string, unknown>) => sum + (Number(s["protection_score"]) || 0),
-          0
-        ) / totalScans
+      ? scans.reduce((sum, s) => sum + (Number(s["protection_score"]) || 0), 0) / totalScans
       : 0;
 
   const allRisks: Array<Record<string, unknown>> = [];
   for (const scan of scans) {
-    const result = scan["result"] as Record<string, unknown>;
-    const risks = (result?.["risks"] ?? []) as Array<Record<string, unknown>>;
+    const risks = (scan["risks_json"] as Array<Record<string, unknown>>) ?? [];
     allRisks.push(...risks);
   }
 
@@ -89,30 +87,18 @@ router.get("/dashboard/risk-trends", async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch trends" });
   }
 
-  const scans = data ?? [];
-
+  const scans = (data ?? []) as Array<Record<string, unknown>>;
   const trendMap: Record<string, Record<string, number>> = {};
 
   for (const scan of scans) {
-    const date = new Date(scan["created_at"] as string)
-      .toISOString()
-      .slice(0, 10);
-
+    const date = new Date(scan["created_at"] as string).toISOString().slice(0, 10);
     if (!trendMap[date]) {
       trendMap[date] = {
-        scopeCreep: 0,
-        paymentDelay: 0,
-        ipOwnership: 0,
-        liability: 0,
-        termination: 0,
-        revisionAbuse: 0,
-        vagueDeliverables: 0,
+        scopeCreep: 0, paymentDelay: 0, ipOwnership: 0,
+        liability: 0, termination: 0, revisionAbuse: 0, vagueDeliverables: 0,
       };
     }
-
-    const result = scan["result"] as Record<string, unknown>;
-    const risks = (result?.["risks"] ?? []) as Array<Record<string, unknown>>;
-
+    const risks = (scan["risks_json"] as Array<Record<string, unknown>>) ?? [];
     for (const risk of risks) {
       const cat = risk["category"] as string;
       if (cat && trendMap[date][cat] !== undefined) {
@@ -121,26 +107,36 @@ router.get("/dashboard/risk-trends", async (req, res) => {
     }
   }
 
-  const trends = Object.entries(trendMap).map(([date, cats]) => ({
-    date,
-    ...cats,
-  }));
-
+  const trends = Object.entries(trendMap).map(([date, cats]) => ({ date, ...cats }));
   return res.json({ trends });
 });
 
-function mapScanRow(row: Record<string, unknown>) {
+type DbRow = Record<string, unknown>;
+
+function mapScanRow(row: DbRow) {
+  const risks = (row["risks_json"] as unknown[]) ?? [];
+  const moneyRisk = Number(row["money_risk"]) || 0;
+  const protectionScore = Number(row["protection_score"]) || 0;
+
   return {
     id: row["id"] as string,
     userId: row["user_id"] as string,
-    contractName: row["contract_name"] as string,
-    contractText: row["contract_text"] as string,
-    result: row["result"] as Record<string, unknown>,
+    contractName: (row["client_name"] as string) ?? "",
+    contractText: (row["contract_text"] as string) ?? "",
+    result: {
+      moneyImpactSummary: `${risks.length} risk(s) detected.`,
+      revenueAtRiskMin: Math.round(moneyRisk * 0.5),
+      revenueAtRiskMax: moneyRisk,
+      protectionScore,
+      risks,
+      nextStep: "Review all flagged clauses before signing.",
+      rawExtractedClauses: (row["fixes_json"] as string[]) ?? [],
+    },
     createdAt: row["created_at"] as string,
-    protectionScore: row["protection_score"] as number,
-    revenueAtRiskMin: row["revenue_at_risk_min"] as number,
-    revenueAtRiskMax: row["revenue_at_risk_max"] as number,
-    riskCount: row["risk_count"] as number,
+    protectionScore,
+    revenueAtRiskMin: Math.round(moneyRisk * 0.5),
+    revenueAtRiskMax: moneyRisk,
+    riskCount: risks.length,
   };
 }
 

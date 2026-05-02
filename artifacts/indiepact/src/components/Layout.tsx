@@ -1,4 +1,5 @@
 import { ReactNode, useState } from "react";
+import { DEMO_USER_ID } from "@/lib/constants";
 import { Link, useLocation } from "wouter";
 import { FileText, History, LayoutDashboard, ShieldAlert, FileOutput, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -13,7 +14,7 @@ export function Layout({ children }: { children: ReactNode }) {
     if (!scanId) return;
     setIsGenerating(true);
     try {
-      const resp = await fetch(`/api/report/${scanId}?userId=demo-user`);
+      const resp = await fetch(`/api/report/${scanId}?userId=${DEMO_USER_ID}`);
       if (!resp.ok) throw new Error("Failed to generate report");
       const data = await resp.json() as { reportBase64: string; filename: string };
       const link = document.createElement("a");

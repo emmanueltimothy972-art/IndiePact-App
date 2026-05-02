@@ -1,3 +1,4 @@
+import { DEMO_USER_ID } from "@/lib/constants";
 import { PageTransition } from "@/components/PageTransition";
 import { useGetDashboardSummary, useGetRiskTrends } from "@workspace/api-client-react";
 import { getGetDashboardSummaryQueryKey, getGetRiskTrendsQueryKey } from "@workspace/api-client-react";
@@ -7,13 +8,13 @@ import { Link } from "wouter";
 
 export default function Dashboard() {
   const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary(
-    { userId: "demo-user" },
-    { query: { queryKey: getGetDashboardSummaryQueryKey({ userId: "demo-user" }) } }
+    { userId: DEMO_USER_ID },
+    { query: { queryKey: getGetDashboardSummaryQueryKey({ userId: DEMO_USER_ID }) } }
   );
 
   const { data: trends, isLoading: isTrendsLoading } = useGetRiskTrends(
-    { userId: "demo-user", days: 30 },
-    { query: { queryKey: getGetRiskTrendsQueryKey({ userId: "demo-user", days: 30 }) } }
+    { userId: DEMO_USER_ID, days: 30 },
+    { query: { queryKey: getGetRiskTrendsQueryKey({ userId: DEMO_USER_ID, days: 30 }) } }
   );
 
   const riskData = summary ? [

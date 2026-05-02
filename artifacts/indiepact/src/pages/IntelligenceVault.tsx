@@ -1,3 +1,4 @@
+import { DEMO_USER_ID } from "@/lib/constants";
 import { PageTransition } from "@/components/PageTransition";
 import { useListScans } from "@workspace/api-client-react";
 import { getListScansQueryKey } from "@workspace/api-client-react";
@@ -7,8 +8,8 @@ import { ShieldAlert, ChevronRight, FileText, Calendar, DollarSign, AlertTriangl
 
 export default function IntelligenceVault() {
   const { data, isLoading } = useListScans(
-    { userId: "demo-user", limit: 50, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId: "demo-user", limit: 50, offset: 0 }) } }
+    { userId: DEMO_USER_ID, limit: 50, offset: 0 },
+    { query: { queryKey: getListScansQueryKey({ userId: DEMO_USER_ID, limit: 50, offset: 0 }) } }
   );
 
   return (

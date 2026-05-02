@@ -1,3 +1,4 @@
+import { DEMO_USER_ID } from "@/lib/constants";
 import { PageTransition } from "@/components/PageTransition";
 import { useGetScan, getGetScanQueryKey } from "@workspace/api-client-react";
 import { ScanResultView } from "@/components/ScanResultView";
@@ -12,8 +13,8 @@ export default function ScanDetail() {
 
   const { data: scan, isLoading, error } = useGetScan(
     scanId,
-    { userId: "demo-user" },
-    { query: { enabled: !!scanId, queryKey: getGetScanQueryKey(scanId, { userId: "demo-user" }) } }
+    { userId: DEMO_USER_ID },
+    { query: { enabled: !!scanId, queryKey: getGetScanQueryKey(scanId, { userId: DEMO_USER_ID }) } }
   );
 
   if (isLoading) {

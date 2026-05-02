@@ -49,7 +49,6 @@ router.get("/scans", async (req, res) => {
   }
 
   const scans = (data ?? []).map(mapScanRow);
-
   return res.json({ scans, total: count ?? 0 });
 });
 
@@ -65,13 +64,13 @@ router.post("/scans", async (req, res) => {
     .from("scans")
     .insert({
       user_id: userId,
-      contract_name: contractName,
+      client_name: contractName,
       contract_text: contractText,
-      result,
-      protection_score: result.protectionScore,
-      revenue_at_risk_min: result.revenueAtRiskMin,
-      revenue_at_risk_max: result.revenueAtRiskMax,
-      risk_count: result.risks.length,
+      risks_json: result.risks,
+      fixes_json: result.rawExtractedClauses,
+      protection_score: Math.round(result.protectionScore),
+      leverage_score: Math.round(result.protectionScore),
+      money_risk: result.revenueAtRiskMax,
     })
     .select()
     .single();
@@ -81,7 +80,7 @@ router.post("/scans", async (req, res) => {
     return res.status(500).json({ error: "Failed to save scan" });
   }
 
-  return res.status(201).json(mapScanRow(data));
+  return res.status(201).json(mapScanRow(data, result));
 });
 
 router.get("/scans/:scanId", async (req, res) => {
@@ -157,32 +156,47 @@ router.get("/report/:scanId", async (req, res) => {
   }
 
   const scan = mapScanRow(data);
-  const report = generateReportMarkdown(scan);
-
+  const report = generateReportText(scan);
   const base64 = Buffer.from(report).toString("base64");
   const filename = `IndiePact-Report-${scan.contractName.replace(/\s+/g, "-")}.txt`;
 
   return res.json({ reportBase64: base64, filename });
 });
 
-function mapScanRow(row: Record<string, unknown>) {
+type DbRow = Record<string, unknown>;
+
+function mapScanRow(row: DbRow, liveResult?: Record<string, unknown>) {
+  const risks = (row["risks_json"] as unknown[]) ?? [];
+  const protectionScore = Number(row["protection_score"]) || 0;
+  const moneyRisk = Number(row["money_risk"]) || 0;
+
+  const result = liveResult ?? {
+    moneyImpactSummary: `${risks.length} risk(s) detected. Revenue exposure estimated.`,
+    revenueAtRiskMin: Math.round(moneyRisk * 0.5),
+    revenueAtRiskMax: moneyRisk,
+    protectionScore,
+    risks,
+    nextStep: "Review all flagged clauses before signing.",
+    rawExtractedClauses: (row["fixes_json"] as string[]) ?? [],
+  };
+
   return {
     id: row["id"] as string,
     userId: row["user_id"] as string,
-    contractName: row["contract_name"] as string,
-    contractText: row["contract_text"] as string,
-    result: row["result"] as Record<string, unknown>,
+    contractName: (row["client_name"] as string) ?? "",
+    contractText: (row["contract_text"] as string) ?? "",
+    result,
     createdAt: row["created_at"] as string,
-    protectionScore: row["protection_score"] as number,
-    revenueAtRiskMin: row["revenue_at_risk_min"] as number,
-    revenueAtRiskMax: row["revenue_at_risk_max"] as number,
-    riskCount: row["risk_count"] as number,
+    protectionScore,
+    revenueAtRiskMin: Math.round(moneyRisk * 0.5),
+    revenueAtRiskMax: moneyRisk,
+    riskCount: risks.length,
   };
 }
 
-function generateReportMarkdown(scan: ReturnType<typeof mapScanRow>): string {
+function generateReportText(scan: ReturnType<typeof mapScanRow>): string {
   const result = scan.result as Record<string, unknown>;
-  const risks = result["risks"] as Array<Record<string, unknown>>;
+  const risks = (result["risks"] as Array<Record<string, unknown>>) ?? [];
 
   const lines = [
     "INDIEPACT AI — REVENUE PROTECTION REPORT",
@@ -195,14 +209,14 @@ function generateReportMarkdown(scan: ReturnType<typeof mapScanRow>): string {
     "",
     "FINANCIAL IMPACT SUMMARY",
     "------------------------",
-    String(result["moneyImpactSummary"]),
+    String(result["moneyImpactSummary"] ?? ""),
     "",
     "DETECTED RISKS",
     "--------------",
   ];
 
-  for (const risk of risks ?? []) {
-    const fixes = risk["fixes"] as Record<string, string>;
+  for (const risk of risks) {
+    const fixes = (risk["fixes"] ?? {}) as Record<string, string>;
     lines.push("");
     lines.push(`[${risk["severity"]}] ${risk["title"]}`);
     lines.push(`Category: ${risk["category"]}`);
@@ -210,19 +224,19 @@ function generateReportMarkdown(scan: ReturnType<typeof mapScanRow>): string {
     lines.push(`Why This Hurts You: ${risk["whyThisHurtsYou"]}`);
     lines.push("");
     lines.push("Suggested Rewrite:");
-    lines.push(fixes?.["rewrittenClause"] ?? "");
+    lines.push(fixes["rewrittenClause"] ?? "");
     lines.push("");
     lines.push("Negotiation Rebuttals:");
-    lines.push(`  Direct: ${fixes?.["direct"] ?? ""}`);
-    lines.push(`  Diplomatic: ${fixes?.["diplomatic"] ?? ""}`);
-    lines.push(`  Legal: ${fixes?.["legal"] ?? ""}`);
+    lines.push(`  Direct: ${fixes["direct"] ?? ""}`);
+    lines.push(`  Diplomatic: ${fixes["diplomatic"] ?? ""}`);
+    lines.push(`  Legal: ${fixes["legal"] ?? ""}`);
     lines.push("---");
   }
 
   lines.push("");
   lines.push("RECOMMENDED NEXT STEP");
   lines.push("---------------------");
-  lines.push(String(result["nextStep"]));
+  lines.push(String(result["nextStep"] ?? ""));
   lines.push("");
   lines.push("Generated by IndiePact AI — Your Revenue Protection OS");
 
