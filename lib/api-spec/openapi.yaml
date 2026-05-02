@@ -3,13 +3,19 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: IndiePact AI - Revenue Protection OS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: analyze
+    description: Contract analysis operations
+  - name: scans
+    description: Scan history operations
+  - name: dashboard
+    description: Dashboard and analytics operations
 paths:
   /healthz:
     get:
@@ -24,6 +30,218 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /analyze:
+    post:
+      operationId: analyzeContract
+      tags: [analyze]
+      summary: Analyze a contract for risks
+      description: Runs pre-filter and AI analysis on contract text, returns structured risk report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeContractBody"
+      responses:
+        "200":
+          description: Analysis complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /scans:
+    get:
+      operationId: listScans
+      tags: [scans]
+      summary: List all scans for authenticated user
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of scans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScansListResponse"
+
+    post:
+      operationId: saveScan
+      tags: [scans]
+      summary: Save a completed scan result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveScanBody"
+      responses:
+        "201":
+          description: Scan saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedScan"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /scans/{scanId}:
+    get:
+      operationId: getScan
+      tags: [scans]
+      summary: Get a specific scan by ID
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedScan"
+        "404":
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: deleteScan
+      tags: [scans]
+      summary: Delete a scan
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats for user
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/risk-trends:
+    get:
+      operationId: getRiskTrends
+      tags: [dashboard]
+      summary: Get risk category trends over time for charts
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Risk trend data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskTrendsResponse"
+
+  /report/{scanId}:
+    get:
+      operationId: generateReport
+      tags: [scans]
+      summary: Generate PDF protection report for a scan
+      parameters:
+        - name: scanId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: PDF report as base64
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "404":
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +252,249 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+      required:
+        - error
+
+    DeleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    RiskFix:
+      type: object
+      properties:
+        rewrittenClause:
+          type: string
+        direct:
+          type: string
+        diplomatic:
+          type: string
+        legal:
+          type: string
+      required:
+        - rewrittenClause
+        - direct
+        - diplomatic
+        - legal
+
+    Risk:
+      type: object
+      properties:
+        title:
+          type: string
+        severity:
+          type: string
+          enum: [Low, Medium, High]
+        explanation:
+          type: string
+        whyThisHurtsYou:
+          type: string
+        category:
+          type: string
+        fixes:
+          $ref: "#/components/schemas/RiskFix"
+      required:
+        - title
+        - severity
+        - explanation
+        - whyThisHurtsYou
+        - category
+        - fixes
+
+    ScanResult:
+      type: object
+      properties:
+        moneyImpactSummary:
+          type: string
+        revenueAtRiskMin:
+          type: number
+        revenueAtRiskMax:
+          type: number
+        protectionScore:
+          type: number
+        risks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Risk"
+        nextStep:
+          type: string
+        rawExtractedClauses:
+          type: array
+          items:
+            type: string
+      required:
+        - moneyImpactSummary
+        - revenueAtRiskMin
+        - revenueAtRiskMax
+        - protectionScore
+        - risks
+        - nextStep
+        - rawExtractedClauses
+
+    AnalyzeContractBody:
+      type: object
+      properties:
+        contractText:
+          type: string
+          minLength: 50
+        userId:
+          type: string
+        contractName:
+          type: string
+      required:
+        - contractText
+        - userId
+
+    SaveScanBody:
+      type: object
+      properties:
+        userId:
+          type: string
+        contractName:
+          type: string
+        contractText:
+          type: string
+        result:
+          $ref: "#/components/schemas/ScanResult"
+      required:
+        - userId
+        - contractName
+        - contractText
+        - result
+
+    SavedScan:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        contractName:
+          type: string
+        contractText:
+          type: string
+        result:
+          $ref: "#/components/schemas/ScanResult"
+        createdAt:
+          type: string
+          format: date-time
+        protectionScore:
+          type: number
+        revenueAtRiskMin:
+          type: number
+        revenueAtRiskMax:
+          type: number
+        riskCount:
+          type: integer
+      required:
+        - id
+        - userId
+        - contractName
+        - contractText
+        - result
+        - createdAt
+        - protectionScore
+        - revenueAtRiskMin
+        - revenueAtRiskMax
+        - riskCount
+
+    ScansListResponse:
+      type: object
+      properties:
+        scans:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedScan"
+        total:
+          type: integer
+      required:
+        - scans
+        - total
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalScans:
+          type: integer
+        totalMoneyProtected:
+          type: number
+        averageProtectionScore:
+          type: number
+        highRiskCount:
+          type: integer
+        mediumRiskCount:
+          type: integer
+        lowRiskCount:
+          type: integer
+        recentScans:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedScan"
+      required:
+        - totalScans
+        - totalMoneyProtected
+        - averageProtectionScore
+        - highRiskCount
+        - mediumRiskCount
+        - lowRiskCount
+        - recentScans
+
+    RiskTrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        scopeCreep:
+          type: integer
+        paymentDelay:
+          type: integer
+        ipOwnership:
+          type: integer
+        liability:
+          type: integer
+        termination:
+          type: integer
+        revisionAbuse:
+          type: integer
+        vagueDeliverables:
+          type: integer
+      required:
+        - date
+        - scopeCreep
+        - paymentDelay
+        - ipOwnership
+        - liability
+        - termination
+        - revisionAbuse
+        - vagueDeliverables
+
+    RiskTrendsResponse:
+      type: object
+      properties:
+        trends:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskTrendPoint"
+      required:
+        - trends
+
+    ReportResponse:
+      type: object
+      properties:
+        reportBase64:
+          type: string
+        filename:
+          type: string
+      required:
+        - reportBase64
+        - filename
