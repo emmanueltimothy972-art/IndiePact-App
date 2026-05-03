@@ -1,7 +1,10 @@
 import { ReactNode, useState } from "react";
 import { DEMO_USER_ID } from "@/lib/constants";
 import { Link, useLocation } from "wouter";
-import { FileText, History, LayoutDashboard, ShieldAlert, FileOutput, Loader2, Menu, Scale, Shield, MessageSquare } from "lucide-react";
+import {
+  FileText, History, LayoutDashboard, ShieldAlert,
+  FileOutput, Loader2, Menu, Scale, Shield, MessageSquare, Lock,
+} from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -39,6 +42,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <NavItem href="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={location === "/dashboard"} onClick={() => setMobileMenuOpen(false)} />
       <NavItem href="/scan" icon={<FileText size={18} />} label="Document Lab" active={location === "/scan" || location.startsWith("/scan/")} onClick={() => setMobileMenuOpen(false)} />
       <NavItem href="/history" icon={<History size={18} />} label="Intelligence Vault" active={location === "/history"} onClick={() => setMobileMenuOpen(false)} />
+      <NavItem href="/escrow" icon={<Lock size={18} />} label="Escrow Lock" active={location === "/escrow"} onClick={() => setMobileMenuOpen(false)} />
       <NavItem href="/bar" icon={<Scale size={18} />} label="The Bar" active={location === "/bar"} isPro onClick={() => setMobileMenuOpen(false)} />
       <NavItem href="/armory" icon={<Shield size={18} />} label="Clause Armory" active={location === "/armory"} onClick={() => setMobileMenuOpen(false)} />
       <NavItem href="/negotiator" icon={<MessageSquare size={18} />} label="Shadow Negotiator" active={location === "/negotiator"} onClick={() => setMobileMenuOpen(false)} />
@@ -47,7 +51,6 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden">
-      {/* Desktop Sidebar */}
       <div className="hidden lg:flex w-64 border-r border-border bg-sidebar flex-col">
         <div className="h-16 flex items-center px-6 border-b border-border">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight text-primary">
@@ -60,11 +63,9 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-16 border-b border-border bg-background/80 backdrop-blur-sm flex items-center justify-between px-4 lg:px-6 z-10 sticky top-0">
           <div className="flex items-center gap-3">
-            {/* Mobile Menu */}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="lg:hidden">
@@ -83,17 +84,17 @@ export function Layout({ children }: { children: ReactNode }) {
                 </nav>
               </SheetContent>
             </Sheet>
-            <div className="font-medium text-sm text-muted-foreground flex items-center gap-2">
-               <span>{location.split('/')[1]?.toUpperCase() || 'APP'}</span>
+            <div className="font-medium text-sm text-muted-foreground">
+              <span>{location.split("/")[1]?.toUpperCase() || "APP"}</span>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-4">
             {isScanDetail && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleGenerateReport} 
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateReport}
                 disabled={isGenerating}
                 className="gap-2"
               >
@@ -115,19 +116,34 @@ export function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-function NavItem({ href, icon, label, active, isPro, onClick }: { href: string; icon: ReactNode; label: string; active: boolean; isPro?: boolean; onClick?: () => void }) {
+function NavItem({
+  href, icon, label, active, isPro, onClick,
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+  isPro?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <Link href={href} onClick={onClick} className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-      active 
-        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border" 
-        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-    }`}>
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border"
+          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+      }`}
+    >
       <div className="flex items-center gap-3">
         {icon}
         {label}
       </div>
       {isPro && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30">PRO</span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30">
+          PRO
+        </span>
       )}
     </Link>
   );

@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/Layout";
 
-// Placeholder pages, will be implemented in next step
 import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
 import DocumentLab from "@/pages/DocumentLab";
@@ -15,6 +14,7 @@ import ScanDetail from "@/pages/ScanDetail";
 import TheBar from "@/pages/TheBar";
 import ClauseArmory from "@/pages/ClauseArmory";
 import ShadowNegotiator from "@/pages/ShadowNegotiator";
+import EscrowLock from "@/pages/EscrowLock";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +29,7 @@ function Router() {
       <Route path="/bar" component={TheBar} />
       <Route path="/armory" component={ClauseArmory} />
       <Route path="/negotiator" component={ShadowNegotiator} />
+      <Route path="/escrow" component={EscrowLock} />
       <Route component={NotFound} />
     </Switch>
   );

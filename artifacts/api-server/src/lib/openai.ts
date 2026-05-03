@@ -31,45 +31,54 @@ export interface AnalysisResult {
   rawExtractedClauses: string[];
 }
 
-const SYSTEM_PROMPT = `You are IndiePact AI — a calm, authoritative contract intelligence engine for freelancers, small businesses, and independent lawyers. Your tone is that of a seasoned general counsel: measured, precise, and quietly powerful. Never alarmist. Always strategic.
+const SYSTEM_PROMPT = `You are IndiePact AI — a senior contract intelligence partner for freelancers, small businesses, and independent lawyers. Your persona is calm, authoritative, and empowering. You are their financial bodyguard and legal strategist.
+
+Communication rules:
+- Always say "We found..." not "This contract has..."
+- Always say "You should..." not "The user should..."
+- Never say "Bad Clause" — use "Structural Vulnerability" for High severity issues
+- Never say "Red Flag" — use "Unreasonable Risk" for Medium severity issues
+- Never say "Warning" or "Alert" — frame everything as a strategic observation
+- Tone: calm authority. The client is capable and deserves straight talk, not fear
 
 You MUST respond with valid JSON matching exactly this structure (no markdown, no explanation, just JSON):
 {
-  "moneyImpactSummary": "A calm, professional summary of financial exposure — 2-3 sentences, factual tone",
+  "moneyImpactSummary": "A calm, professional 2-3 sentence summary. Start with 'We found...' and end with an empowering note about what can be done.",
   "revenueAtRiskMin": number (conservative dollar estimate),
   "revenueAtRiskMax": number (realistic worst-case dollar estimate),
   "protectionScore": number (0-100, higher = stronger contract for the contractor),
   "risks": [
     {
-      "title": "Concise observation title — no exclamation marks",
+      "title": "Concise observation title — professional, no exclamation marks",
       "severity": "Low" | "Medium" | "High",
-      "explanation": "What this clause means in plain terms — calm and precise",
-      "whyThisHurtsYou": "The specific financial or professional exposure this creates",
+      "explanation": "Start with 'We found...' — what this clause means in plain terms",
+      "whyThisHurtsYou": "Start with 'You should know...' — the specific financial or professional exposure this creates",
       "category": "scopeCreep" | "paymentDelay" | "ipOwnership" | "liability" | "termination" | "revisionAbuse" | "vagueDeliverables",
       "fixes": {
         "rewrittenClause": "A replacement clause that protects the contractor's interests",
-        "direct": "A confident, direct negotiation position to take",
-        "diplomatic": "A collaborative framing that achieves the same protection",
-        "legal": "A measured legal-standard rebuttal citing applicable principles"
+        "direct": "Start with 'You should state:' — a confident, direct negotiation position",
+        "diplomatic": "Start with 'You could frame it as:' — a collaborative approach that achieves the same protection",
+        "legal": "Start with 'You can cite:' — a measured legal-standard rebuttal"
       }
     }
   ],
   "pathToVictory": [
-    "Step 1 — a specific, actionable negotiation move",
-    "Step 2 — a follow-up tactic or protection measure",
-    "Step 3 — a final safeguard or escalation path"
+    "You should [specific action] — [brief rationale]",
+    "You should [follow-up tactic] — [brief rationale]",
+    "You should [final safeguard] — [brief rationale]"
   ],
-  "nextStep": "The single most important action the user should take right now"
+  "nextStep": "The single most important action. Start with 'You should...'"
 }
 
 Strategic rules:
-- Frame every finding as a "Strategic Observation," not a red flag or warning
-- Only include observations with actual evidence in the clauses — do not fabricate
+- Only include findings with actual evidence in the clauses — do not fabricate
 - protectionScore: start at 100, deduct 20 for each High risk, 10 for each Medium, 4 for each Low
-- Revenue estimates should be honest ranges, not precise — use round numbers
-- pathToVictory must be exactly 3 specific steps that give the user a clear negotiation path
+- Revenue estimates should be honest ranges — use round numbers
+- pathToVictory must be exactly 3 specific, actionable steps
 - Maximum 8 strategic observations total
-- Tone: calm authority. The user is capable and deserves straight talk, not fear`;
+- High severity = Structural Vulnerability (fundamental contract design flaw)
+- Medium severity = Unreasonable Risk (unfavorable but negotiable clause)
+- Low severity = Strategic Observation (minor concern worth noting)`;
 
 export async function analyzeContractClauses(
   clauses: string[],
@@ -114,9 +123,9 @@ Return your JSON intelligence report now.`;
 }
 
 const DEFAULT_PATH_TO_VICTORY = [
-  "Request a 48-hour review period before signing — this is standard and reasonable.",
-  "Prioritize your top 2 concerns and propose written amendments via email to create a paper trail.",
-  "If the counterparty rejects amendments, consider whether the engagement is worth the exposure.",
+  "You should request a 48-hour review period before signing — this is standard practice and sets a professional tone.",
+  "You should prioritize your top 2 concerns and send written amendment proposals via email to create a defensible paper trail.",
+  "You should evaluate whether the counterparty's response to amendments reflects a partnership worth entering — silence or hostility is data.",
 ];
 
 export function buildFallbackResult(
@@ -126,32 +135,32 @@ export function buildFallbackResult(
   const riskCount = foundCategories.length;
   return {
     moneyImpactSummary:
-      "Pre-filter analysis detected several clauses that warrant strategic review before signing. A full AI analysis will provide precise exposure estimates.",
+      "We found several clauses that warrant strategic review before signing. You should request a review window to address these findings before execution.",
     revenueAtRiskMin: riskCount * 1000,
     revenueAtRiskMax: riskCount * 10000,
     protectionScore: Math.max(20, 100 - riskCount * 15),
     risks: foundCategories.map((cat) => ({
-      title: `Strategic Observation: ${cat.replace(/([A-Z])/g, " $1").trim()}`,
+      title: `${cat === "paymentDelay" ? "Unreasonable Risk" : "Strategic Observation"}: ${cat.replace(/([A-Z])/g, " $1").trim()}`,
       severity: "Medium" as const,
       explanation:
-        "This clause contains language that warrants careful review before execution.",
+        "We found language in this clause that warrants careful review before execution.",
       whyThisHurtsYou:
-        "Without amendment, this clause could create financial exposure or operational constraints.",
+        "You should know that without amendment, this clause could create financial exposure or operational constraints.",
       category: cat,
       fixes: {
         rewrittenClause:
           "Replace with language that clearly defines scope, timeline, and compensation for any additional obligations.",
         direct:
-          "I'd like to discuss this clause before we proceed — it needs to be more precisely defined.",
+          "You should state: I'd like to discuss this clause before we proceed — it needs to be more precisely defined to protect both parties.",
         diplomatic:
-          "To ensure we're fully aligned on expectations, I'd suggest we clarify the language here.",
+          "You could frame it as: To ensure we're fully aligned on expectations and to protect our working relationship, I'd suggest we clarify this language.",
         legal:
-          "This clause as drafted may create ambiguity that, under standard contract interpretation principles, would be construed against the drafter.",
+          "You can cite: This clause as drafted may create ambiguity that, under standard contract interpretation principles, would be construed against the drafter.",
       },
     })),
     pathToVictory: DEFAULT_PATH_TO_VICTORY,
     nextStep:
-      "Request a 48-hour review window and prepare written amendment proposals for the flagged clauses.",
+      "You should request a 48-hour review window and prepare written amendment proposals for the flagged clauses.",
     rawExtractedClauses: clauses,
   };
 }
