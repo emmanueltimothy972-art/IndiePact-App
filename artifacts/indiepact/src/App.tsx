@@ -12,6 +12,9 @@ import Dashboard from "@/pages/Dashboard";
 import DocumentLab from "@/pages/DocumentLab";
 import IntelligenceVault from "@/pages/IntelligenceVault";
 import ScanDetail from "@/pages/ScanDetail";
+import TheBar from "@/pages/TheBar";
+import ClauseArmory from "@/pages/ClauseArmory";
+import ShadowNegotiator from "@/pages/ShadowNegotiator";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +26,9 @@ function Router() {
       <Route path="/scan" component={DocumentLab} />
       <Route path="/history" component={IntelligenceVault} />
       <Route path="/scan/:scanId" component={ScanDetail} />
+      <Route path="/bar" component={TheBar} />
+      <Route path="/armory" component={ClauseArmory} />
+      <Route path="/negotiator" component={ShadowNegotiator} />
       <Route component={NotFound} />
     </Switch>
   );

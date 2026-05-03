@@ -36,12 +36,13 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Protected" 
-          value={isSummaryLoading ? "..." : `$${summary?.totalMoneyProtected.toLocaleString()}`} 
-          icon={<DollarSign className="text-emerald-400" />}
-          desc="Revenue secured"
-        />
+        <div className="lg:col-span-4 p-6 rounded-xl border border-[#D4AF37]/50 bg-[#D4AF37]/5 shadow-[0_0_15px_rgba(212,175,55,0.1)] flex flex-col justify-center items-center text-center">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">Total Capital Protected</h3>
+          <div className="text-5xl font-bold font-mono tracking-tighter text-[#D4AF37] mb-2">
+            {isSummaryLoading ? "..." : `$${summary?.totalMoneyProtected.toLocaleString()}`}
+          </div>
+          <div className="text-sm text-muted-foreground">Liability traps intercepted across all scans</div>
+        </div>
         <StatCard 
           title="Avg Protection Score" 
           value={isSummaryLoading ? "..." : `${summary?.averageProtectionScore.toFixed(1)}/100`} 
@@ -59,6 +60,12 @@ export default function Dashboard() {
           value={isSummaryLoading ? "..." : summary?.totalScans.toString() || "0"} 
           icon={<TrendingUp className="text-chart-2" />}
           desc="Documents analyzed"
+        />
+        <StatCard 
+          title="Scans Remaining" 
+          value="Unlimited" 
+          icon={<Activity className="text-chart-3" />}
+          desc="Current billing period"
         />
       </div>
 

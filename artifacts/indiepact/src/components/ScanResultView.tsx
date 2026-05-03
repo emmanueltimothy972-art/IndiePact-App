@@ -1,9 +1,18 @@
 import { ScanResult } from "@workspace/api-client-react";
 import { RiskCard } from "./RiskCard";
-import { DollarSign, ShieldCheck, Target, ArrowRight } from "lucide-react";
+import { DollarSign, ShieldCheck, Target, ArrowRight, Trophy } from "lucide-react";
 import { Progress } from "./ui/progress";
 
+const DEFAULT_STEPS = [
+  "Request a 48-hour review period before signing.",
+  "Identify your top 2 priority clauses to push back on first.",
+  "Propose amendments in writing via email to create a paper trail.",
+];
+
 export function ScanResultView({ result }: { result: ScanResult }) {
+  const extended = result as ScanResult & { pathToVictory?: string[] };
+  const steps: string[] = extended.pathToVictory?.length ? extended.pathToVictory : DEFAULT_STEPS;
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -36,7 +45,7 @@ export function ScanResultView({ result }: { result: ScanResult }) {
                 strokeWidth="8" 
                 strokeDasharray="351.86"
                 strokeDashoffset={351.86 - (351.86 * result.protectionScore) / 100}
-                className={result.protectionScore > 75 ? "text-chart-5" : result.protectionScore > 50 ? "text-chart-3" : "text-destructive"} 
+                className={result.protectionScore > 75 ? "text-chart-1" : result.protectionScore > 50 ? "text-chart-3" : "text-destructive"} 
                 strokeLinecap="round"
               />
             </svg>
@@ -67,7 +76,7 @@ export function ScanResultView({ result }: { result: ScanResult }) {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-border pb-4">
-          <h2 className="text-2xl font-bold tracking-tight">Identified Risks</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Strategic Observations</h2>
           <span className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-sm font-medium">
             {result.risks.length} Issues Found
           </span>
@@ -78,6 +87,18 @@ export function ScanResultView({ result }: { result: ScanResult }) {
             <RiskCard key={idx} risk={risk} />
           ))}
         </div>
+      </div>
+
+      <div className="border border-primary/30 bg-primary/5 rounded-xl p-6 shadow-sm">
+        <h2 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2 text-primary">
+          <Trophy className="h-6 w-6 text-primary" />
+          Path to Victory
+        </h2>
+        <ol className="list-decimal pl-6 space-y-3 text-muted-foreground text-lg">
+          {steps.map((step, idx) => (
+            <li key={idx} className="pl-2">{step}</li>
+          ))}
+        </ol>
       </div>
 
       <div className="border border-border bg-card rounded-xl p-6 shadow-sm">

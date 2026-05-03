@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -114,7 +114,7 @@
   --chart-4: 0 85% 60%;
   --chart-5: 280 80% 55%;
 
-  --app-font-sans: 'Outfit', sans-serif;
+  --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'Space Mono', monospace;
   --radius: 0.5rem;
@@ -147,56 +147,50 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  /* Deep dark slate / almost black for background */
-  --background: 220 40% 4%;
-  /* Slightly lighter for cards */
-  --card: 220 35% 7%;
-  --card-foreground: 220 20% 90%;
-  --card-border: 220 25% 14%;
+  --background: 220 30% 6%;
+  --card: 215 39% 11%;
+  --card-foreground: 210 40% 98%;
+  --card-border: 215 28% 17%;
   
-  --foreground: 220 20% 90%;
-  --border: 220 25% 14%;
+  --foreground: 210 40% 98%;
+  --border: 215 28% 17%;
   
-  --sidebar: 220 40% 3%;
-  --sidebar-foreground: 220 20% 85%;
-  --sidebar-border: 220 30% 12%;
-  --sidebar-primary: 200 90% 50%;
+  --sidebar: 216 28% 7%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 215 28% 17%;
+  --sidebar-primary: 160 84% 39%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 30% 10%;
-  --sidebar-accent-foreground: 220 20% 95%;
-  --sidebar-ring: 200 90% 50%;
+  --sidebar-accent: 215 28% 17%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-ring: 160 84% 39%;
   
-  --popover: 220 35% 7%;
-  --popover-foreground: 220 20% 90%;
-  --popover-border: 220 25% 14%;
+  --popover: 215 39% 11%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 215 28% 17%;
   
-  /* Electric Cyan / Blue for primary actions */
-  --primary: 195 100% 45%;
-  --primary-foreground: 220 40% 4%;
+  --primary: 160 84% 39%;
+  --primary-foreground: 220 30% 6%;
   
-  /* Secondary is dark subtle slate */
-  --secondary: 220 25% 14%;
-  --secondary-foreground: 220 20% 90%;
+  --secondary: 215 28% 17%;
+  --secondary-foreground: 210 40% 98%;
   
-  --muted: 220 25% 12%;
-  --muted-foreground: 220 15% 60%;
+  --muted: 215 28% 17%;
+  --muted-foreground: 215 16% 47%;
   
-  --accent: 220 30% 14%;
-  --accent-foreground: 220 20% 95%;
+  --accent: 215 28% 17%;
+  --accent-foreground: 210 40% 98%;
   
-  /* Destructive/High Risk is deep red */
-  --destructive: 0 85% 55%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   
-  --input: 220 25% 14%;
-  --ring: 195 100% 45%;
+  --input: 215 28% 17%;
+  --ring: 160 84% 39%;
   
-  /* Charts */
-  --chart-1: 195 100% 45%; /* Cyan */
-  --chart-2: 280 70% 55%; /* Purple */
-  --chart-3: 35 95% 55%;  /* Amber */
-  --chart-4: 0 85% 55%;   /* Red */
-  --chart-5: 140 70% 45%; /* Green */
+  --chart-1: 160 84% 39%; /* Low Risk / Emerald */
+  --chart-2: 46 65% 52%;  /* Gold */
+  --chart-3: 38 92% 50%;  /* Medium Risk */
+  --chart-4: 0 84% 60%;   /* Destructive / High risk */
+  --chart-5: 210 40% 98%; /* White */
 }
 
 @layer base {

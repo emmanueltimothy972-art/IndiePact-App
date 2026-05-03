@@ -17,7 +17,7 @@ export function RiskCard({ risk }: { risk: Risk }) {
     switch (risk.severity) {
       case "High": return <ShieldAlert className="h-5 w-5 text-destructive" />;
       case "Medium": return <AlertTriangle className="h-5 w-5 text-chart-3" />;
-      case "Low": return <AlertCircle className="h-5 w-5 text-chart-5" />;
+      case "Low": return <AlertCircle className="h-5 w-5 text-chart-1" />;
       default: return <AlertCircle className="h-5 w-5 text-muted-foreground" />;
     }
   };
@@ -26,7 +26,7 @@ export function RiskCard({ risk }: { risk: Risk }) {
     switch (risk.severity) {
       case "High": return "border-destructive/50 bg-destructive/10 text-destructive";
       case "Medium": return "border-chart-3/50 bg-chart-3/10 text-chart-3";
-      case "Low": return "border-chart-5/50 bg-chart-5/10 text-chart-5";
+      case "Low": return "border-chart-1/50 bg-chart-1/10 text-chart-1";
       default: return "border-muted bg-muted text-muted-foreground";
     }
   };
@@ -41,7 +41,7 @@ export function RiskCard({ risk }: { risk: Risk }) {
               <h3 className="text-lg font-semibold tracking-tight leading-tight">{risk.title}</h3>
               <div className="flex items-center gap-2 mt-2">
                 <span className={`text-xs font-mono px-2 py-0.5 rounded border ${getSeverityColor()}`}>
-                  {risk.severity} Risk
+                  {risk.severity} Strategic Observation
                 </span>
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
                   {risk.category}
