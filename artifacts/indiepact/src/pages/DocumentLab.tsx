@@ -1,5 +1,4 @@
-import { DEMO_USER_ID } from "@/lib/constants";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,9 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useAnalyzeContract, useSaveScan } from "@workspace/api-client-react";
 import { ScanResultView } from "@/components/ScanResultView";
 import { ForensicTrace } from "@/components/ForensicTrace";
-import { FileText, Zap, UploadCloud } from "lucide-react";
+import { FileText, Zap, UploadCloud, LogIn } from "lucide-react";
 import { ScanResult } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function DocumentLab() {
   const [contractName, setContractName] = useState("");
@@ -23,6 +23,7 @@ export default function DocumentLab() {
   const pendingResult = useRef<ScanResult | null>(null);
   const traceComplete = useRef(false);
 
+  const { userId, isGuest, openAuthModal } = useAuth();
   const { mutate: analyzeContract, isPending: isAnalyzing } = useAnalyzeContract();
   const { mutate: saveScan } = useSaveScan();
   const { toast } = useToast();
@@ -42,6 +43,11 @@ export default function DocumentLab() {
   }, [tryReveal]);
 
   const handleAnalyze = () => {
+    if (isGuest) {
+      openAuthModal();
+      return;
+    }
+
     if (!contractText || contractText.length < 50) {
       toast({
         title: "Insufficient text",
@@ -57,12 +63,12 @@ export default function DocumentLab() {
     setShowTrace(true);
 
     analyzeContract(
-      { data: { contractText, userId: DEMO_USER_ID, contractName: finalName } },
+      { data: { contractText, userId, contractName: finalName } },
       {
         onSuccess: (result) => {
           pendingResult.current = result;
           saveScan({
-            data: { userId: DEMO_USER_ID, contractName: finalName, contractText, result },
+            data: { userId, contractName: finalName, contractText, result },
           });
           tryReveal();
         },
@@ -78,6 +84,14 @@ export default function DocumentLab() {
         },
       }
     );
+  };
+
+  const handleUploadClick = () => {
+    if (isGuest) {
+      openAuthModal();
+      return;
+    }
+    setShowProModal(true);
   };
 
   const handleReset = () => {
@@ -136,7 +150,7 @@ export default function DocumentLab() {
                 <Tabs defaultValue="paste" className="w-full">
                   <TabsList className="mb-4">
                     <TabsTrigger value="paste">Paste Text</TabsTrigger>
-                    <TabsTrigger value="upload" onClick={() => setShowProModal(true)}>
+                    <TabsTrigger value="upload" onClick={handleUploadClick}>
                       Upload File
                     </TabsTrigger>
                   </TabsList>
@@ -154,7 +168,7 @@ export default function DocumentLab() {
                   <TabsContent value="upload">
                     <div
                       className="border-2 border-dashed border-border rounded-xl p-16 flex flex-col items-center justify-center text-center cursor-pointer bg-card hover:bg-muted/30 transition-colors min-h-[420px]"
-                      onClick={() => setShowProModal(true)}
+                      onClick={handleUploadClick}
                     >
                       <div className="h-20 w-20 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mb-6">
                         <UploadCloud className="h-10 w-10 text-primary" />
@@ -166,24 +180,36 @@ export default function DocumentLab() {
                       <Button
                         variant="secondary"
                         size="lg"
-                        onClick={(e) => { e.stopPropagation(); setShowProModal(true); }}
+                        onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
                       >
-                        Select File — Pro Feature
+                        {isGuest ? (
+                          <><LogIn className="h-4 w-4 mr-2" /> Sign In to Upload</>
+                        ) : (
+                          "Select File — Pro Feature"
+                        )}
                       </Button>
                     </div>
                   </TabsContent>
                 </Tabs>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-4">
+                {isGuest && (
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Sign in to run forensic analysis and save results.
+                  </p>
+                )}
                 <Button
                   size="lg"
                   onClick={handleAnalyze}
-                  disabled={isAnalyzing || !contractText.trim()}
+                  disabled={isAnalyzing || (!isGuest && !contractText.trim())}
                   className="px-10 shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] transition-all font-bold tracking-wide"
                 >
-                  <Zap className="mr-2 h-5 w-5" />
-                  Run Forensic Analysis
+                  {isGuest ? (
+                    <><LogIn className="mr-2 h-5 w-5" />Sign In to Scan</>
+                  ) : (
+                    <><Zap className="mr-2 h-5 w-5" />Run Forensic Analysis</>
+                  )}
                 </Button>
               </div>
             </div>
@@ -195,6 +221,7 @@ export default function DocumentLab() {
         </div>
       )}
 
+      {/* Pro feature modal — only shown to logged-in non-pro users */}
       <Dialog open={showProModal} onOpenChange={setShowProModal}>
         <DialogContent>
           <DialogHeader>
