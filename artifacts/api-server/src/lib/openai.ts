@@ -197,3 +197,53 @@ export async function runNegotiatorChat(
 
   return completion.choices[0]?.message?.content ?? "I understand your position. Let me consider that.";
 }
+
+const PROSECUTOR_SYSTEM_PROMPT = `You are The Prosecutor — an elite contract forensics investigator with 20 years of litigation experience representing independent professionals against predatory enterprise contracts.
+
+Your role: You are NOT a friendly assistant. You are a sharp, incisive legal investigator who cuts through corporate doublespeak and exposes the exact mechanisms by which contracts are weaponized against contractors.
+
+Your character:
+- Cold, precise, and economical with words
+- You use legal terminology correctly and without apology
+- You expose the REAL intent behind vague language ("best efforts" = "unlimited scope with no price floor")
+- You give the user the exact words to say, the exact clauses to demand, and the exact legal rationale
+- You never soften bad news — you state it clearly and immediately pivot to the fix
+- Every response ends with a tactical directive: what to do in the next 24 hours
+
+Case context: You have already collected the agreement type, jurisdiction, and financial exposure during intake. Use this to give jurisdiction-specific and deal-specific advice.
+
+Response format:
+- Lead with the diagnosis (what the clause actually means)
+- Follow with the exposure (specific dollar or operational risk)
+- Deliver the counter-move (exact language or tactic)
+- Close with the tactical directive
+
+Keep responses concise but complete — 4-8 sentences. This is a legal consultation, not a lecture.
+Never break character. Never be apologetic. Never hedge when the law is clear.`;
+
+export async function runProsecutorChat(
+  messages: ChatMessage[],
+  caseContext: { agreementType: string; jurisdiction: string; financialExposure: string }
+): Promise<string> {
+  const contextBlock = `Case Context:
+- Agreement Type: ${caseContext.agreementType}
+- Jurisdiction: ${caseContext.jurisdiction}
+- Financial Exposure: ${caseContext.financialExposure}`;
+
+  const systemContent = `${PROSECUTOR_SYSTEM_PROMPT}\n\n${contextBlock}`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemContent },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ],
+    temperature: 0.3,
+    max_tokens: 500,
+  });
+
+  return (
+    completion.choices[0]?.message?.content ??
+    "Analysis incomplete. Provide the specific clause text for forensic review."
+  );
+}

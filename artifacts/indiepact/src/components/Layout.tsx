@@ -23,7 +23,8 @@ export function Layout({ children }: { children: ReactNode }) {
       if (!resp.ok) throw new Error("Failed to generate report");
       const data = await resp.json() as { reportBase64: string; filename: string };
       const link = document.createElement("a");
-      link.href = `data:text/plain;base64,${data.reportBase64}`;
+      const mime = data.filename.endsWith(".html") ? "text/html" : "text/plain";
+      link.href = `data:${mime};base64,${data.reportBase64}`;
       link.download = data.filename;
       document.body.appendChild(link);
       link.click();

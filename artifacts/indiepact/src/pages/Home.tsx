@@ -2,7 +2,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
 import {
   ShieldAlert, ArrowRight, Upload, ScanSearch, Swords, FileDown,
-  CheckCircle2, XCircle, TrendingUp, Lock,
+  CheckCircle2, XCircle, TrendingUp, Lock, AlertTriangle, ShieldCheck,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useEffect, useRef, useState } from "react";
@@ -73,6 +73,30 @@ const COMPARISON_ROWS = [
   },
 ];
 
+const SPOTLIGHT_CLAUSES = [
+  {
+    tag: "Payment Trap",
+    severity: "high" as const,
+    clause: `"Payment shall be issued within ninety (90) days of Client's written acceptance of all deliverables, at Client's sole discretion."`,
+    detection: "Net-90 + 'sole discretion' = indefinite payment hold. Client controls both the acceptance trigger and the timeline.",
+    rebuttal: `"Payment of the remaining balance shall be due within seven (7) calendar days of delivery. Acceptance is deemed granted if no written objection is received within 5 business days."`,
+  },
+  {
+    tag: "IP Grab",
+    severity: "high" as const,
+    clause: `"All work product, deliverables, concepts, and materials produced by Contractor shall be considered work-for-hire and shall vest exclusively in the Company in perpetuity, irrevocably, without restriction."`,
+    detection: "Triple lock: work-for-hire + perpetuity + irrevocable. This clause retroactively claims your process, your tools, and your methodology.",
+    rebuttal: `"Upon receipt of full payment, Contractor grants Client a non-exclusive, perpetual license to use final deliverables. All preliminary work, tools, and methodologies remain Contractor's property."`,
+  },
+  {
+    tag: "Scope Creep Trigger",
+    severity: "medium" as const,
+    clause: `"Contractor shall perform such additional services as may be reasonably required by Client from time to time, without additional compensation, to ensure project success."`,
+    detection: "'As may be reasonably required' with 'without additional compensation' is an unlimited scope expansion clause with zero price protection.",
+    rebuttal: `"Scope is limited to deliverables in Schedule A. Any additional services shall be subject to a written Change Order executed by both parties before commencement."`,
+  },
+];
+
 const STEPS = [
   {
     num: "01",
@@ -99,6 +123,89 @@ const STEPS = [
     desc: "Download your Forensic Audit Report and walk into every negotiation backed by hard evidence.",
   },
 ];
+
+function SpotlightSection() {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setActive((p) => (p + 1) % SPOTLIGHT_CLAUSES.length), 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const item = SPOTLIGHT_CLAUSES[active];
+
+  return (
+    <section className="px-6 pb-28 max-w-5xl mx-auto w-full">
+      <div className="text-center mb-10">
+        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+          Clause Spotlight — Live Examples
+        </h2>
+        <p className="text-slate-400 mt-3 text-base">
+          Real contract language IndiePact flags and neutralizes — clause by clause.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-slate-800 overflow-hidden">
+        {/* Tab selector */}
+        <div className="flex border-b border-slate-800 bg-[#0a0a0a]">
+          {SPOTLIGHT_CLAUSES.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => setActive(i)}
+              className={`flex-1 py-3 px-4 font-mono text-xs uppercase tracking-widest transition-colors ${
+                i === active
+                  ? "text-emerald-400 border-b-2 border-emerald-500 bg-emerald-950/20"
+                  : "text-slate-600 hover:text-slate-400"
+              }`}
+            >
+              {c.tag}
+            </button>
+          ))}
+        </div>
+
+        {/* Clause display */}
+        <div className="grid grid-cols-1 md:grid-cols-3 bg-[#080808]">
+          {/* The Trap */}
+          <div className="p-6 border-r border-slate-800/60 space-y-3">
+            <div className="flex items-center gap-2 font-mono text-[10px] text-red-400 uppercase tracking-widest">
+              <AlertTriangle className="h-3 w-3" /> Predatory Clause
+            </div>
+            <p className="font-mono text-xs text-slate-300 leading-relaxed">
+              {item.clause}
+            </p>
+          </div>
+
+          {/* IndiePact Detection */}
+          <div className="p-6 border-r border-slate-800/60 space-y-3">
+            <div className="flex items-center gap-2 font-mono text-[10px] text-amber-400 uppercase tracking-widest">
+              <ScanSearch className="h-3 w-3" /> What This Actually Means
+            </div>
+            <p className="font-mono text-xs text-amber-200/80 leading-relaxed">
+              {item.detection}
+            </p>
+          </div>
+
+          {/* The Fix */}
+          <div className="p-6 space-y-3 bg-emerald-950/10">
+            <div className="flex items-center gap-2 font-mono text-[10px] text-emerald-400 uppercase tracking-widest">
+              <ShieldCheck className="h-3 w-3" /> IndiePact Counter-Clause
+            </div>
+            <p className="font-mono text-xs text-emerald-300 leading-relaxed">
+              {item.rebuttal}
+            </p>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="flex bg-[#050505] h-0.5">
+          {SPOTLIGHT_CLAUSES.map((_, i) => (
+            <div key={i} className={`flex-1 transition-colors duration-500 ${i === active ? "bg-emerald-500" : "bg-slate-800"}`} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   const accuracy = useCountUp(997, 1800, "", "");
@@ -267,9 +374,12 @@ export default function Home() {
             </Link>
           </div>
         </section>
+
+        {/* ── RISK CATEGORY SPOTLIGHT ──────────────────────────────── */}
+        <SpotlightSection />
       </main>
 
-      <footer className="border-t border-slate-800 px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <footer className="border-t border-slate-800/50 px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-bold text-emerald-400 font-mono tracking-tight">
           <ShieldAlert className="h-4 w-4" />
           IndiePact AI

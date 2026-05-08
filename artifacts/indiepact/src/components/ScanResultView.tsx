@@ -1,5 +1,6 @@
 import { ScanResult } from "@workspace/api-client-react";
 import { RiskCard } from "./RiskCard";
+import { RevenueStressTest } from "./RevenueStressTest";
 import { DollarSign, Target, ArrowRight, Trophy, Lock } from "lucide-react";
 import { IS_PRO } from "@/lib/constants";
 
@@ -70,6 +71,8 @@ export function ScanResultView({ result }: { result: ScanResult }) {
           </div>
         </div>
       </div>
+
+      <RevenueStressTest result={result} />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-border pb-4">
