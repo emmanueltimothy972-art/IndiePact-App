@@ -1,4 +1,4 @@
-import { DEMO_USER_ID } from "@/lib/constants";
+import { useAuth } from "@/contexts/AuthContext";
 import { PageTransition } from "@/components/PageTransition";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
 import { Lock, CheckSquare, Square, AlertTriangle, DollarSign, Loader2, Link as LinkIcon } from "lucide-react";
@@ -56,9 +56,10 @@ function deriveMilestones(risks: Array<{ category: string; title: string; explan
 }
 
 export default function EscrowLock() {
+  const { userId } = useAuth();
   const { data, isLoading } = useListScans(
-    { userId: DEMO_USER_ID, limit: 1, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId: DEMO_USER_ID, limit: 1, offset: 0 }) } }
+    { userId, limit: 1, offset: 0 },
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }) } }
   );
 
   const recentScan = data?.scans?.[0];

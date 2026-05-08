@@ -1,9 +1,9 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  FileText, History, LayoutDashboard, ShieldAlert,
+  FileText, History, LayoutDashboard, ShieldCheck,
   FileOutput, Loader2, Menu, Scale, Shield, MessageSquare, Lock,
-  LogIn, LogOut, UserCircle2,
+  LogIn, LogOut,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -39,60 +39,101 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   };
 
-  if (location === "/") return <>{children}</>;
-
-  const NavItems = () => (
-    <>
-      <NavItem href="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" active={location === "/dashboard"} onClick={() => setMobileMenuOpen(false)} />
-      <NavItem href="/scan" icon={<FileText size={18} />} label="Document Lab" active={location === "/scan" || location.startsWith("/scan/")} onClick={() => setMobileMenuOpen(false)} />
-      <NavItem href="/history" icon={<History size={18} />} label="Intelligence Vault" active={location === "/history"} onClick={() => setMobileMenuOpen(false)} />
-      <NavItem href="/escrow" icon={<Lock size={18} />} label="Escrow Lock" active={location === "/escrow"} onClick={() => setMobileMenuOpen(false)} />
-      <NavItem href="/bar" icon={<Scale size={18} />} label="The Bar" active={location === "/bar"} isPro onClick={() => setMobileMenuOpen(false)} />
-      <NavItem href="/armory" icon={<Shield size={18} />} label="Clause Armory" active={location === "/armory"} onClick={() => setMobileMenuOpen(false)} />
-      <NavItem href="/negotiator" icon={<MessageSquare size={18} />} label="Shadow Negotiator" active={location === "/negotiator"} onClick={() => setMobileMenuOpen(false)} />
-    </>
-  );
+  if (location === "/" || location === "/pricing") return <>{children}</>;
 
   const userInitial = user?.email ? user.email[0].toUpperCase() : null;
 
+  const NAV_ITEMS = [
+    { href: "/dashboard", icon: <LayoutDashboard size={17} />, label: "Dashboard", sub: "Your overview" },
+    { href: "/scan", icon: <FileText size={17} />, label: "Review Contract", sub: "Analyze a contract" },
+    { href: "/history", icon: <History size={17} />, label: "My Reviews", sub: "Past contract reviews" },
+    { href: "/escrow", icon: <Lock size={17} />, label: "Payment Lock", sub: "Protect your payments" },
+    { href: "/bar", icon: <Scale size={17} />, label: "AI Attorney", sub: "Deep legal strategy", isPro: true },
+    { href: "/armory", icon: <Shield size={17} />, label: "Clause Library", sub: "Saved clauses & fixes" },
+    { href: "/negotiator", icon: <MessageSquare size={17} />, label: "Negotiation Room", sub: "AI negotiation coach" },
+  ];
+
+  const NavItems = ({ onClose }: { onClose?: () => void }) => (
+    <>
+      {NAV_ITEMS.map((item) => {
+        const active = item.href === "/scan"
+          ? location === "/scan" || location.startsWith("/scan/")
+          : location === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onClose}
+            className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
+              active
+                ? "bg-emerald-950/50 text-emerald-300 border border-emerald-900/50"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className={active ? "text-emerald-400" : "text-slate-500 group-hover:text-slate-300"}>
+                {item.icon}
+              </span>
+              <div>
+                <div className="leading-tight">{item.label}</div>
+                <div className={`text-[10px] leading-tight mt-0.5 ${active ? "text-emerald-600" : "text-slate-600"}`}>
+                  {item.sub}
+                </div>
+              </div>
+            </div>
+            {item.isPro && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                PRO
+              </span>
+            )}
+          </Link>
+        );
+      })}
+    </>
+  );
+
   return (
     <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden">
-      {/* Sidebar */}
+      {/* Desktop Sidebar */}
       <div className="hidden lg:flex w-64 border-r border-border bg-sidebar flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-border">
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight text-primary">
-            <ShieldAlert className="h-6 w-6" />
-            <span>IndiePact AI</span>
+        <div className="h-16 flex items-center px-5 border-b border-border">
+          <Link href="/" className="flex items-center gap-2 font-bold text-base tracking-tight text-emerald-400">
+            <ShieldCheck className="h-5 w-5" />
+            <span>IndiePact</span>
           </Link>
         </div>
-        <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
+
+        <nav className="flex-1 py-3 flex flex-col gap-1 px-3 overflow-y-auto">
+          <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-widest px-3 pt-2 pb-1">
+            Tools
+          </p>
           <NavItems />
         </nav>
 
-        {/* Sidebar auth section */}
+        {/* Sidebar auth */}
         <div className="border-t border-border p-3">
           {!isLoading && (
             isGuest ? (
               <button
                 onClick={openAuthModal}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-primary/80 hover:bg-sidebar-accent/50 hover:text-primary transition-colors border border-primary/20 hover:border-primary/40"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-emerald-400/80 hover:bg-emerald-950/30 hover:text-emerald-300 transition-all border border-emerald-900/30 hover:border-emerald-800/50"
               >
-                <LogIn size={16} />
-                <span>Sign In / Register</span>
+                <LogIn size={15} />
+                Sign In to Save Progress
               </button>
             ) : (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-sidebar-accent/40">
-                  <div className="h-7 w-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-mono text-xs font-bold shrink-0">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-slate-800/30">
+                  <div className="h-7 w-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-300 font-bold text-xs shrink-0">
                     {userInitial}
                   </div>
-                  <span className="text-xs text-muted-foreground font-mono truncate">{user?.email}</span>
+                  <span className="text-xs text-slate-400 truncate">{user?.email}</span>
                 </div>
                 <button
                   onClick={() => signOut()}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50 transition-colors font-mono"
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-300 hover:bg-slate-800/30 transition-colors"
                 >
-                  <LogOut size={14} />
+                  <LogOut size={13} />
                   Sign Out
                 </button>
               </div>
@@ -101,41 +142,42 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* Main */}
+      {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-16 border-b border-border bg-background/80 backdrop-blur-sm flex items-center justify-between px-4 lg:px-6 z-10 sticky top-0">
+        <header className="h-14 border-b border-border bg-background/90 backdrop-blur-sm flex items-center justify-between px-4 lg:px-6 z-10 sticky top-0">
           <div className="flex items-center gap-3">
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="lg:hidden">
-                  <Menu className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8">
+                  <Menu className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0 bg-sidebar border-r-border flex flex-col">
-                <div className="h-16 flex items-center px-6 border-b border-border">
-                  <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 font-bold text-lg tracking-tight text-primary">
-                    <ShieldAlert className="h-6 w-6" />
-                    <span>IndiePact AI</span>
+              <SheetContent side="left" className="w-72 p-0 bg-sidebar border-r border-border flex flex-col">
+                <div className="h-14 flex items-center px-5 border-b border-border">
+                  <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 font-bold text-base text-emerald-400">
+                    <ShieldCheck className="h-5 w-5" />
+                    IndiePact
                   </Link>
                 </div>
-                <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
-                  <NavItems />
+                <nav className="flex-1 py-3 flex flex-col gap-1 px-3 overflow-y-auto">
+                  <NavItems onClose={() => setMobileMenuOpen(false)} />
                 </nav>
                 <div className="border-t border-border p-3">
                   {isGuest ? (
-                    <button onClick={() => { setMobileMenuOpen(false); openAuthModal(); }} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-sm text-primary font-medium border border-primary/20">
-                      <LogIn size={16} /> Sign In
+                    <button onClick={() => { setMobileMenuOpen(false); openAuthModal(); }} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-emerald-400 border border-emerald-900/40">
+                      <LogIn size={15} /> Sign In
                     </button>
                   ) : (
-                    <button onClick={() => { setMobileMenuOpen(false); signOut(); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs text-muted-foreground font-mono hover:text-foreground">
-                      <LogOut size={14} /> Sign Out ({user?.email})
+                    <button onClick={() => { setMobileMenuOpen(false); signOut(); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-300">
+                      <LogOut size={13} /> Sign Out
                     </button>
                   )}
                 </div>
               </SheetContent>
             </Sheet>
-            <div className="font-medium text-sm text-muted-foreground">
-              <span>{location.split("/")[1]?.toUpperCase() || "APP"}</span>
+
+            <div className="text-sm font-medium text-muted-foreground capitalize">
+              {NAV_ITEMS.find(n => n.href === (location.startsWith("/scan/") ? "/scan" : location))?.label || "App"}
             </div>
           </div>
 
@@ -146,10 +188,10 @@ export function Layout({ children }: { children: ReactNode }) {
                 size="sm"
                 onClick={handleGenerateReport}
                 disabled={isGenerating}
-                className="gap-2"
+                className="gap-2 h-8 text-xs"
               >
-                {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileOutput className="h-4 w-4" />}
-                <span className="hidden sm:inline">Generate Report</span>
+                {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileOutput className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline">Download Report</span>
               </Button>
             )}
 
@@ -159,26 +201,24 @@ export function Layout({ children }: { children: ReactNode }) {
                   size="sm"
                   variant="outline"
                   onClick={openAuthModal}
-                  className="gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 font-mono text-xs"
+                  className="gap-1.5 h-8 text-xs border-emerald-800/50 text-emerald-400 hover:bg-emerald-950/30 hover:border-emerald-700"
                 >
                   <LogIn className="h-3.5 w-3.5" />
-                  Login
+                  Sign In
                 </Button>
               ) : (
                 <div className="flex items-center gap-2">
                   <div
                     title={user?.email}
-                    className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-mono text-sm font-bold border border-primary/30 cursor-default"
+                    className="h-8 w-8 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-300 font-bold text-sm border border-emerald-500/20 cursor-default"
                   >
                     {userInitial}
                   </div>
                   <button
                     onClick={() => signOut()}
-                    title="Sign out"
-                    className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-mono"
+                    className="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
                   >
                     <LogOut className="h-3.5 w-3.5" />
-                    <span className="hidden md:inline">Sign Out</span>
                   </button>
                 </div>
               )
@@ -191,38 +231,5 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
       </div>
     </div>
-  );
-}
-
-function NavItem({
-  href, icon, label, active, isPro, onClick,
-}: {
-  href: string;
-  icon: ReactNode;
-  label: string;
-  active: boolean;
-  isPro?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={`flex items-center justify-between px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-        active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm border border-sidebar-border"
-          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        {icon}
-        {label}
-      </div>
-      {isPro && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/30">
-          PRO
-        </span>
-      )}
-    </Link>
   );
 }

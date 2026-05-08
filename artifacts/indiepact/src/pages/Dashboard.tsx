@@ -1,116 +1,123 @@
-import { DEMO_USER_ID } from "@/lib/constants";
 import { PageTransition } from "@/components/PageTransition";
 import { useGetDashboardSummary, useGetRiskTrends } from "@workspace/api-client-react";
 import { getGetDashboardSummaryQueryKey, getGetRiskTrendsQueryKey } from "@workspace/api-client-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
-import { Shield, AlertTriangle, AlertCircle, CheckCircle, TrendingUp, DollarSign, Activity } from "lucide-react";
+import { Shield, AlertTriangle, TrendingUp, DollarSign, Activity, LayoutDashboard, FileText } from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Dashboard() {
-  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary(
-    { userId: DEMO_USER_ID },
-    { query: { queryKey: getGetDashboardSummaryQueryKey({ userId: DEMO_USER_ID }) } }
-  );
+  const { userId } = useAuth();
 
+  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary(
+    { userId },
+    { query: { queryKey: getGetDashboardSummaryQueryKey({ userId }) } }
+  );
   const { data: trends, isLoading: isTrendsLoading } = useGetRiskTrends(
-    { userId: DEMO_USER_ID, days: 30 },
-    { query: { queryKey: getGetRiskTrendsQueryKey({ userId: DEMO_USER_ID, days: 30 }) } }
+    { userId, days: 30 },
+    { query: { queryKey: getGetRiskTrendsQueryKey({ userId, days: 30 }) } }
   );
 
   const riskData = summary ? [
     { name: "High Risk", count: summary.highRiskCount, fill: "hsl(var(--destructive))" },
-    { name: "Medium Risk", count: summary.mediumRiskCount, fill: "hsl(var(--chart-3))" },
+    { name: "Medium", count: summary.mediumRiskCount, fill: "hsl(var(--chart-3))" },
     { name: "Low Risk", count: summary.lowRiskCount, fill: "hsl(var(--chart-5))" },
   ] : [];
 
   return (
     <PageTransition className="space-y-6">
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Financial Health</h1>
-          <p className="text-muted-foreground mt-1">Overview of your protected revenue and scan history.</p>
+      {/* Page intro */}
+      <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="h-10 w-10 rounded-xl bg-emerald-950/60 border border-emerald-900/50 flex items-center justify-center shrink-0">
+            <LayoutDashboard className="h-5 w-5 text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-slate-400 text-sm mt-0.5">Your contract review overview — money protected, risks found, and activity over time.</p>
+            <p className="text-xs text-slate-600 mt-1 italic">Example: See how many high-risk clauses were flagged across all your contracts this month.</p>
+          </div>
         </div>
-        <Link href="/scan" className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-colors flex items-center gap-2">
-          <Activity size={16} /> New Scan
+        <Link href="/scan" className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors shrink-0 self-start md:self-center shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+          <FileText size={15} /> Review a Contract
         </Link>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-4 p-6 rounded-xl border border-[#D4AF37]/50 bg-[#D4AF37]/5 shadow-[0_0_15px_rgba(212,175,55,0.1)] flex flex-col justify-center items-center text-center">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">Total Capital Protected</h3>
-          <div className="text-5xl font-bold font-mono tracking-tighter text-[#D4AF37] mb-2">
-            {isSummaryLoading ? "..." : `$${summary?.totalMoneyProtected.toLocaleString()}`}
+        <div className="lg:col-span-4 p-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 shadow-[0_0_15px_rgba(212,175,55,0.08)] flex flex-col justify-center items-center text-center">
+          <h3 className="text-xs font-semibold text-amber-400/70 uppercase tracking-widest mb-2">Total Value Protected</h3>
+          <div className="text-5xl font-bold font-mono tracking-tighter text-amber-400 mb-1">
+            {isSummaryLoading ? "..." : `$${(summary?.totalMoneyProtected ?? 0).toLocaleString()}`}
           </div>
-          <div className="text-sm text-muted-foreground">Liability traps intercepted across all scans</div>
+          <div className="text-sm text-slate-500">Estimated value of unfair clauses caught across all your reviews</div>
         </div>
-        <StatCard 
-          title="Avg Protection Score" 
-          value={isSummaryLoading ? "..." : `${summary?.averageProtectionScore.toFixed(1)}/100`} 
-          icon={<Shield className="text-primary" />}
-          desc="Across all contracts"
+
+        <StatCard
+          title="Protection Score"
+          value={isSummaryLoading ? "..." : `${(summary?.averageProtectionScore ?? 0).toFixed(0)}/100`}
+          icon={<Shield className="text-emerald-400" size={18} />}
+          desc="Average across all contracts"
         />
-        <StatCard 
-          title="Critical Risks Found" 
-          value={isSummaryLoading ? "..." : summary?.highRiskCount.toString() || "0"} 
-          icon={<AlertTriangle className="text-destructive" />}
-          desc="Requiring immediate action"
+        <StatCard
+          title="High-Risk Clauses"
+          value={isSummaryLoading ? "..." : (summary?.highRiskCount ?? 0).toString()}
+          icon={<AlertTriangle className="text-red-400" size={18} />}
+          desc="Flagged as urgent to address"
         />
-        <StatCard 
-          title="Total Scans" 
-          value={isSummaryLoading ? "..." : summary?.totalScans.toString() || "0"} 
-          icon={<TrendingUp className="text-chart-2" />}
-          desc="Documents analyzed"
+        <StatCard
+          title="Total Reviews"
+          value={isSummaryLoading ? "..." : (summary?.totalScans ?? 0).toString()}
+          icon={<TrendingUp className="text-blue-400" size={18} />}
+          desc="Contracts reviewed so far"
         />
-        <StatCard 
-          title="Scans Remaining" 
-          value="Unlimited" 
-          icon={<Activity className="text-chart-3" />}
-          desc="Current billing period"
+        <StatCard
+          title="Reviews Remaining"
+          value="Unlimited"
+          icon={<Activity className="text-purple-400" size={18} />}
+          desc="This billing period"
         />
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 border border-border bg-card rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold mb-6">Risk Category Trends (30 Days)</h2>
-          <div className="h-[300px] w-full">
+        <div className="lg:col-span-2 border border-slate-800 bg-[#0a0a0a] rounded-2xl p-6">
+          <h2 className="text-base font-semibold mb-1">Risk trends over 30 days</h2>
+          <p className="text-xs text-slate-500 mb-5">How different risk categories appeared across your recent reviews.</p>
+          <div className="h-[260px] w-full">
             {isTrendsLoading ? (
-              <div className="h-full w-full flex items-center justify-center text-muted-foreground animate-pulse">Loading trends...</div>
+              <div className="h-full flex items-center justify-center text-slate-600 text-sm animate-pulse">Loading trends...</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trends?.trends || []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: "8px" }}
-                    itemStyle={{ color: "hsl(var(--foreground))" }}
-                  />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: "12px" }} itemStyle={{ color: "hsl(var(--foreground))" }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: "11px" }} />
                   <Line type="monotone" dataKey="scopeCreep" name="Scope Creep" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="liability" name="Liability" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="paymentDelay" name="Payment Delay" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="paymentDelay" name="Payment Delays" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        <div className="border border-border bg-card rounded-xl p-6 shadow-sm">
-          <h2 className="text-xl font-semibold mb-6">Risk Distribution</h2>
-          <div className="h-[300px] w-full">
+        <div className="border border-slate-800 bg-[#0a0a0a] rounded-2xl p-6">
+          <h2 className="text-base font-semibold mb-1">Risk breakdown</h2>
+          <p className="text-xs text-slate-500 mb-5">High, medium, and low risk clauses across all reviews.</p>
+          <div className="h-[260px] w-full">
             {isSummaryLoading ? (
-               <div className="h-full w-full flex items-center justify-center text-muted-foreground animate-pulse">Loading distribution...</div>
+              <div className="h-full flex items-center justify-center text-slate-600 text-sm animate-pulse">Loading...</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={riskData} margin={{ top: 5, right: 0, bottom: 20, left: -20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} interval={0} angle={-45} textAnchor="end" height={60} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    cursor={{ fill: "hsl(var(--muted))" }}
-                    contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: "8px" }}
-                  />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]} />
+                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-30} textAnchor="end" height={50} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: "hsl(var(--muted))" }} contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", borderRadius: "12px" }} />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -121,15 +128,15 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon, desc }: { title: string, value: string, icon: React.ReactNode, desc: string }) {
+function StatCard({ title, value, icon, desc }: { title: string; value: string; icon: React.ReactNode; desc: string }) {
   return (
-    <div className="p-6 rounded-xl border border-border bg-card shadow-sm flex flex-col">
-      <div className="flex justify-between items-start mb-4">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <div className="p-2 bg-muted rounded-md">{icon}</div>
+    <div className="p-5 rounded-2xl border border-slate-800 bg-[#0a0a0a] flex flex-col">
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</h3>
+        <div className="p-1.5 bg-slate-800/50 rounded-lg">{icon}</div>
       </div>
-      <div className="text-3xl font-bold tracking-tight mb-1 font-mono">{value}</div>
-      <div className="text-xs text-muted-foreground">{desc}</div>
+      <div className="text-3xl font-bold tracking-tight mb-1 font-mono text-white">{value}</div>
+      <div className="text-xs text-slate-600">{desc}</div>
     </div>
   );
 }

@@ -1,158 +1,211 @@
-import { PageTransition } from "@/components/PageTransition";
-import { Button } from "@/components/ui/button";
-import {
-  ShieldAlert, ArrowRight, Upload, ScanSearch, Swords, FileDown,
-  CheckCircle2, XCircle, TrendingUp, Lock, AlertTriangle, ShieldCheck,
-} from "lucide-react";
+import { motion } from "framer-motion";
 import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useRef, useState } from "react";
+import {
+  ShieldCheck, ArrowRight, Upload, Zap, MessageSquare,
+  FileSearch, AlertTriangle, CheckCircle2, DollarSign,
+  FileText, Lock, Star, ChevronRight, ScanSearch, FileDown,
+} from "lucide-react";
 
-function useCountUp(target: number, duration = 2000, prefix = "", suffix = "") {
-  const [display, setDisplay] = useState(`${prefix}0${suffix}`);
-  const hasStarted = useRef(false);
+function useCountUp(target: number, duration = 2000) {
+  const [val, setVal] = useState(0);
+  const started = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasStarted.current) {
-          hasStarted.current = true;
-          const start = performance.now();
-          const tick = (now: number) => {
-            const progress = Math.min((now - start) / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const current = Math.floor(eased * target);
-            setDisplay(`${prefix}${current.toLocaleString()}${suffix}`);
-            if (progress < 1) requestAnimationFrame(tick);
-            else setDisplay(`${prefix}${target.toLocaleString()}${suffix}`);
-          };
-          requestAnimationFrame(tick);
-        }
-      },
-      { threshold: 0.3 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [target, duration, prefix, suffix]);
-
-  return { ref, display };
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !started.current) {
+        started.current = true;
+        const t0 = performance.now();
+        const tick = (now: number) => {
+          const p = Math.min((now - t0) / duration, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          setVal(Math.floor(eased * target));
+          if (p < 1) requestAnimationFrame(tick);
+          else setVal(target);
+        };
+        requestAnimationFrame(tick);
+      }
+    }, { threshold: 0.3 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [target, duration]);
+  return { ref, val };
 }
 
-const COMPARISON_ROWS = [
+const fadeUp = {
+  initial: { opacity: 0, y: 28 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.55 },
+};
+
+const FEATURES = [
   {
-    category: "Knowledge Base",
-    generic: "General training data — not legal-specific",
-    indiepact: "Specialized forensic contract database",
+    icon: <FileSearch className="h-6 w-6" />,
+    title: "Contract Review",
+    desc: "Upload any contract and we read the whole thing for you. Every clause, every page.",
+    example: "A freelancer checks if a client can legally withhold payment.",
   },
   {
-    category: "Risk Coverage",
-    generic: "Surface-level clause flags only",
-    indiepact: "50+ risk categories analyzed per document",
+    icon: <AlertTriangle className="h-6 w-6" />,
+    title: "Risk Detection",
+    desc: "We find the terms that could cost you money, ownership of your work, or your freedom to work with others.",
+    example: "An agency discovers a non-compete buried on page 8.",
   },
   {
-    category: "Jurisdictional Analysis",
-    generic: "None — generic advice only",
-    indiepact: "Tailored jurisdictional risk assessment",
+    icon: <MessageSquare className="h-6 w-6" />,
+    title: "Plain English Explanations",
+    desc: "Every clause explained like a knowledgeable friend — no legal jargon, no confusing language.",
+    example: "\"Indemnification\" explained as: you could be blamed for problems that weren't your fault.",
   },
   {
-    category: "Legal Citations",
-    generic: "No structured legal references",
-    indiepact: "Clause-level citations and precedent",
+    icon: <Zap className="h-6 w-6" />,
+    title: "Negotiation Help",
+    desc: "We write better contract language for you so you can push back confidently, professionally, and quickly.",
+    example: "A creator rewrites a payment clause from 90 days to 7 days.",
   },
   {
-    category: "Negotiation Rebuttals",
-    generic: "Vague suggestions at best",
-    indiepact: "Structured war-room rebuttal strategies",
+    icon: <FileText className="h-6 w-6" />,
+    title: "Clause Rewriting",
+    desc: "We fix unfair terms and give you language that's ready to copy and send back to the other party.",
+    example: "A founder sends a revised IP clause that protects their future work.",
   },
   {
-    category: "Output Format",
-    generic: "Unstructured chat response",
-    indiepact: "Forensic Audit Report — downloadable",
+    icon: <DollarSign className="h-6 w-6" />,
+    title: "Payment Protection",
+    desc: "We catch the traps that lead to slow payments, withheld fees, or unpaid work — before you sign.",
+    example: "A developer avoids a \"sole discretion\" clause that could delay payment indefinitely.",
   },
 ];
 
-const SPOTLIGHT_CLAUSES = [
-  {
-    tag: "Payment Trap",
-    severity: "high" as const,
-    clause: `"Payment shall be issued within ninety (90) days of Client's written acceptance of all deliverables, at Client's sole discretion."`,
-    detection: "Net-90 + 'sole discretion' = indefinite payment hold. Client controls both the acceptance trigger and the timeline.",
-    rebuttal: `"Payment of the remaining balance shall be due within seven (7) calendar days of delivery. Acceptance is deemed granted if no written objection is received within 5 business days."`,
-  },
-  {
-    tag: "IP Grab",
-    severity: "high" as const,
-    clause: `"All work product, deliverables, concepts, and materials produced by Contractor shall be considered work-for-hire and shall vest exclusively in the Company in perpetuity, irrevocably, without restriction."`,
-    detection: "Triple lock: work-for-hire + perpetuity + irrevocable. This clause retroactively claims your process, your tools, and your methodology.",
-    rebuttal: `"Upon receipt of full payment, Contractor grants Client a non-exclusive, perpetual license to use final deliverables. All preliminary work, tools, and methodologies remain Contractor's property."`,
-  },
-  {
-    tag: "Scope Creep Trigger",
-    severity: "medium" as const,
-    clause: `"Contractor shall perform such additional services as may be reasonably required by Client from time to time, without additional compensation, to ensure project success."`,
-    detection: "'As may be reasonably required' with 'without additional compensation' is an unlimited scope expansion clause with zero price protection.",
-    rebuttal: `"Scope is limited to deliverables in Schedule A. Any additional services shall be subject to a written Change Order executed by both parties before commencement."`,
-  },
+const STATS = [
+  { label: "Protected in freelance deals", value: 30, prefix: "$", suffix: "M+", color: "text-emerald-400" },
+  { label: "Contract reviews completed", value: 12000, prefix: "", suffix: "+", color: "text-white" },
+  { label: "Average review time", value: 3, prefix: "< ", suffix: " min", color: "text-white" },
+  { label: "Countries using IndiePact", value: 40, prefix: "", suffix: "+", color: "text-white" },
 ];
 
 const STEPS = [
   {
     num: "01",
     icon: <Upload className="h-7 w-7 text-emerald-400" />,
-    title: "Upload",
-    desc: "Drop your PDF, image, or paste message screenshots directly into the Document Lab.",
+    title: "Upload or paste your contract",
+    desc: "PDF, Word doc, or just paste the text directly. We handle any format.",
   },
   {
     num: "02",
     icon: <ScanSearch className="h-7 w-7 text-emerald-400" />,
-    title: "Forensic Scan",
-    desc: "Our AI engine dissects 50+ risk categories — payment traps, IP grabs, liability landmines, scope creep clauses.",
+    title: "We explain the risks in plain English",
+    desc: "IndiePact reads every clause and flags anything that could put your money, rights, or time at risk.",
   },
   {
     num: "03",
-    icon: <Swords className="h-7 w-7 text-emerald-400" />,
-    title: "War Room",
-    desc: "Receive clause-by-clause rebuttals, negotiation language, and capital-protection strategies.",
-  },
-  {
-    num: "04",
-    icon: <FileDown className="h-7 w-7 text-emerald-400" />,
-    title: "Execute",
-    desc: "Download your Forensic Audit Report and walk into every negotiation backed by hard evidence.",
+    icon: <MessageSquare className="h-7 w-7 text-emerald-400" />,
+    title: "Get help before you sign",
+    desc: "Receive ready-to-send counter-clauses, negotiation scripts, and clear next steps.",
   },
 ];
 
-function SpotlightSection() {
-  const [active, setActive] = useState(0);
+const TESTIMONIALS = [
+  {
+    quote: "I almost signed away all my future design work. IndiePact caught a clause that would have made every project I create belong to the client — forever. Saved me years of headache.",
+    name: "Maya R.",
+    role: "Freelance Designer",
+    rating: 5,
+  },
+  {
+    quote: "As a startup founder reviewing investor agreements, IndiePact gave me clarity I would have paid $500/hr to a lawyer for. I understood every clause and negotiated two of them successfully.",
+    name: "James T.",
+    role: "Startup Founder",
+    rating: 5,
+  },
+  {
+    quote: "My client slipped in a 90-day payment clause buried in the fine print. IndiePact flagged it, rewrote it to 7 days, and I got paid immediately after delivery.",
+    name: "Sofia V.",
+    role: "Content Creator",
+    rating: 5,
+  },
+];
 
+const FAQS = [
+  {
+    q: "Is IndiePact a lawyer?",
+    a: "No. IndiePact is an AI tool that helps you understand and review contracts. It provides information and suggestions, not legal advice. For complex situations, we always recommend consulting a qualified attorney.",
+  },
+  {
+    q: "What types of contracts can I review?",
+    a: "Any contract — freelance agreements, employment contracts, NDAs, agency agreements, partnership deals, SaaS terms, creator agreements, and more. If it's a contract, we can review it.",
+  },
+  {
+    q: "Is my contract data private?",
+    a: "Completely. Your contracts are never shared, sold, or used to train AI models. All data is encrypted and stored securely.",
+  },
+  {
+    q: "How accurate is the AI?",
+    a: "Very accurate for identifying common contract risks and explaining legal terms. It's been trained on thousands of real commercial contracts. That said, important decisions should always involve a human professional.",
+  },
+  {
+    q: "Can I cancel my plan anytime?",
+    a: "Yes. You can cancel at any time from your account settings. No lock-in, no penalties, no questions asked.",
+  },
+  {
+    q: "What if I don't agree with a flagged risk?",
+    a: "You're always in control. IndiePact gives you information and suggestions — what you do with them is entirely up to you.",
+  },
+];
+
+const SPOTLIGHT_CLAUSES = [
+  {
+    tag: "Payment Trap",
+    clause: `"Payment shall be issued within ninety (90) days of Client's written acceptance of all deliverables, at Client's sole discretion."`,
+    plain: "This means the client can delay paying you for 3 months — and they decide when your work is 'accepted.' There's no deadline on their side.",
+    fix: `"Payment is due within 7 calendar days of delivery. Work is considered accepted unless written objection is received within 5 business days."`,
+  },
+  {
+    tag: "IP Ownership Grab",
+    clause: `"All work product, deliverables, concepts, and materials produced by Contractor shall vest exclusively in the Company in perpetuity, irrevocably, without restriction."`,
+    plain: "This means everything you create — your process, tools, and ideas — permanently belong to the client. Even work you do using your own methods.",
+    fix: `"Upon full payment, Contractor grants Client a license to use final deliverables. All tools, processes, and preliminary work remain Contractor's property."`,
+  },
+  {
+    tag: "Unlimited Scope Creep",
+    clause: `"Contractor shall perform such additional services as may be reasonably required by Client from time to time, without additional compensation."`,
+    plain: "This allows the client to keep adding work to the project with no extra pay. There's no limit on how much they can ask for.",
+    fix: `"Scope is limited to deliverables in Schedule A. Any additional work requires a signed Change Order with agreed pricing before starting."`,
+  },
+];
+
+function SpotlightSection({ onReview }: { onReview: () => void }) {
+  const [active, setActive] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setActive((p) => (p + 1) % SPOTLIGHT_CLAUSES.length), 5000);
     return () => clearInterval(t);
   }, []);
-
   const item = SPOTLIGHT_CLAUSES[active];
 
   return (
-    <section className="px-6 pb-28 max-w-5xl mx-auto w-full">
+    <motion.section {...fadeUp} className="px-4 pb-28 max-w-5xl mx-auto w-full">
       <div className="text-center mb-10">
         <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-          Clause Spotlight — Live Examples
+          See IndiePact in Action
         </h2>
-        <p className="text-slate-400 mt-3 text-base">
-          Real contract language IndiePact flags and neutralizes — clause by clause.
+        <p className="text-slate-400 mt-3 text-base max-w-xl mx-auto">
+          Real contract language. Real problems. Real fixes — written in plain English.
         </p>
       </div>
 
-      <div className="rounded-xl border border-slate-800 overflow-hidden">
-        {/* Tab selector */}
+      <div className="rounded-2xl border border-slate-800 overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)]">
         <div className="flex border-b border-slate-800 bg-[#0a0a0a]">
           {SPOTLIGHT_CLAUSES.map((c, i) => (
             <button
               key={i}
               onClick={() => setActive(i)}
-              className={`flex-1 py-3 px-4 font-mono text-xs uppercase tracking-widest transition-colors ${
+              className={`flex-1 py-3 px-3 text-xs font-semibold transition-colors ${
                 i === active
                   ? "text-emerald-400 border-b-2 border-emerald-500 bg-emerald-950/20"
                   : "text-slate-600 hover:text-slate-400"
@@ -163,231 +216,464 @@ function SpotlightSection() {
           ))}
         </div>
 
-        {/* Clause display */}
         <div className="grid grid-cols-1 md:grid-cols-3 bg-[#080808]">
-          {/* The Trap */}
-          <div className="p-6 border-r border-slate-800/60 space-y-3">
-            <div className="flex items-center gap-2 font-mono text-[10px] text-red-400 uppercase tracking-widest">
-              <AlertTriangle className="h-3 w-3" /> Predatory Clause
+          <div className="p-6 border-b md:border-b-0 md:border-r border-slate-800/60 space-y-3">
+            <div className="flex items-center gap-2 text-[10px] text-red-400 uppercase tracking-widest font-semibold">
+              <AlertTriangle className="h-3 w-3" /> What's in the contract
             </div>
-            <p className="font-mono text-xs text-slate-300 leading-relaxed">
-              {item.clause}
-            </p>
+            <p className="text-xs text-slate-300 leading-relaxed italic">{item.clause}</p>
           </div>
-
-          {/* IndiePact Detection */}
-          <div className="p-6 border-r border-slate-800/60 space-y-3">
-            <div className="flex items-center gap-2 font-mono text-[10px] text-amber-400 uppercase tracking-widest">
-              <ScanSearch className="h-3 w-3" /> What This Actually Means
+          <div className="p-6 border-b md:border-b-0 md:border-r border-slate-800/60 space-y-3">
+            <div className="flex items-center gap-2 text-[10px] text-amber-400 uppercase tracking-widest font-semibold">
+              <ScanSearch className="h-3 w-3" /> What it actually means
             </div>
-            <p className="font-mono text-xs text-amber-200/80 leading-relaxed">
-              {item.detection}
-            </p>
+            <p className="text-xs text-amber-200/80 leading-relaxed">{item.plain}</p>
           </div>
-
-          {/* The Fix */}
           <div className="p-6 space-y-3 bg-emerald-950/10">
-            <div className="flex items-center gap-2 font-mono text-[10px] text-emerald-400 uppercase tracking-widest">
-              <ShieldCheck className="h-3 w-3" /> IndiePact Counter-Clause
+            <div className="flex items-center gap-2 text-[10px] text-emerald-400 uppercase tracking-widest font-semibold">
+              <CheckCircle2 className="h-3 w-3" /> IndiePact's fix
             </div>
-            <p className="font-mono text-xs text-emerald-300 leading-relaxed">
-              {item.rebuttal}
-            </p>
+            <p className="text-xs text-emerald-300 leading-relaxed italic">{item.fix}</p>
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="flex bg-[#050505] h-0.5">
+        <div className="flex bg-[#050505] h-1">
           {SPOTLIGHT_CLAUSES.map((_, i) => (
             <div key={i} className={`flex-1 transition-colors duration-500 ${i === active ? "bg-emerald-500" : "bg-slate-800"}`} />
           ))}
         </div>
       </div>
-    </section>
+
+      <div className="flex justify-center mt-10">
+        <Button
+          size="lg"
+          onClick={onReview}
+          className="h-13 px-10 bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_24px_rgba(16,185,129,0.35)] hover:shadow-[0_0_36px_rgba(16,185,129,0.55)] transition-all"
+        >
+          Review My Contract Now
+          <ArrowRight className="ml-2 h-5 w-5" />
+        </Button>
+      </div>
+    </motion.section>
   );
 }
 
 export default function Home() {
-  const accuracy = useCountUp(997, 1800, "", "");
-  const capital = useCountUp(60000, 2200, "$", "+");
+  const { user, isGuest, openAuthModal } = useAuth();
+  const userInitial = user?.email ? user.email[0].toUpperCase() : null;
+
+  const stat0 = useCountUp(30, 1600);
+  const stat1 = useCountUp(12000, 2000);
+  const stat2 = useCountUp(3, 1200);
+  const stat3 = useCountUp(40, 1800);
+  const statRefs = [stat0.ref, stat1.ref, stat2.ref, stat3.ref];
+  const statVals = [stat0.val, stat1.val, stat2.val, stat3.val];
+
+  const handleReviewCta = () => {
+    if (isGuest) {
+      openAuthModal();
+    } else {
+      window.location.href = import.meta.env.BASE_URL + "scan";
+    }
+  };
 
   return (
-    <PageTransition className="min-h-screen bg-[#050505] text-slate-100 flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#050505]/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="flex items-center gap-2.5 font-bold text-xl tracking-tight text-emerald-400">
-          <ShieldAlert className="h-6 w-6" />
-          <span>IndiePact AI</span>
+    <div className="min-h-screen bg-[#050505] text-slate-100 flex flex-col">
+      {/* ── HEADER ────────────────────────────────────────────────── */}
+      <header className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/60 bg-[#050505]/90 backdrop-blur-md sticky top-0 z-50">
+        <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-emerald-400">
+          <ShieldCheck className="h-5 w-5" />
+          IndiePact
         </div>
-        <Link href="/scan">
-          <Button
-            size="sm"
-            className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_12px_rgba(16,185,129,0.35)] hover:shadow-[0_0_20px_rgba(16,185,129,0.55)] transition-all"
-          >
-            Run Audit
-            <ArrowRight className="ml-1.5 h-4 w-4" />
-          </Button>
-        </Link>
+
+        <nav className="hidden md:flex items-center gap-6 text-sm text-slate-400">
+          <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+          <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+        </nav>
+
+        <div className="flex items-center gap-3">
+          {isGuest ? (
+            <>
+              <button
+                onClick={openAuthModal}
+                className="text-sm text-slate-400 hover:text-white transition-colors hidden sm:block"
+              >
+                Sign In
+              </button>
+              <Button
+                size="sm"
+                onClick={handleReviewCta}
+                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold h-9 px-4 shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all"
+              >
+                Get Started Free
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Link href="/dashboard">
+                <Button size="sm" variant="outline" className="h-9 border-slate-700 text-slate-300 hover:bg-slate-800">
+                  Go to Dashboard
+                </Button>
+              </Link>
+              <div className="h-8 w-8 rounded-full bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-300 font-bold text-sm">
+                {userInitial}
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col">
-        {/* ── HERO ─────────────────────────────────────────────────── */}
-        <section className="relative flex flex-col items-center text-center pt-28 pb-24 px-6 overflow-hidden">
-          <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#ffffff06_1px,transparent_1px),linear-gradient(to_bottom,#ffffff06_1px,transparent_1px)] bg-[size:32px_32px]" />
-          <div className="absolute inset-0 -z-10 [background:radial-gradient(ellipse_70%_55%_at_50%_0%,rgba(16,185,129,0.07)_0%,transparent_70%)]" />
+        {/* ── 1. HERO ──────────────────────────────────────────────── */}
+        <section className="relative flex flex-col items-center text-center pt-24 pb-20 px-4 overflow-hidden">
+          <div className="absolute inset-0 -z-10 [background:radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(16,185,129,0.08)_0%,transparent_70%)]" />
+          <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#ffffff04_1px,transparent_1px),linear-gradient(to_bottom,#ffffff04_1px,transparent_1px)] bg-[size:36px_36px]" />
 
-          <div className="inline-flex items-center gap-2 border border-emerald-800/60 bg-emerald-950/30 text-emerald-400 text-xs font-mono font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-8">
-            <Lock className="h-3 w-3" /> Forensic Contract Intelligence
-          </div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 bg-emerald-950/40 border border-emerald-800/40 text-emerald-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-8 uppercase tracking-widest"
+          >
+            <Lock className="h-3 w-3" />
+            AI Contract Protection
+          </motion.div>
 
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-[1.08] max-w-4xl">
-            Forensic Contract Audit&nbsp;&amp;
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-5xl md:text-7xl font-bold tracking-tighter leading-[1.07] max-w-4xl"
+          >
+            Review any contract
             <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-300">
-              Revenue Protection.
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400">
+              in minutes.
             </span>
-          </h1>
+          </motion.h1>
 
-          <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed mt-7">
-            The contract scanning engine for independent professionals. We surface financial and legal risk before the client can exploit it — clause by clause, dollar by dollar.
-          </p>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed mt-6"
+          >
+            IndiePact reads your contracts, spots the risks, and helps you negotiate better deals —
+            all explained in plain English. No lawyers needed.
+          </motion.p>
 
-          {/* Trust bar */}
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 mt-9 text-xs font-mono font-medium text-slate-500 uppercase tracking-wider">
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Enterprise-Grade Security</span>
-            <span className="text-slate-700 hidden sm:block">|</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Forensic Analysis</span>
-            <span className="text-slate-700 hidden sm:block">|</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Built for Independent Professionals</span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 mt-11">
-            <Link href="/scan">
-              <Button
-                size="lg"
-                className="h-14 px-10 text-base font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_24px_rgba(16,185,129,0.45)] hover:shadow-[0_0_36px_rgba(16,185,129,0.65)] transition-all"
-              >
-                Start Forensic Audit
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="flex flex-col sm:flex-row items-center gap-3 mt-9"
+          >
+            <Button
+              size="lg"
+              onClick={handleReviewCta}
+              className="h-13 px-10 text-base font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_28px_rgba(16,185,129,0.4)] hover:shadow-[0_0_40px_rgba(16,185,129,0.6)] transition-all"
+            >
+              Review Your First Contract Free
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            <Link href="/pricing">
+              <button className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-1">
+                See pricing <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </Link>
-          </div>
+          </motion.div>
 
-          {/* Live metrics */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 mt-20 pt-10 border-t border-slate-800/60 w-full max-w-lg">
-            <div className="flex flex-col items-center gap-1" ref={accuracy.ref}>
-              <span className="text-3xl font-mono font-bold text-white tabular-nums">
-                {accuracy.display.replace(/(\d+)/, (m) => {
-                  const n = parseInt(m);
-                  return (n / 10).toFixed(1);
-                })}%
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+            className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2 mt-10 text-xs text-slate-500"
+          >
+            {["No credit card required", "Results in under 3 minutes", "Plain English — always"].map((t) => (
+              <span key={t} className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> {t}
               </span>
-              <span className="text-xs text-slate-500 uppercase tracking-widest font-mono">Accuracy Rate</span>
-            </div>
-            <div className="hidden sm:block h-10 w-px bg-slate-800" />
-            <div className="flex flex-col items-center gap-1" ref={capital.ref}>
-              <span className="text-3xl font-mono font-bold text-emerald-400 tabular-nums">
-                {capital.display}
-              </span>
-              <span className="text-xs text-slate-500 uppercase tracking-widest font-mono">Total Capital Protected</span>
-            </div>
-          </div>
+            ))}
+          </motion.div>
         </section>
 
-        {/* ── COMPETITIVE COMPARISON ───────────────────────────────── */}
-        <section className="px-6 pb-24 max-w-5xl mx-auto w-full">
+        {/* ── 2. WHAT IS INDIEPACT ────────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-24 max-w-6xl mx-auto w-full">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Why Professionals Choose <span className="text-emerald-400">IndiePact</span>
+              Everything you need to <span className="text-emerald-400">sign with confidence</span>
             </h2>
-            <p className="text-slate-400 mt-3 text-base">Not all AI is built equal. Forensic work demands forensic tools.</p>
+            <p className="text-slate-400 mt-3 text-base max-w-xl mx-auto">
+              IndiePact does the heavy lifting — so you never sign something you don't understand.
+            </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.6)]">
-            {/* Table header */}
-            <div className="grid grid-cols-3 font-mono text-xs uppercase tracking-widest border-b border-slate-800">
-              <div className="px-5 py-4 text-slate-500 font-semibold bg-[#0a0a0a]">Category</div>
-              <div className="px-5 py-4 text-slate-400 font-semibold bg-[#0d0d0d] border-l border-slate-800 flex items-center gap-2">
-                <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                Standard AI Chatbots
-              </div>
-              <div className="px-5 py-4 text-emerald-400 font-semibold bg-[#071510] border-l border-slate-800 flex items-center gap-2">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                IndiePact AI
-              </div>
-            </div>
-
-            {COMPARISON_ROWS.map((row, i) => (
-              <div
-                key={row.category}
-                className={`grid grid-cols-3 border-b border-slate-800/60 last:border-b-0 ${i % 2 === 0 ? "bg-[#080808]" : "bg-[#060606]"}`}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {FEATURES.map((f, i) => (
+              <motion.div
+                key={f.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, delay: i * 0.06 }}
+                className="group p-6 rounded-2xl border border-slate-800 bg-[#0a0a0a] hover:border-emerald-900/60 hover:bg-[#0c110e] transition-all cursor-default"
               >
-                <div className="px-5 py-4 font-mono text-xs text-slate-400 font-semibold uppercase tracking-wide">
-                  {row.category}
+                <div className="h-11 w-11 rounded-xl bg-emerald-950/50 border border-emerald-900/40 flex items-center justify-center text-emerald-400 mb-4 group-hover:border-emerald-800/60 transition-colors">
+                  {f.icon}
                 </div>
-                <div className="px-5 py-4 text-sm text-slate-500 border-l border-slate-800/60 font-mono">
-                  {row.generic}
-                </div>
-                <div className="px-5 py-4 text-sm text-emerald-300 border-l border-slate-800/60 font-mono font-medium">
-                  {row.indiepact}
-                </div>
-              </div>
+                <h3 className="font-bold text-white mb-2">{f.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed mb-3">{f.desc}</p>
+                <p className="text-xs text-slate-600 italic border-t border-slate-800/60 pt-3">
+                  💡 {f.example}
+                </p>
+              </motion.div>
             ))}
           </div>
+        </motion.section>
+
+        {/* ── 3. TRUST METRICS ────────────────────────────────────── */}
+        <section className="px-4 pb-24 max-w-5xl mx-auto w-full">
+          <motion.div {...fadeUp} className="rounded-2xl border border-slate-800 bg-gradient-to-br from-[#0c0c0c] to-[#080808] p-10">
+            <div className="text-center mb-10">
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+                Trusted by freelancers, creators, and founders
+              </h2>
+              <p className="text-slate-500 mt-2 text-sm">Protecting independent professionals, one contract at a time.</p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              {STATS.map((s, i) => (
+                <div key={i} className="text-center" ref={statRefs[i]}>
+                  <div className={`text-3xl md:text-4xl font-bold tracking-tight ${s.color} tabular-nums`}>
+                    {s.prefix}{statVals[i].toLocaleString()}{s.suffix}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-2 leading-tight">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </section>
 
-        {/* ── HOW IT WORKS ─────────────────────────────────────────── */}
-        <section className="px-6 pb-28 max-w-5xl mx-auto w-full">
+        {/* ── 4. HOW IT WORKS ─────────────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-24 max-w-5xl mx-auto w-full">
           <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">How It Works</h2>
-            <p className="text-slate-400 mt-3 text-base">Four deliberate steps from document to protection.</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+              How IndiePact works
+            </h2>
+            <p className="text-slate-400 mt-3 text-base">
+              Three simple steps from contract to confidence.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {STEPS.map((step) => (
-              <div
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 relative">
+            <div className="hidden md:block absolute top-10 left-1/3 right-1/3 h-px bg-gradient-to-r from-transparent via-emerald-900/50 to-transparent" />
+            {STEPS.map((step, i) => (
+              <motion.div
                 key={step.num}
-                className="relative flex flex-col gap-5 p-6 rounded-xl border border-slate-800 bg-[#0c0c0c] hover:border-emerald-900 hover:bg-[#0d120f] transition-colors group"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, delay: i * 0.1 }}
+                className="relative flex flex-col gap-4 p-7 rounded-2xl border border-slate-800 bg-[#0a0a0a] hover:border-emerald-900/50 transition-colors group"
               >
-                <div className="absolute top-4 right-5 font-mono text-4xl font-bold text-slate-800 group-hover:text-emerald-950 select-none transition-colors">
+                <div className="absolute top-5 right-5 text-5xl font-bold text-slate-800/60 select-none">
                   {step.num}
                 </div>
-                <div className="h-12 w-12 rounded-lg border border-emerald-900/50 bg-emerald-950/40 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-xl border border-emerald-900/50 bg-emerald-950/40 flex items-center justify-center">
                   {step.icon}
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white mb-2 tracking-tight">{step.title}</h3>
+                  <h3 className="font-bold text-white mb-2 leading-snug">{step.title}</h3>
                   <p className="text-sm text-slate-400 leading-relaxed">{step.desc}</p>
                 </div>
-              </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        {/* ── 5. CONTRACT UPLOAD CTA ───────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-24 max-w-4xl mx-auto w-full">
+          <div
+            className="rounded-2xl border border-emerald-900/40 p-12 text-center relative overflow-hidden"
+            style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(5,5,5,0.95) 60%)" }}
+          >
+            <div className="absolute inset-0 -z-10 [background:radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(16,185,129,0.05)_0%,transparent_70%)]" />
+            <Upload className="h-12 w-12 text-emerald-400/60 mx-auto mb-5" />
+            <h2 className="text-2xl md:text-3xl font-bold mb-3">
+              Have a contract to review?
+            </h2>
+            <p className="text-slate-400 text-base max-w-md mx-auto mb-8 leading-relaxed">
+              Paste or upload it. IndiePact will read every word and tell you exactly what to watch out for —
+              in plain English, in minutes.
+            </p>
+            <Button
+              size="lg"
+              onClick={handleReviewCta}
+              className="h-13 px-10 bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_24px_rgba(16,185,129,0.35)] transition-all"
+            >
+              Start Reviewing Now
+              <FileDown className="ml-2 h-5 w-5" />
+            </Button>
+          </div>
+        </motion.section>
+
+        {/* ── 6. AI SHOWCASE — CLAUSE SPOTLIGHT ───────────────────── */}
+        <SpotlightSection onReview={handleReviewCta} />
+
+        {/* ── 7. TESTIMONIALS ─────────────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-28 max-w-5xl mx-auto w-full">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+              Freelancers love IndiePact
+            </h2>
+            <p className="text-slate-400 mt-3 text-base">Real stories from independent professionals.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {TESTIMONIALS.map((t, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, delay: i * 0.08 }}
+                className="flex flex-col gap-4 p-6 rounded-2xl border border-slate-800 bg-[#0a0a0a]"
+              >
+                <div className="flex gap-0.5">
+                  {Array.from({ length: t.rating }).map((_, j) => (
+                    <Star key={j} className="h-4 w-4 text-amber-400 fill-amber-400" />
+                  ))}
+                </div>
+                <p className="text-slate-300 text-sm leading-relaxed flex-1">"{t.quote}"</p>
+                <div>
+                  <p className="font-semibold text-white text-sm">{t.name}</p>
+                  <p className="text-xs text-slate-500">{t.role}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+
+        {/* ── 8. PRICING PREVIEW ─────────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-28 max-w-4xl mx-auto w-full">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+              Simple, affordable plans
+            </h2>
+            <p className="text-slate-400 mt-3 text-base">
+              Start free. Upgrade when you need more. Cancel anytime.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            {[
+              { name: "Free", price: "$0", desc: "2 reviews/month. Get started today.", cta: "Start Free", featured: false },
+              { name: "Starter", price: "$19", desc: "25 reviews/month. Negotiation assistant included.", cta: "Most Popular", featured: true },
+              { name: "Pro", price: "$49", desc: "100 reviews + advanced AI + PDF export.", cta: "Go Pro", featured: false },
+            ].map((p, i) => (
+              <motion.div
+                key={p.name}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.45, delay: i * 0.07 }}
+                className={`p-6 rounded-2xl border text-center transition-all ${
+                  p.featured
+                    ? "border-emerald-500/40 bg-emerald-950/20 shadow-[0_0_30px_rgba(16,185,129,0.08)]"
+                    : "border-slate-800 bg-[#0a0a0a]"
+                }`}
+              >
+                {p.featured && (
+                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Most Popular</div>
+                )}
+                <div className="font-bold text-white mb-1">{p.name}</div>
+                <div className="text-3xl font-bold text-emerald-400 mb-2">{p.price}<span className="text-sm text-slate-500">/mo</span></div>
+                <div className="text-xs text-slate-400 mb-5 leading-snug">{p.desc}</div>
+                <button
+                  onClick={handleReviewCta}
+                  className={`w-full py-2 rounded-xl text-sm font-semibold transition-all ${
+                    p.featured
+                      ? "bg-emerald-500 hover:bg-emerald-400 text-black"
+                      : "bg-slate-800 hover:bg-slate-700 text-white"
+                  }`}
+                >
+                  {p.cta}
+                </button>
+              </motion.div>
             ))}
           </div>
 
-          <div className="flex justify-center mt-14">
-            <Link href="/scan">
-              <Button
-                size="lg"
-                className="h-14 px-12 text-base font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_24px_rgba(16,185,129,0.4)] hover:shadow-[0_0_36px_rgba(16,185,129,0.6)] transition-all"
-              >
-                Begin Your Audit
-                <TrendingUp className="ml-2 h-5 w-5" />
-              </Button>
+          <div className="text-center">
+            <Link href="/pricing">
+              <button className="text-sm text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1 mx-auto">
+                See all plans including Elite <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </Link>
           </div>
-        </section>
+        </motion.section>
 
-        {/* ── RISK CATEGORY SPOTLIGHT ──────────────────────────────── */}
-        <SpotlightSection />
+        {/* ── 9. FAQ ─────────────────────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-28 max-w-3xl mx-auto w-full">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Common questions</h2>
+            <p className="text-slate-400 mt-3 text-base">Everything you need to know before getting started.</p>
+          </div>
+
+          <Accordion type="single" collapsible className="space-y-2">
+            {FAQS.map((faq, i) => (
+              <AccordionItem
+                key={i}
+                value={`faq-${i}`}
+                className="border border-slate-800 rounded-xl bg-[#0a0a0a] px-5 overflow-hidden"
+              >
+                <AccordionTrigger className="text-sm font-semibold text-white hover:text-emerald-400 hover:no-underline py-4 text-left">
+                  {faq.q}
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400 text-sm leading-relaxed pb-4">
+                  {faq.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </motion.section>
+
+        {/* ── 10. FINAL CTA ─────────────────────────────────────── */}
+        <motion.section {...fadeUp} className="px-4 pb-28 max-w-3xl mx-auto w-full text-center">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+            Stop signing contracts you don't understand.
+          </h2>
+          <p className="text-slate-400 text-base mb-8 max-w-lg mx-auto leading-relaxed">
+            Join thousands of freelancers, creators, and founders who use IndiePact to protect their work, money, and rights.
+          </p>
+          <Button
+            size="lg"
+            onClick={handleReviewCta}
+            className="h-13 px-12 text-base font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_28px_rgba(16,185,129,0.4)] hover:shadow-[0_0_40px_rgba(16,185,129,0.6)] transition-all"
+          >
+            Get Started — It's Free
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+          <p className="text-xs text-slate-600 mt-4">No credit card needed · Cancel anytime</p>
+        </motion.section>
       </main>
 
-      <footer className="border-t border-slate-800/50 px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-bold text-emerald-400 font-mono tracking-tight">
-          <ShieldAlert className="h-4 w-4" />
-          IndiePact AI
+      {/* ── FOOTER ──────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-800/50 px-6 py-8">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2 font-bold text-emerald-400">
+            <ShieldCheck className="h-5 w-5" />
+            IndiePact
+          </div>
+          <div className="flex items-center gap-6 text-xs text-slate-500">
+            <Link href="/pricing" className="hover:text-slate-300 transition-colors">Pricing</Link>
+            <Link href="/dashboard" className="hover:text-slate-300 transition-colors">Dashboard</Link>
+            <Link href="/scan" className="hover:text-slate-300 transition-colors">Review a Contract</Link>
+          </div>
+          <p className="text-xs text-slate-700">
+            © 2025 IndiePact · AI contract protection for independent professionals
+          </p>
         </div>
-        <p className="text-xs text-slate-600 font-mono">
-          Forensic contract intelligence for independent professionals.
-        </p>
       </footer>
-    </PageTransition>
+    </div>
   );
 }

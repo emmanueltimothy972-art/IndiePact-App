@@ -1,13 +1,14 @@
 import { PageTransition } from "@/components/PageTransition";
-import { DEMO_USER_ID } from "@/lib/constants";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
 import { Scale, ArrowRight, ShieldAlert, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TheBar() {
+  const { userId } = useAuth();
   const { data, isLoading } = useListScans(
-    { userId: DEMO_USER_ID, limit: 1, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId: DEMO_USER_ID, limit: 1, offset: 0 }) } }
+    { userId, limit: 1, offset: 0 },
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }) } }
   );
 
   const recentScan = data?.scans?.[0];

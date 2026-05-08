@@ -1,27 +1,31 @@
-import { DEMO_USER_ID } from "@/lib/constants";
 import { PageTransition } from "@/components/PageTransition";
 import { useListScans } from "@workspace/api-client-react";
 import { getListScansQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { ShieldAlert, ChevronRight, FileText, Calendar, DollarSign, AlertTriangle } from "lucide-react";
+import { ChevronRight, FileText, Calendar, DollarSign, AlertTriangle, History } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function IntelligenceVault() {
+  const { userId } = useAuth();
   const { data, isLoading } = useListScans(
-    { userId: DEMO_USER_ID, limit: 50, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId: DEMO_USER_ID, limit: 50, offset: 0 }) } }
+    { userId, limit: 50, offset: 0 },
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 50, offset: 0 }) } }
   );
 
   return (
     <PageTransition className="space-y-6 max-w-5xl mx-auto">
-      <div className="mb-8 border-b border-border pb-6">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-          <ShieldAlert className="text-primary h-8 w-8" />
-          Intelligence Vault
-        </h1>
-        <p className="text-muted-foreground mt-2 max-w-2xl">
-          Complete history of your forensic contract analyses. Review past risk assessments and track your negotiated improvements.
-        </p>
+      <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6 mb-2">
+        <div className="flex items-start gap-3.5">
+          <div className="h-10 w-10 rounded-xl bg-emerald-950/60 border border-emerald-900/50 flex items-center justify-center shrink-0">
+            <History className="h-5 w-5 text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">My Reviews</h1>
+            <p className="text-slate-400 text-sm mt-0.5">All the contracts you've reviewed, in one place. Click any review to see the full risk breakdown.</p>
+            <p className="text-xs text-slate-600 mt-1 italic">Example: Review your NDA from last month to check if any flagged clauses were addressed.</p>
+          </div>
+        </div>
       </div>
 
       {isLoading ? (
@@ -35,10 +39,10 @@ export default function IntelligenceVault() {
           <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-semibold mb-2">The vault is empty</h3>
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-            You haven't analyzed any contracts yet. Deploy the engine to secure your revenue.
+            No contracts reviewed yet. Upload one to start spotting risks, understanding payment terms, and negotiating better deals.
           </p>
-          <Link href="/scan" className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-            Scan First Contract
+          <Link href="/scan" className="inline-flex items-center justify-center rounded-xl text-sm font-semibold transition-colors bg-emerald-500 hover:bg-emerald-400 text-black h-10 px-5">
+            Review Your First Contract
           </Link>
         </div>
       ) : (

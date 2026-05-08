@@ -9,6 +9,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AuthModal } from "@/components/AuthModal";
 
 import Home from "@/pages/Home";
+import Pricing from "@/pages/Pricing";
 import Dashboard from "@/pages/Dashboard";
 import DocumentLab from "@/pages/DocumentLab";
 import IntelligenceVault from "@/pages/IntelligenceVault";
@@ -24,6 +25,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/pricing" component={Pricing} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/scan" component={DocumentLab} />
       <Route path="/history" component={IntelligenceVault} />

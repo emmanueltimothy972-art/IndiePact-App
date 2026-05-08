@@ -1,4 +1,3 @@
-import { DEMO_USER_ID } from "@/lib/constants";
 import { PageTransition } from "@/components/PageTransition";
 import { useGetScan, getGetScanQueryKey } from "@workspace/api-client-react";
 import { ScanResultView } from "@/components/ScanResultView";
@@ -6,15 +5,17 @@ import { useParams, Link } from "wouter";
 import { ArrowLeft, Calendar, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ScanDetail() {
   const params = useParams();
   const scanId = params.scanId as string;
+  const { userId } = useAuth();
 
   const { data: scan, isLoading, error } = useGetScan(
     scanId,
-    { userId: DEMO_USER_ID },
-    { query: { enabled: !!scanId, queryKey: getGetScanQueryKey(scanId, { userId: DEMO_USER_ID }) } }
+    { userId },
+    { query: { enabled: !!scanId, queryKey: getGetScanQueryKey(scanId, { userId }) } }
   );
 
   if (isLoading) {

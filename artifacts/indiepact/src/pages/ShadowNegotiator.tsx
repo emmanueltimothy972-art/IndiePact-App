@@ -8,7 +8,7 @@ import {
   Swords, Search, Copy, CheckCircle2, Send, Loader2, ShieldCheck,
   AlertTriangle, ShieldAlert, AlertCircle, Scale, ChevronRight, RefreshCw,
 } from "lucide-react";
-import { DEMO_USER_ID } from "@/lib/constants";
+import { useAuth } from "@/contexts/AuthContext";
 
 const DANGER_WORDS = [
   "indemnify", "indemnification", "perpetuity", "sole discretion", "unlimited",
@@ -102,6 +102,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 export default function ShadowNegotiator() {
+  const { userId } = useAuth();
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [selectedScanId, setSelectedScanId] = useState<string>("");
   const [selectedRisks, setSelectedRisks] = useState<Risk[]>([]);
@@ -117,7 +118,7 @@ export default function ShadowNegotiator() {
 
   useEffect(() => {
     setTableLoading(true);
-    fetch(`/api/scans?userId=${DEMO_USER_ID}&limit=10`)
+    fetch(`/api/scans?userId=${userId}&limit=10`)
       .then((r) => r.json())
       .then((d) => {
         const items = d.scans || [];
