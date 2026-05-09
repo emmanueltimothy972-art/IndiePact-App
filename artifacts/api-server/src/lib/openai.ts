@@ -221,6 +221,130 @@ Response format:
 Keep responses concise but complete — 4-8 sentences. This is a legal consultation, not a lecture.
 Never break character. Never be apologetic. Never hedge when the law is clear.`;
 
+export interface LegalStrategyResult {
+  overallAssessment: string;
+  powerBalance: {
+    score: number;
+    label: "Strong" | "Balanced" | "Unfavorable" | "Weak";
+    explanation: string;
+  };
+  priorityRisks: Array<{
+    rank: number;
+    title: string;
+    urgency: "Immediate" | "High" | "Moderate";
+    impact: string;
+    negotiationApproach: string;
+  }>;
+  negotiationOrder: Array<{
+    step: number;
+    action: string;
+    rationale: string;
+    tactic: "Anchor" | "Trade" | "Reframe" | "Walk Away" | "Request";
+  }>;
+  questionsToAsk: string[];
+  redFlags: Array<{
+    clause: string;
+    interpretation: string;
+    realWorldImpact: string;
+  }>;
+  recommendedMove: string;
+  checklist: Array<{
+    item: string;
+    priority: "High" | "Medium" | "Low";
+  }>;
+}
+
+const LEGAL_STRATEGY_PROMPT = `You are IndiePact's AI Legal Strategy Engine — a senior contract strategy advisor for independent professionals.
+
+Your role is NOT to identify risks (that has been done already). Your role is to:
+1. Assess the overall power dynamic in this contract
+2. Prioritize which issues to address first and in what order
+3. Create a step-by-step negotiation roadmap
+4. Identify the questions that MUST be answered before signing
+5. Flag the most dangerous clauses in plain terms
+6. Recommend the single most important next move
+
+Tone: Calm, authoritative, professional. Never alarmist. Clear and actionable.
+Important: This is AI-assisted strategy, not legal advice. Frame everything as strategic preparation.
+
+You MUST respond with valid JSON (no markdown, no code fences) exactly matching this structure:
+{
+  "overallAssessment": "2-3 sentence strategic summary starting with 'Based on our analysis...'",
+  "powerBalance": {
+    "score": <0-100, where 50=balanced, below 50=unfavorable for you, above 50=favorable>,
+    "label": "Strong" | "Balanced" | "Unfavorable" | "Weak",
+    "explanation": "1-2 sentences on the power dynamic"
+  },
+  "priorityRisks": [
+    {
+      "rank": 1,
+      "title": "string",
+      "urgency": "Immediate" | "High" | "Moderate",
+      "impact": "Plain English: what this costs you if unaddressed",
+      "negotiationApproach": "Specific tactic to address this"
+    }
+  ],
+  "negotiationOrder": [
+    {
+      "step": 1,
+      "action": "What to do at this step",
+      "rationale": "Why this order matters",
+      "tactic": "Anchor" | "Trade" | "Reframe" | "Walk Away" | "Request"
+    }
+  ],
+  "questionsToAsk": ["5-7 specific questions to ask before signing"],
+  "redFlags": [
+    {
+      "clause": "The problematic language",
+      "interpretation": "What it really means in plain English",
+      "realWorldImpact": "The specific consequence for you"
+    }
+  ],
+  "recommendedMove": "The single most important action to take in the next 24 hours",
+  "checklist": [
+    {
+      "item": "Specific action item",
+      "priority": "High" | "Medium" | "Low"
+    }
+  ]
+}
+
+Rules:
+- priorityRisks: rank by financial/professional impact, most severe first
+- negotiationOrder: 3-5 steps in strategic sequence
+- questionsToAsk: 5-7 specific, pointed questions
+- redFlags: max 3, the absolute worst clauses only
+- checklist: 7-10 actionable items`;
+
+export async function runLegalStrategyAnalysis(
+  risks: Array<{ title: string; severity: string; explanation: string; whyThisHurtsYou: string; category: string; fixes: { rewrittenClause: string; direct: string } }>,
+  protectionScore: number,
+  moneyImpactSummary: string
+): Promise<LegalStrategyResult> {
+  const riskSummary = risks.map((r, i) =>
+    `Risk ${i + 1} [${r.severity}] - ${r.title}\nCategory: ${r.category}\nExplanation: ${r.explanation}\nWhy it hurts: ${r.whyThisHurtsYou}`
+  ).join("\n\n");
+
+  const userMessage = `Contract Protection Score: ${protectionScore}/100\nSummary: ${moneyImpactSummary}\n\nIdentified Risks:\n${riskSummary}\n\nGenerate the strategic analysis now.`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: LEGAL_STRATEGY_PROMPT },
+      { role: "user", content: userMessage },
+    ],
+    temperature: 0.25,
+    max_tokens: 2500,
+    response_format: { type: "json_object" },
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error("No response from AI");
+
+  const parsed = JSON.parse(content) as LegalStrategyResult;
+  return parsed;
+}
+
 export async function runProsecutorChat(
   messages: ChatMessage[],
   caseContext: { agreementType: string; jurisdiction: string; financialExposure: string }

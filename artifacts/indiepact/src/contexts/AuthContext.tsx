@@ -12,6 +12,7 @@ interface AuthContextType {
   showAuthModal: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;
+  signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -41,8 +42,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const redirectTo = `${window.location.origin}${base}/auth/callback`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+    if (error) console.error("Google OAuth error:", error);
+  }, []);
+
   const signInWithEmail = useCallback(async (email: string) => {
-    const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL ?? "/"}`;
+    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const redirectTo = `${window.location.origin}${base}/auth/callback`;
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
@@ -64,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, isLoading, userId, isGuest,
       showAuthModal, openAuthModal, closeAuthModal,
-      signInWithEmail, signOut,
+      signInWithGoogle, signInWithEmail, signOut,
     }}>
       {children}
     </AuthContext.Provider>

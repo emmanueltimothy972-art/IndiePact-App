@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   FileText, History, LayoutDashboard, ShieldCheck,
   FileOutput, Loader2, Menu, Scale, Shield, MessageSquare, Lock,
-  LogIn, LogOut,
+  LogIn, LogOut, Brain,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -48,6 +48,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { href: "/scan", icon: <FileText size={17} />, label: "Review Contract", sub: "Analyze a contract" },
     { href: "/history", icon: <History size={17} />, label: "My Reviews", sub: "Past contract reviews" },
     { href: "/escrow", icon: <Lock size={17} />, label: "Payment Lock", sub: "Protect your payments" },
+    { href: "/legal-strategy", icon: <Brain size={17} />, label: "AI Legal Strategy", sub: "Negotiation planning", isNew: true },
     { href: "/bar", icon: <Scale size={17} />, label: "AI Attorney", sub: "Deep legal strategy", isPro: true },
     { href: "/armory", icon: <Shield size={17} />, label: "Clause Library", sub: "Saved clauses & fixes" },
     { href: "/negotiator", icon: <MessageSquare size={17} />, label: "Negotiation Room", sub: "AI negotiation coach" },
@@ -81,11 +82,18 @@ export function Layout({ children }: { children: ReactNode }) {
                 </div>
               </div>
             </div>
-            {item.isPro && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
-                PRO
-              </span>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {item.isNew && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  NEW
+                </span>
+              )}
+              {item.isPro && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  PRO
+                </span>
+              )}
+            </div>
           </Link>
         );
       })}

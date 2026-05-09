@@ -6,6 +6,7 @@ import dashboardRouter from "./dashboard.js";
 import chatRouter from "./chat.js";
 import clausesRouter from "./clauses.js";
 import extractRouter from "./extract.js";
+import legalStrategyRouter from "./legal-strategy.js";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(dashboardRouter);
 router.use(chatRouter);
 router.use(clausesRouter);
 router.use(extractRouter);
+router.use(legalStrategyRouter);
 
 export default router;

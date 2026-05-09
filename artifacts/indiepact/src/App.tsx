@@ -10,6 +10,7 @@ import { AuthModal } from "@/components/AuthModal";
 
 import Home from "@/pages/Home";
 import Pricing from "@/pages/Pricing";
+import AuthCallback from "@/pages/AuthCallback";
 import Dashboard from "@/pages/Dashboard";
 import DocumentLab from "@/pages/DocumentLab";
 import IntelligenceVault from "@/pages/IntelligenceVault";
@@ -18,6 +19,7 @@ import TheBar from "@/pages/TheBar";
 import ClauseArmory from "@/pages/ClauseArmory";
 import ShadowNegotiator from "@/pages/ShadowNegotiator";
 import EscrowLock from "@/pages/EscrowLock";
+import LegalStrategy from "@/pages/LegalStrategy";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +28,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/scan" component={DocumentLab} />
       <Route path="/history" component={IntelligenceVault} />
@@ -34,6 +37,7 @@ function Router() {
       <Route path="/armory" component={ClauseArmory} />
       <Route path="/negotiator" component={ShadowNegotiator} />
       <Route path="/escrow" component={EscrowLock} />
+      <Route path="/legal-strategy" component={LegalStrategy} />
       <Route component={NotFound} />
     </Switch>
   );
