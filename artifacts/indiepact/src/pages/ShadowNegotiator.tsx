@@ -103,6 +103,7 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 export default function ShadowNegotiator() {
   const { userId } = useAuth();
+  const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [selectedScanId, setSelectedScanId] = useState<string>("");
   const [selectedRisks, setSelectedRisks] = useState<Risk[]>([]);
@@ -118,7 +119,7 @@ export default function ShadowNegotiator() {
 
   useEffect(() => {
     setTableLoading(true);
-    fetch(`/api/scans?userId=${userId}&limit=10`)
+    fetch(`${base}/api/scans?userId=${userId}&limit=10`)
       .then((r) => r.json())
       .then((d) => {
         const items = d.scans || [];
@@ -191,7 +192,7 @@ export default function ShadowNegotiator() {
         .filter((m) => m.role !== "ai" || newMessages.indexOf(m) > 0)
         .map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.content }));
 
-      const res = await fetch("/api/prosecutor", {
+      const res = await fetch(`${base}/api/prosecutor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMsg, history, caseContext }),

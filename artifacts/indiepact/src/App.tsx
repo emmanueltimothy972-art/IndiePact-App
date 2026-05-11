@@ -81,7 +81,9 @@ function App() {
                 <Router />
               </Layout>
             </ErrorBoundary>
-            <AuthModal />
+            <ErrorBoundary fallback={null}>
+              <AuthModal />
+            </ErrorBoundary>
           </WouterRouter>
           <Toaster />
         </AuthProvider>
