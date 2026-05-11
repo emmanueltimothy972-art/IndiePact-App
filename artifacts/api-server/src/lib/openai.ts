@@ -3,10 +3,22 @@ import OpenAI from "openai";
 const apiKey = process.env["OPENAI_API_KEY"];
 
 if (!apiKey) {
-  throw new Error("OPENAI_API_KEY environment variable is required");
+  console.warn(
+    "[IndiePact API] OPENAI_API_KEY is not set.\n" +
+    "Contract analysis endpoints will return fallback responses until the key is configured."
+  );
 }
 
-export const openai = new OpenAI({ apiKey });
+// Only instantiate the real client when the key is present.
+// Routes that need it will call requireOpenAI() which throws a clean 503.
+export const openai: OpenAI | null = apiKey ? new OpenAI({ apiKey }) : null;
+
+export function requireOpenAI(): OpenAI {
+  if (!openai) {
+    throw Object.assign(new Error("AI analysis is temporarily unavailable — OpenAI key not configured."), { statusCode: 503 });
+  }
+  return openai;
+}
 
 export interface AnalysisResult {
   moneyImpactSummary: string;
@@ -84,6 +96,7 @@ export async function analyzeContractClauses(
   clauses: string[],
   foundCategories: string[]
 ): Promise<AnalysisResult> {
+  const client = requireOpenAI();
   const clauseText = clauses.join("\n\n---\n\n");
 
   const userMessage = `Contract clauses requiring strategic analysis (pre-filtered categories: ${foundCategories.join(", ")}):
@@ -92,7 +105,7 @@ ${clauseText}
 
 Return your JSON intelligence report now.`;
 
-  const completion = await openai.chat.completions.create({
+  const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -183,9 +196,10 @@ export async function runNegotiatorChat(
   messages: ChatMessage[],
   scenario: string
 ): Promise<string> {
+  const client = requireOpenAI();
   const systemContent = `${NEGOTIATOR_SYSTEM_PROMPT}\n\nScenario: ${scenario}`;
 
-  const completion = await openai.chat.completions.create({
+  const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemContent },
@@ -321,13 +335,14 @@ export async function runLegalStrategyAnalysis(
   protectionScore: number,
   moneyImpactSummary: string
 ): Promise<LegalStrategyResult> {
+  const client = requireOpenAI();
   const riskSummary = risks.map((r, i) =>
     `Risk ${i + 1} [${r.severity}] - ${r.title}\nCategory: ${r.category}\nExplanation: ${r.explanation}\nWhy it hurts: ${r.whyThisHurtsYou}`
   ).join("\n\n");
 
   const userMessage = `Contract Protection Score: ${protectionScore}/100\nSummary: ${moneyImpactSummary}\n\nIdentified Risks:\n${riskSummary}\n\nGenerate the strategic analysis now.`;
 
-  const completion = await openai.chat.completions.create({
+  const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: LEGAL_STRATEGY_PROMPT },
@@ -349,6 +364,7 @@ export async function runProsecutorChat(
   messages: ChatMessage[],
   caseContext: { agreementType: string; jurisdiction: string; financialExposure: string }
 ): Promise<string> {
+  const client = requireOpenAI();
   const contextBlock = `Case Context:
 - Agreement Type: ${caseContext.agreementType}
 - Jurisdiction: ${caseContext.jurisdiction}
@@ -356,7 +372,7 @@ export async function runProsecutorChat(
 
   const systemContent = `${PROSECUTOR_SYSTEM_PROMPT}\n\n${contextBlock}`;
 
-  const completion = await openai.chat.completions.create({
+  const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemContent },

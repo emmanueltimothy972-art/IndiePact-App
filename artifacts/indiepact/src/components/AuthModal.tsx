@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { ShieldCheck, Lock, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -28,6 +28,8 @@ export function AuthModal() {
               boxShadow: "0 0 0 1px rgba(16,185,129,0.06), 0 0 80px rgba(16,185,129,0.08), 0 40px 80px rgba(0,0,0,0.95)",
             }}
           >
+            <DialogTitle className="sr-only">Sign in to IndiePact</DialogTitle>
+            <DialogDescription className="sr-only">Create your free account to review contracts, detect risks, and negotiate smarter deals.</DialogDescription>
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

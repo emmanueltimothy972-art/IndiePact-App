@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { supabase } from "../lib/supabase.js";
+import { requireSupabase } from "../lib/supabase.js";
 
 const router = Router();
 
@@ -36,7 +36,7 @@ router.get("/scans", async (req, res) => {
 
   const { userId, limit, offset } = parse.data;
 
-  const { data, error, count } = await supabase
+  const { data, error, count } = await requireSupabase()
     .from("scans")
     .select("*", { count: "exact" })
     .eq("user_id", userId)
@@ -60,7 +60,7 @@ router.post("/scans", async (req, res) => {
 
   const { userId, contractName, contractText, result } = parse.data;
 
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from("scans")
     .insert({
       user_id: userId,
@@ -94,7 +94,7 @@ router.get("/scans/:scanId", async (req, res) => {
   const { scanId } = paramParse.data;
   const { userId } = queryParse.data;
 
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from("scans")
     .select("*")
     .eq("id", scanId)
@@ -119,7 +119,7 @@ router.delete("/scans/:scanId", async (req, res) => {
   const { scanId } = paramParse.data;
   const { userId } = queryParse.data;
 
-  const { error } = await supabase
+  const { error } = await requireSupabase()
     .from("scans")
     .delete()
     .eq("id", scanId)
@@ -144,7 +144,7 @@ router.get("/report/:scanId", async (req, res) => {
   const { scanId } = paramParse.data;
   const { userId } = queryParse.data;
 
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from("scans")
     .select("*")
     .eq("id", scanId)

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { supabase } from "../lib/supabase.js";
+import { requireSupabase } from "../lib/supabase.js";
 
 const router = Router();
 
@@ -18,7 +18,7 @@ router.get("/dashboard/summary", async (req, res) => {
 
   const { userId } = parse.data;
 
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from("scans")
     .select("*")
     .eq("user_id", userId)
@@ -75,7 +75,7 @@ router.get("/dashboard/risk-trends", async (req, res) => {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const { data, error } = await supabase
+  const { data, error } = await requireSupabase()
     .from("scans")
     .select("*")
     .eq("user_id", userId)

@@ -22,7 +22,8 @@ export function Layout({ children }: { children: ReactNode }) {
     if (isGuest) { openAuthModal(); return; }
     setIsGenerating(true);
     try {
-      const resp = await fetch(`/api/report/${scanId}?userId=${userId}`);
+      const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const resp = await fetch(`${base}/api/report/${scanId}?userId=${userId}`);
       if (!resp.ok) throw new Error("Failed to generate report");
       const data = await resp.json() as { reportBase64: string; filename: string };
       const link = document.createElement("a");

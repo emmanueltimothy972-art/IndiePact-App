@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { supabase } from "../lib/supabase.js";
+import { requireSupabase } from "../lib/supabase.js";
 import { runLegalStrategyAnalysis } from "../lib/openai.js";
 
 const router = Router();
@@ -18,7 +18,7 @@ router.post("/legal-strategy", async (req, res) => {
 
   const { scanId, userId } = parse.data;
 
-  const { data: scan, error: fetchError } = await supabase
+  const { data: scan, error: fetchError } = await requireSupabase()
     .from("scans")
     .select("id, contract_name, result")
     .eq("id", scanId)
