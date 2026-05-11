@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { buildAuthRedirectUrl } from "@/lib/auth";
 import { DEMO_USER_ID } from "@/lib/constants";
 
 interface AuthContextType {
@@ -43,18 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    const redirectTo = `${window.location.origin}${base}/auth/callback`;
+    const redirectTo = buildAuthRedirectUrl();
+    console.info("[IndiePact] OAuth redirectTo:", redirectTo);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
     });
-    if (error) console.error("Google OAuth error:", error);
+    if (error) console.error("[IndiePact] Google OAuth error:", error.message);
   }, []);
 
   const signInWithEmail = useCallback(async (email: string) => {
-    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    const redirectTo = `${window.location.origin}${base}/auth/callback`;
+    const redirectTo = buildAuthRedirectUrl();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
