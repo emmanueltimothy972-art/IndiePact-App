@@ -8,10 +8,12 @@ import clausesRouter from "./clauses.js";
 import extractRouter from "./extract.js";
 import legalStrategyRouter from "./legal-strategy.js";
 import subscriptionRouter from "./subscription.js";
+import authRouter from "./auth.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(analyzeRouter);
 router.use(scansRouter);
 router.use(dashboardRouter);
