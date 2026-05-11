@@ -2,12 +2,13 @@ import { PageTransition } from "@/components/PageTransition";
 import { useGetDashboardSummary, useGetRiskTrends } from "@workspace/api-client-react";
 import { getGetDashboardSummaryQueryKey, getGetRiskTrendsQueryKey } from "@workspace/api-client-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
-import { Shield, AlertTriangle, TrendingUp, DollarSign, Activity, LayoutDashboard, FileText } from "lucide-react";
+import { Shield, AlertTriangle, TrendingUp, DollarSign, Activity, LayoutDashboard, FileText, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { PLAN_DISPLAY_NAMES } from "@/lib/constants";
 
 export default function Dashboard() {
-  const { userId } = useAuth();
+  const { userId, userPlan, scansUsed, scansLimit, isGuest } = useAuth();
 
   const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary(
     { userId },
@@ -23,6 +24,10 @@ export default function Dashboard() {
     { name: "Medium", count: summary.mediumRiskCount, fill: "hsl(var(--chart-3))" },
     { name: "Low Risk", count: summary.lowRiskCount, fill: "hsl(var(--chart-5))" },
   ] : [];
+
+  const reviewsRemaining = isGuest ? scansLimit : Math.max(0, scansLimit - scansUsed);
+  const isAtLimit = !isGuest && reviewsRemaining === 0;
+  const planLabel = PLAN_DISPLAY_NAMES[userPlan] ?? "Free";
 
   return (
     <PageTransition className="space-y-6">
@@ -42,6 +47,19 @@ export default function Dashboard() {
           <FileText size={15} /> Review a Contract
         </Link>
       </div>
+
+      {/* Upgrade banner when at limit */}
+      {isAtLimit && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-amber-400 font-semibold text-sm mb-0.5">You've used all your reviews this month</p>
+            <p className="text-slate-500 text-xs">Upgrade your plan to keep reviewing contracts without interruption.</p>
+          </div>
+          <Link href="/pricing" className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-colors shrink-0 shadow-[0_0_12px_rgba(212,175,55,0.2)]">
+            <Zap size={14} /> Upgrade Plan
+          </Link>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -73,9 +91,10 @@ export default function Dashboard() {
         />
         <StatCard
           title="Reviews Remaining"
-          value="Unlimited"
-          icon={<Activity className="text-purple-400" size={18} />}
-          desc="This billing period"
+          value={isGuest ? "—" : reviewsRemaining.toString()}
+          icon={<Activity className={isAtLimit ? "text-amber-400" : "text-purple-400"} size={18} />}
+          desc={isGuest ? "Sign in to track usage" : `${scansUsed}/${scansLimit} used · ${planLabel} plan`}
+          highlight={isAtLimit}
         />
       </div>
 
@@ -128,9 +147,13 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon, desc }: { title: string; value: string; icon: React.ReactNode; desc: string }) {
+function StatCard({
+  title, value, icon, desc, highlight,
+}: {
+  title: string; value: string; icon: React.ReactNode; desc: string; highlight?: boolean;
+}) {
   return (
-    <div className="p-5 rounded-2xl border border-slate-800 bg-[#0a0a0a] flex flex-col">
+    <div className={`p-5 rounded-2xl border bg-[#0a0a0a] flex flex-col ${highlight ? "border-amber-500/30" : "border-slate-800"}`}>
       <div className="flex justify-between items-start mb-3">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</h3>
         <div className="p-1.5 bg-slate-800/50 rounded-lg">{icon}</div>

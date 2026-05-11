@@ -80,6 +80,9 @@ router.post("/scans", async (req, res) => {
     return res.status(500).json({ error: "Failed to save scan" });
   }
 
+  // Increment usage count — fire-and-forget, never block the scan response
+  void incrementScanUsage(userId);
+
   return res.status(201).json(mapScanRow(data, result));
 });
 
@@ -162,6 +165,36 @@ router.get("/report/:scanId", async (req, res) => {
 
   return res.json({ reportBase64: base64, filename });
 });
+
+async function incrementScanUsage(userId: string): Promise<void> {
+  try {
+    const db = requireSupabase();
+    const { data: existing } = await db
+      .from("subscriptions")
+      .select("scans_used")
+      .eq("user_id", userId)
+      .single();
+
+    if (existing) {
+      await db
+        .from("subscriptions")
+        .update({
+          scans_used: (Number(existing["scans_used"]) || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+    } else {
+      await db.from("subscriptions").insert({
+        user_id: userId,
+        plan: "free",
+        scans_used: 1,
+        period_start: new Date().toISOString(),
+      });
+    }
+  } catch {
+    // Non-critical — usage tracking failure should never block scan flow
+  }
+}
 
 type DbRow = Record<string, unknown>;
 

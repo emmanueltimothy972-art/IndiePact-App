@@ -2,7 +2,6 @@ import { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { ShieldCheck, Lock, Zap, LogIn } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { IS_PRO } from "@/lib/constants";
 
 interface FeatureGateProps {
   requires: "auth" | "pro";
@@ -11,13 +10,9 @@ interface FeatureGateProps {
   featureDescription?: string;
 }
 
-// In dev mode, bypass plan gates (not auth gates) so devs can preview all UI
-const isDev = import.meta.env.DEV;
-
 export function FeatureGate({ requires, children, featureName, featureDescription }: FeatureGateProps) {
-  const { isGuest, openAuthModal } = useAuth();
+  const { isGuest, openAuthModal, userPlan } = useAuth();
 
-  // Auth gate: always applies in all environments
   if (requires === "auth" && isGuest) {
     return (
       <AuthGate
@@ -28,8 +23,7 @@ export function FeatureGate({ requires, children, featureName, featureDescriptio
     );
   }
 
-  // Plan gate: bypass in dev for easy previewing
-  if (requires === "pro" && !IS_PRO && !isDev) {
+  if (requires === "pro" && (isGuest || userPlan === "free")) {
     return (
       <ProGate
         featureName={featureName}
@@ -137,14 +131,14 @@ function ProGate({
       </div>
 
       <div className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wider">
-        <ShieldCheck className="h-3 w-3" /> Pro Feature
+        <ShieldCheck className="h-3 w-3" /> Paid Feature
       </div>
 
       <h3 className="text-xl font-bold text-white mb-2">
         Upgrade to unlock {featureName || "this feature"}
       </h3>
       <p className="text-slate-400 text-sm max-w-sm leading-relaxed mb-7">
-        {featureDescription || "This feature requires a Pro plan or higher. Upgrade to get full access to all IndiePact tools."}
+        {featureDescription || "This feature requires a paid plan. Upgrade to get full access to all IndiePact tools."}
       </p>
 
       <a
@@ -154,7 +148,7 @@ function ProGate({
         <Zap className="h-4 w-4" /> View Plans & Upgrade
       </a>
 
-      <p className="text-xs text-slate-600 mt-4">Pro from $49.99/month · Cancel anytime</p>
+      <p className="text-xs text-slate-600 mt-4">Plans from $19/month · Cancel anytime</p>
     </motion.div>
   );
 }
