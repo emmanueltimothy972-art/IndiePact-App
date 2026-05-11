@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { buildAuthRedirectUrl } from "@/lib/auth";
 import { DEMO_USER_ID, PLAN_LIMITS } from "@/lib/constants";
 
 interface SubscriptionState {
@@ -19,8 +18,8 @@ interface AuthContextType {
   showAuthModal: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string) => Promise<{ error: Error | null }>;
+  sendOtp: (email: string) => Promise<{ error: Error | null }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   userPlan: string;
   scansUsed: number;
@@ -88,21 +87,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => authSub.unsubscribe();
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
-    const redirectTo = buildAuthRedirectUrl();
-    console.info("[IndiePact] OAuth redirectTo:", redirectTo);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
-    if (error) console.error("[IndiePact] Google OAuth error:", error.message);
-  }, []);
-
-  const signInWithEmail = useCallback(async (email: string) => {
-    const redirectTo = buildAuthRedirectUrl();
+  /**
+   * Step 1 of OTP flow — sends a 6-digit code to the user's email.
+   * No redirect URL needed; verification happens inline via verifyOtp.
+   * To switch to a custom SMTP provider (Resend, etc.) in the future,
+   * configure it in the Supabase Auth dashboard — no code changes required.
+   */
+  const sendOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: redirectTo },
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+    return { error: error as Error | null };
+  }, []);
+
+  /**
+   * Step 2 of OTP flow — verifies the 6-digit code and establishes a session.
+   * On success, onAuthStateChange fires automatically and closes the modal.
+   */
+  const verifyOtp = useCallback(async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "email",
     });
     return { error: error as Error | null };
   }, []);
@@ -122,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, isLoading, userId, isGuest,
       showAuthModal, openAuthModal, closeAuthModal,
-      signInWithGoogle, signInWithEmail, signOut,
+      sendOtp, verifyOtp, signOut,
       userPlan: subscription.userPlan,
       scansUsed: subscription.scansUsed,
       scansLimit: subscription.scansLimit,
