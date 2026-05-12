@@ -3,8 +3,9 @@ import { Link, useLocation } from "wouter";
 import {
   FileText, History, LayoutDashboard, ShieldCheck,
   FileOutput, Loader2, Menu, Scale, Shield, MessageSquare, Lock,
-  LogIn, LogOut, Brain,
+  LogIn, LogOut, Brain, FlaskConical,
 } from "lucide-react";
+import { DEV_AUTH_BYPASS } from "@/lib/devMode";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
@@ -121,7 +122,15 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Sidebar auth */}
         <div className="border-t border-border p-3">
-          {!isLoading && (
+          {DEV_AUTH_BYPASS ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-950/40 border border-violet-800/40">
+              <FlaskConical size={13} className="text-violet-400 shrink-0" />
+              <div>
+                <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest leading-none">Dev Preview</p>
+                <p className="text-[9px] text-violet-700 mt-0.5 leading-none">Auth bypassed · Pro plan</p>
+              </div>
+            </div>
+          ) : !isLoading && (
             isGuest ? (
               <button
                 onClick={openAuthModal}
@@ -204,7 +213,12 @@ export function Layout({ children }: { children: ReactNode }) {
               </Button>
             )}
 
-            {!isLoading && (
+            {DEV_AUTH_BYPASS ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-950/50 border border-violet-800/40">
+                <FlaskConical size={11} className="text-violet-400" />
+                <span className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">Dev</span>
+              </div>
+            ) : !isLoading && (
               isGuest ? (
                 <Button
                   size="sm"
