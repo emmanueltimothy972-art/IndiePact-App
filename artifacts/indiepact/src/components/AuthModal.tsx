@@ -5,8 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 
-type Step = "welcome-back" | "mode" | "email" | "otp" | "success";
-type Mode = "login" | "signup";
+type Step = "welcome-back" | "entry" | "otp" | "success";
 
 const RESEND_COOLDOWN = 30;
 
@@ -17,7 +16,7 @@ const fadeSlide = {
   transition: { duration: 0.2, ease: "easeOut" },
 };
 
-// ─── Digit OTP Input ──────────────────────────────────────────────────────────
+// ─── Digit OTP Input ───────────────────────────────────────────────────────────
 
 function OtpInput({
   value,
@@ -112,7 +111,7 @@ function OtpInput({
   );
 }
 
-// ─── Auth Modal ───────────────────────────────────────────────────────────────
+// ─── Auth Modal ────────────────────────────────────────────────────────────────
 
 export function AuthModal() {
   const {
@@ -126,8 +125,8 @@ export function AuthModal() {
   } = useAuth();
   const [, navigate] = useLocation();
 
-  const [step, setStep] = useState<Step>("mode");
-  const [mode, setMode] = useState<Mode>("login");
+  const [step, setStep] = useState<Step>("entry");
+  const [isSignUp, setIsSignUp] = useState(true);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [rememberChecked, setRememberChecked] = useState(true);
@@ -135,13 +134,9 @@ export function AuthModal() {
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Decide initial step based on whether this device has a remembered email.
-  const initialStep: Step = rememberedEmail ? "welcome-back" : "mode";
-
   const resetModal = useCallback(() => {
-    const next: Step = rememberedEmail ? "welcome-back" : "mode";
-    setStep(next);
-    setMode("login");
+    setStep(rememberedEmail ? "welcome-back" : "entry");
+    setIsSignUp(true);
     setEmail("");
     setOtp("");
     setError(null);
@@ -154,10 +149,9 @@ export function AuthModal() {
     setTimeout(resetModal, 300);
   }, [closeAuthModal, resetModal]);
 
-  // Sync step when modal opens / remembered state changes.
   useEffect(() => {
     if (showAuthModal) {
-      setStep(rememberedEmail ? "welcome-back" : "mode");
+      setStep(rememberedEmail ? "welcome-back" : "entry");
       setOtp("");
       setError(null);
     } else {
@@ -165,20 +159,22 @@ export function AuthModal() {
     }
   }, [showAuthModal]);
 
-  // Resend countdown.
+  // Resend countdown
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [resendCooldown]);
 
-  const doSendOtp = async (targetEmail: string) => {
+  // ── Core actions ────────────────────────────────────────────────────────────
+
+  const doSendOtp = async (targetEmail: string): Promise<boolean> => {
     setError(null);
     setIsLoading(true);
     const { error } = await sendOtp(targetEmail.trim().toLowerCase());
     setIsLoading(false);
     if (error) {
-      setError(error.message ?? "Couldn't send the code. Please try again.");
+      setError("Couldn't send the code. Please check your email and try again.");
       return false;
     }
     setOtp("");
@@ -190,7 +186,7 @@ export function AuthModal() {
   const handleEmailSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed || !trimmed.includes("@")) {
+    if (!trimmed || !trimmed.includes("@") || !trimmed.includes(".")) {
       setError("Please enter a valid email address.");
       return;
     }
@@ -212,7 +208,7 @@ export function AuthModal() {
     const { error } = await verifyOtp(targetEmail, clean);
     setIsLoading(false);
     if (error) {
-      const msg = error.message?.toLowerCase() ?? "";
+      const msg = (error.message ?? "").toLowerCase();
       if (msg.includes("expired")) {
         setError("That code has expired. Request a new one below.");
       } else if (msg.includes("invalid") || msg.includes("token") || msg.includes("otp")) {
@@ -223,7 +219,6 @@ export function AuthModal() {
       setOtp("");
       return;
     }
-    // Save device memory if requested.
     if (rememberChecked) {
       rememberThisDevice(targetEmail);
     }
@@ -234,7 +229,7 @@ export function AuthModal() {
     }, 1200);
   };
 
-  // Auto-verify when all 6 digits are entered.
+  // Auto-verify when all 6 digits are entered
   useEffect(() => {
     const clean = otp.replace(/\s/g, "");
     if (clean.length === 6 && step === "otp" && !isLoading) {
@@ -259,6 +254,8 @@ export function AuthModal() {
 
   const activeEmail = email || rememberedEmail || "";
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
     <Dialog open={showAuthModal} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent
@@ -268,15 +265,17 @@ export function AuthModal() {
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
           border: "1px solid rgba(16,185,129,0.18)",
-          boxShadow: "0 0 0 1px rgba(16,185,129,0.06), 0 0 80px rgba(16,185,129,0.08), 0 40px 80px rgba(0,0,0,0.95)",
+          boxShadow:
+            "0 0 0 1px rgba(16,185,129,0.06), 0 0 80px rgba(16,185,129,0.08), 0 40px 80px rgba(0,0,0,0.95)",
         }}
       >
         <DialogTitle className="sr-only">Sign in to IndiePact</DialogTitle>
         <DialogDescription className="sr-only">
-          Enter your email to continue securely into IndiePact.
+          Create your IndiePact account or sign in to continue securely.
         </DialogDescription>
 
         <div className="px-8 pt-9 pb-8 flex flex-col items-center text-center gap-6">
+
           {/* Logo */}
           <div className="flex flex-col items-center gap-3">
             <div
@@ -293,11 +292,11 @@ export function AuthModal() {
             <h2 className="text-xl font-bold text-white tracking-tight">IndiePact</h2>
           </div>
 
-          {/* Step content */}
+          {/* Steps */}
           <div className="w-full">
             <AnimatePresence mode="wait">
 
-              {/* ── Welcome back ─────────────────────────────────────── */}
+              {/* ── Welcome back ──────────────────────────────────── */}
               {step === "welcome-back" && (
                 <motion.div key="welcome-back" {...fadeSlide} className="flex flex-col gap-4">
                   <div className="flex flex-col items-center gap-2">
@@ -327,21 +326,17 @@ export function AuthModal() {
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <>
-                        Send my code
-                        <ArrowRight className="h-4 w-4" />
-                      </>
+                      <>Send my code <ArrowRight className="h-4 w-4" /></>
                     )}
                   </button>
 
-                  {error && (
-                    <p className="text-red-400 text-xs">{error}</p>
-                  )}
+                  {error && <p className="text-red-400 text-xs">{error}</p>}
 
                   <button
                     onClick={() => {
                       forgetThisDevice();
-                      setStep("mode");
+                      setStep("entry");
+                      setIsSignUp(true);
                       setError(null);
                     }}
                     className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
@@ -351,51 +346,34 @@ export function AuthModal() {
                 </motion.div>
               )}
 
-              {/* ── Mode selector ────────────────────────────────────── */}
-              {step === "mode" && (
-                <motion.div key="mode" {...fadeSlide} className="flex flex-col gap-4">
-                  <p className="text-slate-400 text-sm leading-relaxed max-w-[240px] mx-auto">
-                    Enter your email to continue securely into IndiePact.
-                  </p>
-                  <div className="flex rounded-xl overflow-hidden border border-white/10 w-full">
-                    {(["login", "signup"] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => { setMode(m); setError(null); }}
-                        className="flex-1 py-2.5 text-sm font-semibold transition-all"
-                        style={{
-                          background: mode === m ? "rgba(16,185,129,0.15)" : "transparent",
-                          color: mode === m ? "#34d399" : "rgba(255,255,255,0.4)",
-                          borderRight: m === "login" ? "1px solid rgba(255,255,255,0.08)" : undefined,
-                        }}
-                      >
-                        {m === "login" ? "Log In" : "Sign Up"}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => { setError(null); setStep("email"); }}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-[0.98]"
-                    style={{
-                      background: "linear-gradient(135deg, #10b981, #059669)",
-                      color: "#000",
-                      boxShadow: "0 0 24px rgba(16,185,129,0.25)",
-                    }}
-                  >
-                    <Mail className="h-4 w-4" />
-                    Continue with Email
-                  </button>
-                </motion.div>
-              )}
+              {/* ── Entry (sign-up first) ──────────────────────────── */}
+              {step === "entry" && (
+                <motion.div key="entry" {...fadeSlide} className="flex flex-col gap-5">
 
-              {/* ── Email input ──────────────────────────────────────── */}
-              {step === "email" && (
-                <motion.div key="email" {...fadeSlide} className="flex flex-col gap-4">
-                  <p className="text-slate-400 text-sm leading-relaxed">
-                    {mode === "signup"
-                      ? "Enter your email — we'll send you a secure 6-digit code."
-                      : "Enter your email and we'll send a secure 6-digit code."}
-                  </p>
+                  {/* Headline */}
+                  <div className="flex flex-col gap-1.5">
+                    {isSignUp ? (
+                      <>
+                        <p className="text-white font-semibold text-lg leading-snug">
+                          Protect your contracts with AI.
+                        </p>
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                          Create your free IndiePact account to continue securely.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-white font-semibold text-lg leading-snug">
+                          Welcome back.
+                        </p>
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                          Enter your email and we'll send you a 6-digit code.
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Email form */}
                   <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
@@ -410,7 +388,9 @@ export function AuthModal() {
                         className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-white placeholder:text-slate-600 outline-none transition-all disabled:opacity-50"
                         style={{
                           background: "rgba(255,255,255,0.05)",
-                          border: error ? "1.5px solid rgba(239,68,68,0.5)" : "1.5px solid rgba(255,255,255,0.1)",
+                          border: error
+                            ? "1.5px solid rgba(239,68,68,0.5)"
+                            : "1.5px solid rgba(255,255,255,0.1)",
                         }}
                         onFocus={(e) => {
                           e.target.style.border = "1.5px solid rgba(16,185,129,0.5)";
@@ -437,7 +417,7 @@ export function AuthModal() {
                       >
                         {rememberChecked && (
                           <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 12 12" fill="none">
-                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                         )}
                       </div>
@@ -450,6 +430,7 @@ export function AuthModal() {
                       <p className="text-red-400 text-xs text-left">{error}</p>
                     )}
 
+                    {/* Primary CTA */}
                     <button
                       type="submit"
                       disabled={isLoading || !email.trim()}
@@ -464,32 +445,48 @@ export function AuthModal() {
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <>
-                          Send Code
+                          {isSignUp ? "Create free account" : "Send code"}
                           <ArrowRight className="h-4 w-4" />
                         </>
                       )}
                     </button>
                   </form>
-                  <button
-                    onClick={() => { setStep("mode"); setError(null); }}
-                    className="text-xs text-slate-600 hover:text-slate-400 transition-colors mt-1"
-                  >
-                    ← Back
-                  </button>
+
+                  {/* Toggle sign-up / log-in */}
+                  <p className="text-xs text-slate-600">
+                    {isSignUp ? (
+                      <>
+                        Already have an account?{" "}
+                        <button
+                          onClick={() => { setIsSignUp(false); setError(null); }}
+                          className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium"
+                        >
+                          Log in
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        New to IndiePact?{" "}
+                        <button
+                          onClick={() => { setIsSignUp(true); setError(null); }}
+                          className="text-emerald-500 hover:text-emerald-400 transition-colors font-medium"
+                        >
+                          Create free account
+                        </button>
+                      </>
+                    )}
+                  </p>
                 </motion.div>
               )}
 
-              {/* ── OTP entry ────────────────────────────────────────── */}
+              {/* ── OTP entry ─────────────────────────────────────── */}
               {step === "otp" && (
                 <motion.div key="otp" {...fadeSlide} className="flex flex-col gap-5">
                   <div>
-                    <p className="text-white font-semibold text-base">Check your email</p>
+                    <p className="text-white font-semibold text-base">Check your inbox</p>
                     <p className="text-slate-400 text-sm mt-1.5 leading-relaxed">
                       Enter the 6-digit code sent to{" "}
                       <span className="text-emerald-400 font-medium break-all">{activeEmail}</span>
-                    </p>
-                    <p className="text-slate-600 text-xs mt-1.5">
-                      Look for a code — not a link. If you see a link email, the code is also inside it.
                     </p>
                   </div>
 
@@ -531,7 +528,7 @@ export function AuthModal() {
 
                   <button
                     onClick={() => {
-                      setStep(rememberedEmail ? "welcome-back" : "email");
+                      setStep(rememberedEmail ? "welcome-back" : "entry");
                       setOtp("");
                       setError(null);
                     }}
@@ -542,7 +539,7 @@ export function AuthModal() {
                 </motion.div>
               )}
 
-              {/* ── Success ──────────────────────────────────────────── */}
+              {/* ── Success ───────────────────────────────────────── */}
               {step === "success" && (
                 <motion.div
                   key="success"
@@ -572,21 +569,21 @@ export function AuthModal() {
           </div>
 
           {/* Trust indicators */}
-          {(step === "mode" || step === "email") && (
+          {step === "entry" && (
             <div className="flex items-center justify-center gap-5 text-xs text-slate-600">
               <span className="flex items-center gap-1.5">
                 <Lock className="h-3 w-3 text-emerald-700" />
                 Secure
               </span>
               <span className="text-slate-800">·</span>
-              <span>No spam</span>
+              <span>No password</span>
               <span className="text-slate-800">·</span>
-              <span>Private by default</span>
+              <span>No spam</span>
             </div>
           )}
 
           {/* Maybe later */}
-          {step === "mode" && (
+          {step === "entry" && (
             <button
               onClick={handleClose}
               className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 transition-colors rounded-xl hover:bg-white/5 -mt-2"
