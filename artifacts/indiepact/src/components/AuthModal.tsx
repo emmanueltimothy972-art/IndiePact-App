@@ -7,7 +7,7 @@ import { useLocation } from "wouter";
 
 type Step = "welcome-back" | "entry" | "otp" | "success";
 
-const RESEND_COOLDOWN = 30;
+const RESEND_COOLDOWN = 60;
 
 const fadeSlide = {
   initial: { opacity: 0, y: 10 },

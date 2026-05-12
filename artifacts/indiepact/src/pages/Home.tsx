@@ -554,64 +554,6 @@ export default function Home() {
           </div>
         </motion.section>
 
-        {/* ── 8. PRICING PREVIEW ─────────────────────────────────── */}
-        <motion.section {...fadeUp} className="px-4 pb-28 max-w-4xl mx-auto w-full">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
-              Simple, affordable plans
-            </h2>
-            <p className="text-slate-400 mt-3 text-base">
-              Start free. Upgrade when you need more. Cancel anytime.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            {[
-              { name: "Free", price: "$0", desc: "2 reviews/month. Get started today.", cta: "Start Free", featured: false },
-              { name: "Starter", price: "$19", desc: "25 reviews/month. Negotiation assistant included.", cta: "Most Popular", featured: true },
-              { name: "Pro", price: "$49", desc: "100 reviews + advanced AI + PDF export.", cta: "Go Pro", featured: false },
-            ].map((p, i) => (
-              <motion.div
-                key={p.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.45, delay: i * 0.07 }}
-                className={`p-6 rounded-2xl border text-center transition-all ${
-                  p.featured
-                    ? "border-emerald-500/40 bg-emerald-950/20 shadow-[0_0_30px_rgba(16,185,129,0.08)]"
-                    : "border-slate-800 bg-[#0a0a0a]"
-                }`}
-              >
-                {p.featured && (
-                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-3">Most Popular</div>
-                )}
-                <div className="font-bold text-white mb-1">{p.name}</div>
-                <div className="text-3xl font-bold text-emerald-400 mb-2">{p.price}<span className="text-sm text-slate-500">/mo</span></div>
-                <div className="text-xs text-slate-400 mb-5 leading-snug">{p.desc}</div>
-                <button
-                  onClick={handleReviewCta}
-                  className={`w-full py-2 rounded-xl text-sm font-semibold transition-all ${
-                    p.featured
-                      ? "bg-emerald-500 hover:bg-emerald-400 text-black"
-                      : "bg-slate-800 hover:bg-slate-700 text-white"
-                  }`}
-                >
-                  {p.cta}
-                </button>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <Link href="/pricing">
-              <button className="text-sm text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1 mx-auto">
-                See all plans including Elite <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </Link>
-          </div>
-        </motion.section>
-
         {/* ── 9. FAQ ─────────────────────────────────────────────── */}
         <motion.section {...fadeUp} className="px-4 pb-28 max-w-3xl mx-auto w-full">
           <div className="text-center mb-10">
