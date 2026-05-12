@@ -1,7 +1,8 @@
 import { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ShieldCheck, Lock, Zap, LogIn } from "lucide-react";
+import { ShieldCheck, Lock, Zap, ArrowRight, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "wouter";
 
 interface FeatureGateProps {
   requires: "auth" | "pro";
@@ -28,12 +29,16 @@ export function FeatureGate({ requires, children, featureName, featureDescriptio
       <ProGate
         featureName={featureName}
         featureDescription={featureDescription}
+        onSignIn={openAuthModal}
+        isGuest={isGuest}
       />
     );
   }
 
   return <>{children}</>;
 }
+
+// ─── Auth gate ────────────────────────────────────────────────────────────────
 
 function AuthGate({
   featureName,
@@ -64,48 +69,61 @@ function AuthGate({
           boxShadow: "0 0 24px rgba(16,185,129,0.1)",
         }}
       >
-        <LogIn className="h-6 w-6 text-emerald-400" />
+        <ShieldCheck className="h-6 w-6 text-emerald-400" />
       </div>
 
       <h3 className="text-xl font-bold text-white mb-2">
-        Sign in to use {featureName || "this feature"}
+        {featureName ? `Sign in to use ${featureName}` : "Create your free account to continue"}
       </h3>
       <p className="text-slate-400 text-sm max-w-sm leading-relaxed mb-7">
-        {featureDescription || "Create your free IndiePact account to continue reviewing contracts, detecting risks, and negotiating smarter deals."}
+        {featureDescription ||
+          "IndiePact is free to start. Create your account to review contracts, detect risks, and negotiate smarter deals."}
       </p>
 
       <button
         onClick={onSignIn}
-        className="flex items-center gap-3 px-6 py-3 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-semibold text-sm transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
+        className="flex items-center gap-2 px-7 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:shadow-[0_0_32px_rgba(16,185,129,0.4)]"
+        style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#000" }}
       >
-        <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
-          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-        </svg>
-        Continue with Google
+        Create free account
+        <ArrowRight className="h-4 w-4" />
       </button>
 
-      <div className="flex items-center justify-center gap-5 text-xs text-slate-600 mt-5">
+      <p className="text-xs text-slate-600 mt-4">
+        Already have an account?{" "}
+        <button
+          onClick={onSignIn}
+          className="text-emerald-600 hover:text-emerald-400 transition-colors"
+        >
+          Log in
+        </button>
+      </p>
+
+      <div className="flex items-center justify-center gap-5 text-xs text-slate-700 mt-5">
         <span className="flex items-center gap-1.5">
-          <Lock className="h-3 w-3 text-emerald-800" /> Secure
+          <Lock className="h-3 w-3 text-emerald-900" /> Secure
         </span>
         <span>·</span>
-        <span>No spam</span>
+        <span>No password</span>
         <span>·</span>
-        <span>Private by default</span>
+        <span>No spam</span>
       </div>
     </motion.div>
   );
 }
 
+// ─── Pro gate ─────────────────────────────────────────────────────────────────
+
 function ProGate({
   featureName,
   featureDescription,
+  onSignIn,
+  isGuest,
 }: {
   featureName?: string;
   featureDescription?: string;
+  onSignIn: () => void;
+  isGuest: boolean;
 }) {
   return (
     <motion.div
@@ -138,17 +156,40 @@ function ProGate({
         Upgrade to unlock {featureName || "this feature"}
       </h3>
       <p className="text-slate-400 text-sm max-w-sm leading-relaxed mb-7">
-        {featureDescription || "This feature requires a paid plan. Upgrade to get full access to all IndiePact tools."}
+        {featureDescription ||
+          "This feature is available on paid plans. Upgrade to get full access to all IndiePact tools, unlimited reviews, and advanced AI."}
       </p>
 
-      <a
+      {/* Primary: upgrade */}
+      <Link
         href="/pricing"
-        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all shadow-[0_0_16px_rgba(212,175,55,0.25)] hover:shadow-[0_0_24px_rgba(212,175,55,0.4)] active:scale-[0.98]"
+        className="flex items-center gap-2 px-7 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all shadow-[0_0_16px_rgba(212,175,55,0.25)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] active:scale-[0.98]"
       >
-        <Zap className="h-4 w-4" /> View Plans & Upgrade
-      </a>
+        <Zap className="h-4 w-4" /> Unlock Now
+      </Link>
 
-      <p className="text-xs text-slate-600 mt-4">Plans from $19/month · Cancel anytime</p>
+      {/* Secondary: compare plans */}
+      <Link
+        href="/pricing"
+        className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors mt-3"
+      >
+        Compare all plans <ChevronRight className="h-3.5 w-3.5" />
+      </Link>
+
+      <p className="text-xs text-slate-700 mt-4">Plans from $19/month · Cancel anytime</p>
+
+      {/* If guest, offer to sign up first */}
+      {isGuest && (
+        <p className="text-xs text-slate-600 mt-3">
+          No account yet?{" "}
+          <button
+            onClick={onSignIn}
+            className="text-emerald-600 hover:text-emerald-400 transition-colors"
+          >
+            Create a free account first
+          </button>
+        </p>
+      )}
     </motion.div>
   );
 }
