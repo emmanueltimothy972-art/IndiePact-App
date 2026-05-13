@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Swords, Search, Copy, CheckCircle2, Send, Loader2, ShieldCheck,
   AlertTriangle, ShieldAlert, AlertCircle, Scale, ChevronRight, RefreshCw,
+  TrendingDown,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -273,6 +274,49 @@ export default function ShadowNegotiator() {
               </span>
             )}
           </div>
+
+          {/* Revenue Stress Test score — computed inline from selected risks */}
+          {!tableLoading && selectedRisks.length > 0 && (() => {
+            let score = 100;
+            for (const r of selectedRisks) {
+              if (r.category === "paymentDelay") score -= r.severity === "High" ? 30 : r.severity === "Medium" ? 18 : 8;
+              if (r.category === "scopeCreep")   score -= r.severity === "High" ? 22 : r.severity === "Medium" ? 12 : 5;
+              if (r.category === "liability")    score -= r.severity === "High" ? 25 : r.severity === "Medium" ? 14 : 0;
+              if (r.category === "termination")  score -= r.severity === "High" ? 20 : r.severity === "Medium" ? 10 : 0;
+            }
+            score = Math.max(0, Math.min(100, score));
+            const color = score >= 70 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
+            const label = score >= 70 ? "LOW FRICTION" : score >= 40 ? "MODERATE RISK" : "HIGH EXPOSURE";
+            const circumference = 2 * Math.PI * 28;
+            const dashOffset = circumference - (circumference * score) / 100;
+            const highCount = selectedRisks.filter(r => r.severity === "High").length;
+            const medCount  = selectedRisks.filter(r => r.severity === "Medium").length;
+            return (
+              <div className="mb-5 flex items-center gap-5 px-5 py-3.5 rounded-xl border border-border bg-[#050505]">
+                <TrendingDown className="h-4 w-4 text-amber-400 shrink-0" />
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Revenue Stress Test</span>
+                <div className="flex items-center gap-2">
+                  <svg className="-rotate-90 shrink-0" width="36" height="36" viewBox="0 0 64 64">
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/20" />
+                    <circle cx="32" cy="32" r="28" fill="none" stroke={color} strokeWidth="6"
+                      strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round"
+                      style={{ filter: `drop-shadow(0 0 4px ${color}60)` }}
+                    />
+                  </svg>
+                  <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{score}</span>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase tracking-widest"
+                  style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>
+                  {label}
+                </span>
+                <div className="flex items-center gap-3 ml-auto text-[10px] font-mono text-muted-foreground">
+                  {highCount > 0 && <span className="text-red-400">{highCount} HIGH</span>}
+                  {medCount > 0 && <span className="text-amber-400">{medCount} MEDIUM</span>}
+                  <span>{selectedRisks.length - highCount - medCount} LOW</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {tableLoading ? (
             <div className="flex items-center justify-center h-64 text-muted-foreground font-mono text-sm animate-pulse">

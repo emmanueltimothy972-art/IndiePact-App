@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, Check, X, ArrowLeft, Zap, Brain, Loader2 } from "lucide-react";
+import { ShieldCheck, Check, X, ArrowLeft, Zap, Brain, Loader2, FileText, Lock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { initiatePaystackPayment } from "@/lib/paystack";
@@ -23,7 +23,7 @@ const PLANS = [
       { text: "Text paste only (no PDF uploads)", included: true },
       { text: "Basic contract explanation", included: true },
       { text: "Basic risk detection", included: true },
-      { text: "Negotiation assistant", included: false },
+      { text: "Negotiation scripts", included: false },
       { text: "Save review history", included: false },
       { text: "Export reports", included: false },
       { text: "AI Legal Strategy", included: false },
@@ -42,7 +42,7 @@ const PLANS = [
       { text: "10 contract reviews per month", included: true },
       { text: "PDF & document uploads", included: true },
       { text: "Better AI explanations", included: true },
-      { text: "Basic negotiation assistant", included: true },
+      { text: "Negotiation scripts (Direct, Diplomatic, Legal)", included: true },
       { text: "Save review history", included: true },
       { text: "Export reports", included: false },
       { text: "AI Legal Strategy", included: false },
@@ -168,7 +168,7 @@ export default function Pricing() {
     if (!paystackKey) {
       toast({
         title: "Payments not configured yet",
-        description: "Paystack is not yet set up. Please add VITE_PAYSTACK_PUBLIC_KEY to your environment.",
+        description: "Payment processing is being set up. Check back soon or contact us.",
         variant: "destructive",
       });
       return;
@@ -216,6 +216,8 @@ export default function Pricing() {
     }
   };
 
+  const isPayPerScanCurrent = !isGuest && userPlan === "pay_per_scan";
+
   return (
     <div className="min-h-screen bg-[#050505] text-slate-100">
       <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 sticky top-0 z-50 bg-[#050505]/90 backdrop-blur-md">
@@ -245,7 +247,81 @@ export default function Pricing() {
           </p>
         </motion.div>
 
-        {/* Top row: Free, Starter, Pro */}
+        {/* ── PAY-PER-SCAN — ONE-TIME OPTION ─────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mb-8"
+        >
+          <div className="relative rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-[#0a0a0a] to-emerald-950/20 p-6 md:p-8 overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.06)]">
+            <div className="absolute inset-0 -z-10 [background:radial-gradient(ellipse_40%_80%_at_0%_50%,rgba(16,185,129,0.06)_0%,transparent_70%)]" />
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className="h-12 w-12 rounded-xl bg-emerald-950/60 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                  <FileText className="h-6 w-6 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-xl font-bold text-white">Pay-Per-Scan</h2>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 uppercase tracking-widest">
+                      One-Time · No Subscription
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-sm max-w-lg leading-relaxed">
+                    Need to review one contract now? Get full forensic-grade analysis — including every negotiation
+                    script, PDF export, and revenue stress test — for a single document.
+                    Exactly the same depth as the $99/mo Business plan, for one review.
+                  </p>
+                  <div className="flex flex-wrap gap-3 mt-3">
+                    {[
+                      "Full negotiation scripts (Direct, Diplomatic, Legal)",
+                      "PDF report export",
+                      "Revenue Stress Test",
+                      "Path to Victory",
+                    ].map((f) => (
+                      <span key={f} className="flex items-center gap-1.5 text-xs text-emerald-300">
+                        <Check className="h-3 w-3 text-emerald-400 shrink-0" /> {f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-end gap-3 shrink-0">
+                <div className="text-right">
+                  <div className="flex items-end gap-1">
+                    <span className="text-4xl font-bold text-white tracking-tight">$9.99</span>
+                    <span className="text-slate-500 text-sm mb-1">one-time</span>
+                  </div>
+                  <p className="text-xs text-slate-600">No recurring charges</p>
+                </div>
+                <button
+                  onClick={() => void handlePlanCta("pay_per_scan")}
+                  disabled={loadingPlan === "pay_per_scan" || isPayPerScanCurrent}
+                  className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+                    isPayPerScanCurrent
+                      ? "bg-slate-800 text-slate-500 cursor-default"
+                      : "bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_32px_rgba(16,185,129,0.5)]"
+                  }`}
+                >
+                  {loadingPlan === "pay_per_scan" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {isPayPerScanCurrent ? "Active" : "Buy One Scan — $9.99"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 mt-3 mx-1">
+            <div className="flex-1 h-px bg-slate-800" />
+            <span className="text-xs text-slate-600 uppercase tracking-widest font-mono">or choose a monthly plan</span>
+            <div className="flex-1 h-px bg-slate-800" />
+          </div>
+        </motion.div>
+
+        {/* ── TOP ROW: Free, Starter, Pro ─────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
           {PLANS.slice(0, 3).map((plan, i) => {
             const isCurrentPlan = !isGuest && userPlan === plan.key;
@@ -311,7 +387,7 @@ export default function Pricing() {
           })}
         </div>
 
-        {/* Bottom row: Business (most popular), Agency, Enterprise */}
+        {/* ── BOTTOM ROW: Business (popular), Agency, Enterprise ─────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
           {PLANS.slice(3).map((plan, i) => {
             const isCurrentPlan = !isGuest && userPlan === plan.key;

@@ -2,11 +2,15 @@ import { useState } from "react";
 import { Risk } from "@workspace/api-client-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, CheckCircle2, ShieldAlert, AlertTriangle, AlertCircle, Lock } from "lucide-react";
-import { IS_PRO } from "@/lib/constants";
+import { Copy, CheckCircle2, ShieldAlert, AlertTriangle, AlertCircle, Lock, ArrowRight } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { isPaidPlan } from "@/lib/constants";
+import { Link } from "wouter";
 
 export function RiskCard({ risk }: { risk: Risk }) {
   const [copiedTab, setCopiedTab] = useState<string | null>(null);
+  const { userPlan } = useAuth();
+  const isPro = isPaidPlan(userPlan);
 
   const handleCopy = (text: string, tab: string) => {
     navigator.clipboard.writeText(text);
@@ -76,13 +80,13 @@ export function RiskCard({ risk }: { risk: Risk }) {
               Rewritten Clause
             </TabsTrigger>
             <TabsTrigger value="direct" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2 font-medium flex items-center gap-1.5">
-              Direct {!IS_PRO && <Lock className="h-3 w-3 text-[#D4AF37]" />}
+              Direct {!isPro && <Lock className="h-3 w-3 text-[#D4AF37]" />}
             </TabsTrigger>
             <TabsTrigger value="diplomatic" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2 font-medium flex items-center gap-1.5">
-              Diplomatic {!IS_PRO && <Lock className="h-3 w-3 text-[#D4AF37]" />}
+              Diplomatic {!isPro && <Lock className="h-3 w-3 text-[#D4AF37]" />}
             </TabsTrigger>
             <TabsTrigger value="legal" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2 font-medium flex items-center gap-1.5">
-              Legal {!IS_PRO && <Lock className="h-3 w-3 text-[#D4AF37]" />}
+              Legal {!isPro && <Lock className="h-3 w-3 text-[#D4AF37]" />}
             </TabsTrigger>
           </TabsList>
 
@@ -95,7 +99,7 @@ export function RiskCard({ risk }: { risk: Risk }) {
 
             {lockedTabs.map((tab) => (
               <TabsContent key={tab} value={tab} className="m-0">
-                {IS_PRO ? (
+                {isPro ? (
                   <div className="p-4 bg-muted/30 rounded-lg border border-border font-sans text-sm leading-relaxed text-foreground italic">
                     "{tab === "direct" ? risk.fixes.direct : tab === "diplomatic" ? risk.fixes.diplomatic : risk.fixes.legal}"
                   </div>
@@ -110,18 +114,22 @@ export function RiskCard({ risk }: { risk: Risk }) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center rounded-lg bg-[#0B0E14]/80 backdrop-blur-sm">
                       <Lock className="h-5 w-5 text-[#D4AF37] mb-2" />
                       <p className="text-xs text-muted-foreground text-center mb-3 px-4">
-                        Pro-only negotiation script
+                        Paid-plan negotiation script
                       </p>
-                      <button className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#0B0E14] font-bold text-xs px-4 py-1.5 rounded transition-colors">
-                        Upgrade to Pro
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <Link href="/pricing">
+                          <button className="bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-[#0B0E14] font-bold text-xs px-4 py-1.5 rounded transition-colors">
+                            Unlock — from $9.99
+                          </button>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 )}
               </TabsContent>
             ))}
 
-            {IS_PRO && (
+            {isPro && (
               <Button
                 size="sm"
                 variant="outline"

@@ -171,16 +171,27 @@ export default function DocumentLab() {
                     <p className="text-white font-bold text-lg mb-1">Monthly limit reached</p>
                     <p className="text-slate-400 text-sm max-w-sm leading-relaxed">
                       You've used all {scansLimit} review{scansLimit === 1 ? "" : "s"} on the {planLabel} plan this month.
-                      Upgrade to keep reviewing contracts without interruption.
+                      You can upgrade to a monthly plan — or buy a single forensic review right now for $9.99.
                     </p>
                   </div>
+
+                  {/* $9.99 Pay-Per-Scan — primary option */}
                   <Link
                     href="/pricing"
-                    className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-3 rounded-xl text-sm flex items-center gap-2 transition-colors shadow-[0_0_16px_rgba(212,175,55,0.2)]"
+                    className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-8 py-3 rounded-xl text-sm flex items-center gap-2 transition-colors shadow-[0_0_16px_rgba(16,185,129,0.25)]"
                   >
-                    <Zap className="h-4 w-4" /> View Upgrade Plans
+                    <CheckCircle2 className="h-4 w-4" /> Buy One Scan — $9.99
                   </Link>
-                  <p className="text-xs text-slate-600">Your limit resets in 30 days from {new Date().toLocaleDateString()}</p>
+
+                  {/* Compare monthly plans — secondary */}
+                  <Link
+                    href="/pricing"
+                    className="text-amber-400 hover:text-amber-300 font-semibold text-xs transition-colors flex items-center gap-1"
+                  >
+                    <Zap className="h-3.5 w-3.5" /> Compare monthly plans →
+                  </Link>
+
+                  <p className="text-xs text-slate-600">Monthly limit resets 30 days from {new Date().toLocaleDateString()}</p>
                 </div>
               )}
 
