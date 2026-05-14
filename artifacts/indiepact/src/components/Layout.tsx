@@ -9,12 +9,13 @@ import { DEV_AUTH_BYPASS } from "@/lib/devMode";
 import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { TierSwitcher } from "@/components/TierSwitcher";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [isGenerating, setIsGenerating] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, userId, isGuest, openAuthModal, signOut, isLoading } = useAuth();
+  const { user, userId, isGuest, openAuthModal, signOut, isLoading, devTier } = useAuth();
   const isScanDetail = location.startsWith("/scan/") && location !== "/scan";
   const scanId = isScanDetail ? location.split("/")[2] : null;
 
@@ -46,14 +47,14 @@ export function Layout({ children }: { children: ReactNode }) {
   const userInitial = user?.email ? user.email[0].toUpperCase() : null;
 
   const NAV_ITEMS = [
-    { href: "/dashboard", icon: <LayoutDashboard size={17} />, label: "Dashboard", sub: "Your overview" },
-    { href: "/scan", icon: <FileText size={17} />, label: "Review Contract", sub: "Analyze a contract" },
-    { href: "/history", icon: <History size={17} />, label: "My Reviews", sub: "Past contract reviews" },
-    { href: "/escrow", icon: <Lock size={17} />, label: "Payment Lock", sub: "Protect your payments" },
-    { href: "/legal-strategy", icon: <Brain size={17} />, label: "AI Legal Strategy", sub: "Negotiation planning", isNew: true },
-    { href: "/bar", icon: <Scale size={17} />, label: "AI Attorney", sub: "Deep legal strategy", isPro: true },
-    { href: "/armory", icon: <Shield size={17} />, label: "Clause Library", sub: "Saved clauses & fixes" },
-    { href: "/negotiator", icon: <MessageSquare size={17} />, label: "Negotiation Room", sub: "AI negotiation coach" },
+    { href: "/dashboard",  icon: <LayoutDashboard size={17} />, label: "Dashboard",         sub: "Your overview" },
+    { href: "/scan",       icon: <FileText size={17} />,         label: "Review Contract",   sub: "Analyze a contract" },
+    { href: "/history",    icon: <History size={17} />,          label: "My Reviews",        sub: "Past contract reviews" },
+    { href: "/escrow",     icon: <Lock size={17} />,             label: "Payment Lock",      sub: "Protect your payments" },
+    { href: "/legal-strategy", icon: <Brain size={17} />,        label: "AI Legal Strategy", sub: "Negotiation planning", isNew: true },
+    { href: "/bar",        icon: <Scale size={17} />,            label: "AI Attorney",       sub: "Deep legal strategy", isPro: true },
+    { href: "/armory",     icon: <Shield size={17} />,           label: "Clause Library",    sub: "Saved clauses & fixes" },
+    { href: "/negotiator", icon: <MessageSquare size={17} />,    label: "Negotiation Room",  sub: "AI negotiation coach" },
   ];
 
   const NavItems = ({ onClose }: { onClose?: () => void }) => (
@@ -104,7 +105,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-[100dvh] bg-background text-foreground overflow-hidden">
-      {/* Desktop Sidebar */}
+      {/* ── Desktop Sidebar ──────────────────────────────────────────────────── */}
       <div className="hidden lg:flex w-64 border-r border-border bg-sidebar flex-col">
         <div className="h-16 flex items-center px-5 border-b border-border">
           <Link href="/" className="flex items-center gap-2 font-bold text-base tracking-tight text-emerald-400">
@@ -120,14 +121,21 @@ export function Layout({ children }: { children: ReactNode }) {
           <NavItems />
         </nav>
 
+        {/* Tier Switcher — dev mode only */}
+        <TierSwitcher />
+
         {/* Sidebar auth */}
         <div className="border-t border-border p-3">
           {DEV_AUTH_BYPASS ? (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-950/40 border border-violet-800/40">
               <FlaskConical size={13} className="text-violet-400 shrink-0" />
               <div>
-                <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest leading-none">Dev Preview</p>
-                <p className="text-[9px] text-violet-700 mt-0.5 leading-none">Auth bypassed · Pro plan</p>
+                <p className="text-[10px] font-bold text-violet-400 uppercase tracking-widest leading-none">
+                  Dev Preview
+                </p>
+                <p className="text-[9px] text-violet-700 mt-0.5 leading-none">
+                  Auth bypassed · {devTier.toUpperCase()} plan
+                </p>
               </div>
             </div>
           ) : !isLoading && (
@@ -137,7 +145,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-emerald-400/80 hover:bg-emerald-950/30 hover:text-emerald-300 transition-all border border-emerald-900/30 hover:border-emerald-800/50"
               >
                 <LogIn size={15} />
-                Sign In to Save Progress
+                Sign in with Google
               </button>
             ) : (
               <div className="space-y-1.5">
@@ -148,7 +156,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <span className="text-xs text-slate-400 truncate">{user?.email}</span>
                 </div>
                 <button
-                  onClick={() => signOut()}
+                  onClick={() => void signOut()}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-300 hover:bg-slate-800/30 transition-colors"
                 >
                   <LogOut size={13} />
@@ -160,7 +168,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* Main area */}
+      {/* ── Main area ────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-14 border-b border-border bg-background/90 backdrop-blur-sm flex items-center justify-between px-4 lg:px-6 z-10 sticky top-0">
           <div className="flex items-center gap-3">
@@ -180,13 +188,20 @@ export function Layout({ children }: { children: ReactNode }) {
                 <nav className="flex-1 py-3 flex flex-col gap-1 px-3 overflow-y-auto">
                   <NavItems onClose={() => setMobileMenuOpen(false)} />
                 </nav>
+                <TierSwitcher />
                 <div className="border-t border-border p-3">
                   {isGuest ? (
-                    <button onClick={() => { setMobileMenuOpen(false); openAuthModal(); }} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-emerald-400 border border-emerald-900/40">
-                      <LogIn size={15} /> Sign In
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); openAuthModal(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-emerald-400 border border-emerald-900/40"
+                    >
+                      <LogIn size={15} /> Sign in with Google
                     </button>
                   ) : (
-                    <button onClick={() => { setMobileMenuOpen(false); signOut(); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-300">
+                    <button
+                      onClick={() => { setMobileMenuOpen(false); void signOut(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-300"
+                    >
                       <LogOut size={13} /> Sign Out
                     </button>
                   )}
@@ -216,7 +231,9 @@ export function Layout({ children }: { children: ReactNode }) {
             {DEV_AUTH_BYPASS ? (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-950/50 border border-violet-800/40">
                 <FlaskConical size={11} className="text-violet-400" />
-                <span className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">Dev</span>
+                <span className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">
+                  DEV · {devTier.toUpperCase()}
+                </span>
               </div>
             ) : !isLoading && (
               isGuest ? (
@@ -238,7 +255,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     {userInitial}
                   </div>
                   <button
-                    onClick={() => signOut()}
+                    onClick={() => void signOut()}
                     className="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
                   >
                     <LogOut className="h-3.5 w-3.5" />

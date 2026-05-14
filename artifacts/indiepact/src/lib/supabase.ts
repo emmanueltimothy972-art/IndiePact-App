@@ -8,18 +8,22 @@ const isMisconfigured = !supabaseUrl || !supabaseAnonKey;
 if (isMisconfigured) {
   console.warn(
     "[IndiePact] Supabase credentials are not configured.\n" +
-    "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables to enable auth.\n" +
+    "Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable auth.\n" +
     "The app will run in guest-only mode until credentials are provided."
   );
 }
 
 /**
- * Supabase client — used for all auth operations (OTP send + verify) and
- * database queries from the frontend.
+ * Supabase client — handles Google OAuth and session management.
  *
- * Email delivery is handled by Supabase Auth. To switch to a custom SMTP
- * provider (Resend, Postmark, etc.) configure it in the Supabase dashboard
- * under Auth > SMTP Settings — no code changes are needed here.
+ * Auth flow:
+ * 1. User clicks "Continue with Google" → signInWithOAuth({ provider: 'google' })
+ * 2. Supabase redirects to Google, then back to /auth/callback
+ * 3. AuthCallback.tsx detects the session via onAuthStateChange → redirects to /dashboard
+ * 4. AuthContext.onAuthStateChange fires globally → updates user state everywhere
+ *
+ * To enable Google OAuth: configure the Google provider in Supabase Dashboard
+ * under Auth > Providers > Google, and add your Google OAuth client credentials.
  */
 export const supabase: SupabaseClient = isMisconfigured
   ? ({
@@ -27,6 +31,10 @@ export const supabase: SupabaseClient = isMisconfigured
         getSession: async () => ({ data: { session: null }, error: null }),
         onAuthStateChange: (_event: unknown, _cb: unknown) => ({
           data: { subscription: { unsubscribe: () => {} } },
+        }),
+        signInWithOAuth: async () => ({
+          data: null,
+          error: new Error("Auth not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY"),
         }),
         signInWithOtp: async () => ({ data: null, error: new Error("Auth not configured") }),
         verifyOtp: async () => ({ data: null, error: new Error("Auth not configured") }),
@@ -39,5 +47,6 @@ export const supabase: SupabaseClient = isMisconfigured
         autoRefreshToken: true,
         detectSessionInUrl: true,
         storageKey: "indiepact_auth",
+        flowType: "pkce",
       },
     });

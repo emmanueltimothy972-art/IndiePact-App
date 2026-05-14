@@ -4,35 +4,22 @@ import { supabase } from "@/lib/supabase";
 import { DEMO_USER_ID, PLAN_LIMITS } from "@/lib/constants";
 import { DEV_AUTH_BYPASS, DEV_MOCK_USER } from "@/lib/devMode";
 
-// ─── Device memory (remember this device for 30 days) ────────────────────────
+// ─── Dev tier override (localStorage) ────────────────────────────────────────
+// Only used when DEV_AUTH_BYPASS=true. Persists across refreshes.
 
-const DEVICE_KEY = "indiepact_device";
-const DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DEV_TIER_KEY = "indiepact_dev_tier";
+const DEV_TIER_DEFAULT = "pro";
 
-interface DeviceMemory {
-  email: string;
-  expiresAt: number;
+function readDevTier(): string {
+  if (!DEV_AUTH_BYPASS) return DEV_TIER_DEFAULT;
+  try { return localStorage.getItem(DEV_TIER_KEY) ?? DEV_TIER_DEFAULT; } catch { return DEV_TIER_DEFAULT; }
 }
 
-function readDeviceMemory(): DeviceMemory | null {
-  try {
-    const raw = localStorage.getItem(DEVICE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as DeviceMemory;
-    if (Date.now() > data.expiresAt) { localStorage.removeItem(DEVICE_KEY); return null; }
-    return data;
-  } catch { return null; }
+function writeDevTier(tier: string) {
+  try { localStorage.setItem(DEV_TIER_KEY, tier); } catch {}
 }
 
-function writeDeviceMemory(email: string) {
-  localStorage.setItem(DEVICE_KEY, JSON.stringify({ email, expiresAt: Date.now() + DEVICE_TTL_MS }));
-}
-
-function clearDeviceMemory() {
-  localStorage.removeItem(DEVICE_KEY);
-}
-
-// ─── Subscription ─────────────────────────────────────────────────────────────
+// ─── Subscription state ───────────────────────────────────────────────────────
 
 interface SubscriptionState {
   userPlan: string;
@@ -63,27 +50,27 @@ interface AuthContextType {
   isLoading: boolean;
   userId: string;
   isGuest: boolean;
+
   showAuthModal: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;
-  sendOtp: (email: string) => Promise<{ error: Error | null }>;
-  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
+
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
-  rememberedEmail: string | null;
-  rememberThisDevice: (email: string) => void;
-  forgetThisDevice: () => void;
+
   userPlan: string;
   scansUsed: number;
   scansLimit: number;
   refreshSubscription: () => Promise<void>;
+
+  // Dev-mode tier simulator (no-op in production)
+  devTier: string;
+  setDevTier: (tier: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// ─── Dev bypass mock values ───────────────────────────────────────────────────
-// When DEV_AUTH_BYPASS=true, the provider returns these instead of real
-// Supabase state. The full auth architecture (OTP, session, gates) remains
-// intact — only the session check is short-circuited.
+// ─── Dev mock user ────────────────────────────────────────────────────────────
 
 const DEV_MOCK_SUPABASE_USER = DEV_AUTH_BYPASS
   ? ({
@@ -103,14 +90,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(!DEV_AUTH_BYPASS);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [rememberedEmail, setRememberedEmail] = useState<string | null>(
-    () => readDeviceMemory()?.email ?? null,
-  );
-  const [subscription, setSubscription] = useState<SubscriptionState>(
-    DEV_AUTH_BYPASS
-      ? { userPlan: DEV_MOCK_USER.plan, scansUsed: DEV_MOCK_USER.scansUsed, scansLimit: DEV_MOCK_USER.scansLimit }
-      : { userPlan: "free", scansUsed: 0, scansLimit: 2 },
-  );
+
+  // Dev tier switcher state — only meaningful when DEV_AUTH_BYPASS=true
+  const [devTier, setDevTierState] = useState<string>(() => readDevTier());
+
+  // Subscription for real auth
+  const [subscription, setSubscription] = useState<SubscriptionState>(() => {
+    const plan = DEV_AUTH_BYPASS ? readDevTier() : "free";
+    return {
+      userPlan: plan,
+      scansUsed: DEV_AUTH_BYPASS ? DEV_MOCK_USER.scansUsed : 0,
+      scansLimit: DEV_AUTH_BYPASS ? (PLAN_LIMITS[plan] ?? DEV_MOCK_USER.scansLimit) : 2,
+    };
+  });
+
+  const setDevTier = useCallback((tier: string) => {
+    if (!DEV_AUTH_BYPASS) return;
+    writeDevTier(tier);
+    setDevTierState(tier);
+    // Also update live subscription so all isPaidPlan() checks react immediately
+    setSubscription({
+      userPlan: tier,
+      scansUsed: DEV_MOCK_USER.scansUsed,
+      scansLimit: PLAN_LIMITS[tier] ?? DEV_MOCK_USER.scansLimit,
+    });
+  }, []);
 
   const refreshSubscription = useCallback(async (uid?: string) => {
     if (DEV_AUTH_BYPASS) return;
@@ -120,7 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSubscription(state);
   }, [user?.id]);
 
-  // Real Supabase auth — skipped entirely in dev bypass mode
+  // ── Real Supabase auth (skipped entirely in dev bypass mode) ──────────────
+
   useEffect(() => {
     if (DEV_AUTH_BYPASS) return;
 
@@ -146,51 +151,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => authSub.unsubscribe();
   }, []);
 
-  const sendOtp = useCallback(async (email: string) => {
-    if (DEV_AUTH_BYPASS) return { error: null };
-    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    try {
-      const res = await fetch(`${window.location.origin}${base}/api/auth/otp/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      const data = (await res.json()) as { success?: boolean; error?: string };
-      if (!res.ok) return { error: new Error(data.error ?? "Failed to send code") };
-      return { error: null };
-    } catch {
-      return { error: new Error("Network error — please check your connection") };
-    }
-  }, []);
+  // ── Auth actions ──────────────────────────────────────────────────────────
 
-  const verifyOtp = useCallback(async (email: string, token: string) => {
-    if (DEV_AUTH_BYPASS) return { error: null };
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+  const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
+    if (DEV_AUTH_BYPASS) return { error: null }; // no-op in dev mode
+
+    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    const redirectTo = `${window.location.origin}${base}/auth/callback`;
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+
     return { error: error as Error | null };
   }, []);
 
   const signOut = useCallback(async () => {
     if (DEV_AUTH_BYPASS) return;
-    clearDeviceMemory();
-    setRememberedEmail(null);
     await supabase.auth.signOut();
     setSubscription({ userPlan: "free", scansUsed: 0, scansLimit: 2 });
   }, []);
 
-  const rememberThisDevice = useCallback((email: string) => {
-    writeDeviceMemory(email);
-    setRememberedEmail(email);
-  }, []);
-
-  const forgetThisDevice = useCallback(() => {
-    clearDeviceMemory();
-    setRememberedEmail(null);
-  }, []);
-
   const openAuthModal = useCallback(() => {
-    if (DEV_AUTH_BYPASS) return; // no-op in dev mode
+    if (DEV_AUTH_BYPASS) return;
     setShowAuthModal(true);
   }, []);
+
   const closeAuthModal = useCallback(() => setShowAuthModal(false), []);
 
   const userId = user?.id ?? DEMO_USER_ID;
@@ -200,12 +187,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, isLoading, userId, isGuest,
       showAuthModal, openAuthModal, closeAuthModal,
-      sendOtp, verifyOtp, signOut,
-      rememberedEmail, rememberThisDevice, forgetThisDevice,
+      signInWithGoogle, signOut,
       userPlan: subscription.userPlan,
       scansUsed: subscription.scansUsed,
       scansLimit: subscription.scansLimit,
       refreshSubscription,
+      devTier,
+      setDevTier,
     }}>
       {children}
     </AuthContext.Provider>

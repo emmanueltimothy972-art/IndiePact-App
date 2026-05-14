@@ -4,15 +4,15 @@ import { ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 /**
- * AuthCallback — safety net page for any URL-based session establishment.
+ * AuthCallback — handles the redirect from Google OAuth.
  *
- * In normal OTP flow, users never land here. This page exists only as a
- * fallback in case a user clicks an older email link or Supabase redirects
- * here for any reason. It immediately redirects to /dashboard if a session
- * exists, or back to the home page if not.
+ * Flow:
+ * 1. User clicks "Continue with Google" → signInWithOAuth redirects to Google
+ * 2. Google redirects back to this page (/auth/callback)
+ * 3. Supabase exchanges the PKCE code for a session automatically
+ * 4. onAuthStateChange fires with SIGNED_IN → we redirect to /dashboard
  *
- * No magic-link or OAuth logic lives here — OTP verification is handled
- * entirely inside the AuthModal via verifyOtp(), never via URL redirects.
+ * If no session is established within 5 seconds, we fall back to home.
  */
 export default function AuthCallback() {
   useEffect(() => {

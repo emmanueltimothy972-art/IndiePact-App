@@ -9,6 +9,8 @@ const ChatMessageSchema = z.object({
   content: z.string(),
 });
 
+// ─── Negotiator Chat (rehearsal partner) ──────────────────────────────────────
+
 const ChatBodySchema = z.object({
   message: z.string().min(1).max(2000),
   scenario: z.string().min(1),
@@ -22,7 +24,6 @@ router.post("/chat", async (req, res) => {
   }
 
   const { message, scenario, history } = parse.data;
-
   const messages = [
     ...history,
     { role: "user" as const, content: message },
@@ -33,9 +34,14 @@ router.post("/chat", async (req, res) => {
     return res.json({ reply });
   } catch (err) {
     req.log.error({ err }, "Shadow negotiator chat failed");
-    return res.status(500).json({ error: "AI unavailable", reply: "The AI is currently unavailable. Please try again shortly." });
+    return res.status(500).json({
+      error: "AI unavailable",
+      reply: "The AI is currently unavailable. Please try again shortly.",
+    });
   }
 });
+
+// ─── The Prosecutor (structured JSON, with rebuttal email) ────────────────────
 
 const ProsecutorBodySchema = z.object({
   message: z.string().min(1).max(3000),
@@ -55,6 +61,7 @@ router.post("/prosecutor", async (req, res) => {
 
   const { message, history, caseContext } = parse.data;
 
+  // Build history including only the content strings (not structured objects) for the AI
   const messages = [
     ...history,
     { role: "user" as const, content: message },
@@ -67,11 +74,21 @@ router.post("/prosecutor", async (req, res) => {
   };
 
   try {
+    // Returns structured ProsecutorResponse: { diagnosis, exposure, counterMove, rebuttalEmail, tacticalDirective }
     const reply = await runProsecutorChat(messages, context);
     return res.json({ reply });
   } catch (err) {
     req.log.error({ err }, "Prosecutor chat failed");
-    return res.status(500).json({ error: "AI unavailable", reply: "Investigation interrupted. Please try again." });
+    return res.status(500).json({
+      error: "AI unavailable",
+      reply: {
+        diagnosis: "Investigation interrupted — AI temporarily unavailable.",
+        exposure: "Unable to assess at this time.",
+        counterMove: "Stand by for reconnection.",
+        rebuttalEmail: "",
+        tacticalDirective: "Try again in 60 seconds.",
+      },
+    });
   }
 });
 
