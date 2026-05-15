@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   FileText, History, LayoutDashboard, ShieldCheck,
-  FileOutput, Loader2, Menu, Scale, Shield, MessageSquare, Lock,
+  FileOutput, Loader2, Menu, Shield, MessageSquare, Lock,
   LogIn, LogOut, Brain, FlaskConical,
 } from "lucide-react";
 import { DEV_AUTH_BYPASS } from "@/lib/devMode";
@@ -52,8 +52,8 @@ export function Layout({ children }: { children: ReactNode }) {
     { href: "/history",    icon: <History size={17} />,          label: "My Reviews",        sub: "Past contract reviews" },
     { href: "/escrow",     icon: <Lock size={17} />,             label: "Payment Lock",      sub: "Protect your payments" },
     { href: "/legal-strategy", icon: <Brain size={17} />,        label: "AI Legal Strategy", sub: "Negotiation planning", isNew: true },
-    { href: "/bar",        icon: <Scale size={17} />,            label: "AI Attorney",       sub: "Deep legal strategy", isPro: true },
-    { href: "/armory",     icon: <Shield size={17} />,           label: "Clause Library",    sub: "Saved clauses & fixes" },
+    { href: "/bar",        icon: <Brain size={17} />,            label: "AI Attorney",       sub: "Deep clause intelligence", isPro: true },
+    { href: "/armory",     icon: <Shield size={17} />,           label: "Clause Armory",     sub: "Battle-tested clause library" },
     { href: "/negotiator", icon: <MessageSquare size={17} />,    label: "Negotiation Room",  sub: "AI negotiation coach" },
   ];
 

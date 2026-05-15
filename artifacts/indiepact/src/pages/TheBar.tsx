@@ -1,33 +1,88 @@
 import { PageTransition } from "@/components/PageTransition";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
-import { Scale, ArrowRight, ShieldAlert, Loader2 } from "lucide-react";
+import { Scale, ArrowRight, ShieldAlert, Loader2, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { isPaidPlan } from "@/lib/constants";
+
+const MOCK_RISKS = [
+  {
+    explanation: "\"All deliverables become property of Client immediately upon creation, regardless of payment status.\"",
+    category: "IP Ownership",
+    severity: "High",
+    fixes: {
+      rewrittenClause: "All intellectual property transfers to Client upon receipt of full and final payment. Prior to full payment, Contractor retains all rights, title, and interest in all deliverables.",
+    },
+  },
+  {
+    explanation: "\"Client may request unlimited revisions at no additional cost until fully satisfied.\"",
+    category: "Scope Creep",
+    severity: "High",
+    fixes: {
+      rewrittenClause: "This agreement includes up to 3 revision rounds per milestone. Revisions beyond this cap are billed at $150/hour, invoiced separately, and require written approval before work begins.",
+    },
+  },
+  {
+    explanation: "\"Payment shall be made within 60 days of invoice receipt (Net-60).\"",
+    category: "Payment Delay",
+    severity: "Medium",
+    fixes: {
+      rewrittenClause: "Payment is due within 14 days of invoice date. Unpaid balances accrue interest at 1.5% per month (18% annually) after the due date.",
+    },
+  },
+  {
+    explanation: "\"Either party may terminate this agreement with 7 days' written notice, with no further obligation.\"",
+    category: "Termination Risk",
+    severity: "Medium",
+    fixes: {
+      rewrittenClause: "If Client terminates without cause, Client shall pay a kill fee equal to 50% of remaining contract value within 7 business days of termination notice.",
+    },
+  },
+  {
+    explanation: "\"Contractor's liability shall not exceed $500 in aggregate for any claims.\"",
+    category: "Liability Cap",
+    severity: "Low",
+    fixes: {
+      rewrittenClause: "Contractor's total liability shall not exceed the total fees paid under this agreement in the 3 months preceding the claim.",
+    },
+  },
+];
 
 export default function TheBar() {
-  const { userId } = useAuth();
-  const { data, isLoading } = useListScans(
+  const { userId, userPlan } = useAuth();
+  const { data, isLoading, isError } = useListScans(
     { userId, limit: 1, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }) } }
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }), retry: 1 } }
   );
 
+  const hasPaid = isPaidPlan(userPlan);
   const recentScan = data?.scans?.[0];
-  const risks = recentScan?.result?.risks || [];
+  const liveRisks = recentScan?.result?.risks || [];
+  const risks = liveRisks.length > 0 ? liveRisks : (hasPaid ? MOCK_RISKS : []);
+  const isMockData = liveRisks.length === 0 && hasPaid;
+  const showLoader = isLoading && !isError && !hasPaid;
 
   return (
     <PageTransition className="space-y-8 max-w-7xl mx-auto">
       <div className="flex items-start justify-between border-b border-border pb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Scale className="text-primary h-8 w-8" />
-            The Bar
+            <Brain className="text-primary h-8 w-8" />
+            AI Attorney
             <span className="bg-[#D4AF37]/20 text-[#D4AF37] px-2 py-1 rounded text-xs font-bold border border-[#D4AF37]/30 ml-2 uppercase">Pro</span>
           </h1>
           <p className="text-muted-foreground mt-2">Clause-by-clause risk intelligence for legal professionals.</p>
         </div>
       </div>
 
-      {isLoading ? (
+      {isMockData && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-violet-800/40 bg-violet-950/20 text-xs text-violet-400 font-mono">
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse shrink-0" />
+          Simulated data — run a contract scan to populate with real clause intelligence.
+        </div>
+      )}
+
+      {showLoader ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="animate-spin text-primary h-8 w-8" />
         </div>
@@ -52,7 +107,7 @@ export default function TheBar() {
                     {risks.length > 0 ? risks.map((risk, idx) => (
                       <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/20">
                         <td className="px-6 py-4 font-mono text-xs max-w-xs truncate" title={risk.explanation}>
-                          {risk.explanation || risk.title}
+                          {risk.explanation || (risk as { title?: string }).title || "—"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">{risk.category}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -74,7 +129,7 @@ export default function TheBar() {
                     )) : (
                       <tr>
                         <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
-                          No recent scan data found. Run a scan in the Document Lab first.
+                          No scan data found. Run a scan in Review Contract first.
                         </td>
                       </tr>
                     )}
@@ -95,7 +150,7 @@ export default function TheBar() {
                   </h3>
                 </div>
                 <div className="p-6 font-mono text-sm leading-relaxed text-muted-foreground flex-1">
-                  {risks[0]?.explanation || "No risky clause found to compare."}
+                  {risks[0]?.explanation || "No risky clause found. Run a scan first."}
                 </div>
               </div>
 
@@ -112,7 +167,7 @@ export default function TheBar() {
                   </h3>
                 </div>
                 <div className="p-6 font-mono text-sm leading-relaxed text-foreground flex-1">
-                  {risks[0]?.fixes.rewrittenClause || "No replacement found. Run a scan first."}
+                  {risks[0]?.fixes?.rewrittenClause || "No replacement found. Run a scan first."}
                 </div>
               </div>
             </div>

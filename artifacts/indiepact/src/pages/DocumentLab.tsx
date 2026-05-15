@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScanResult } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { PLAN_DISPLAY_NAMES } from "@/lib/constants";
+import { PLAN_DISPLAY_NAMES, isPaidPlan } from "@/lib/constants";
 import {
   FileText, Zap, UploadCloud, LogIn, AlertTriangle,
   CheckCircle2, DollarSign, MessageSquare, Shield, TrendingUp,
@@ -35,8 +35,10 @@ export default function DocumentLab() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [showProModal, setShowProModal] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const pendingResult = useRef<ScanResult | null>(null);
   const traceComplete = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { userId, isGuest, openAuthModal, userPlan, scansUsed, scansLimit, refreshSubscription } = useAuth();
   const { mutate: analyzeContract, isPending: isAnalyzing } = useAnalyzeContract();
@@ -103,15 +105,36 @@ export default function DocumentLab() {
     );
   };
 
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadedFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      if (text && text.length > 10) {
+        setContractText(text);
+        if (!contractName) setContractName(file.name.replace(/\.[^.]+$/, ""));
+        toast({ title: "File loaded", description: `${file.name} ready for review.` });
+      } else {
+        toast({ title: "Could not read file", description: "Please paste the contract text directly or try a plain-text file.", variant: "destructive" });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, [contractName, toast]);
+
   const handleUploadClick = () => {
     if (isGuest) { openAuthModal(); return; }
-    setShowProModal(true);
+    if (!isPaidPlan(userPlan)) { setShowProModal(true); return; }
+    fileInputRef.current?.click();
   };
 
   const handleReset = () => {
     setScanResult(null);
     setContractText("");
     setContractName("");
+    setUploadedFileName(null);
     setShowTrace(false);
     pendingResult.current = null;
     traceComplete.current = false;
@@ -251,13 +274,27 @@ export default function DocumentLab() {
 
                   <div className="space-y-1.5">
                     <Label className="text-sm font-medium text-slate-300">Your contract</Label>
+                    {/* Hidden file input for paid upload */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.pdf,.doc,.docx,.rtf"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+
                     <Tabs defaultValue="paste" className="w-full">
                       <TabsList className="mb-3 bg-[#0c0c0c] border border-slate-800 rounded-xl p-1 h-auto">
                         <TabsTrigger value="paste" className="rounded-lg text-sm data-[state=active]:bg-slate-800 data-[state=active]:text-white">
                           Paste Text
                         </TabsTrigger>
-                        <TabsTrigger value="upload" onClick={handleUploadClick} className="rounded-lg text-sm data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+                        <TabsTrigger value="upload" className="rounded-lg text-sm data-[state=active]:bg-slate-800 data-[state=active]:text-white">
                           Upload File
+                          {isPaidPlan(userPlan) && !isGuest && (
+                            <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              UNLOCKED
+                            </span>
+                          )}
                         </TabsTrigger>
                       </TabsList>
 
@@ -277,39 +314,83 @@ export default function DocumentLab() {
                       </TabsContent>
 
                       <TabsContent value="upload">
-                        <div
-                          onClick={handleUploadClick}
-                          className="border-2 border-dashed border-slate-700 rounded-2xl p-16 flex flex-col items-center justify-center text-center cursor-pointer bg-[#0c0c0c] hover:border-emerald-900/60 hover:bg-[#0d110e] transition-all min-h-[380px] group"
-                        >
-                          <motion.div
-                            animate={{ y: [0, -4, 0] }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                            className="h-16 w-16 rounded-2xl bg-emerald-950/40 border border-emerald-900/40 flex items-center justify-center mb-5 group-hover:border-emerald-800/60"
+                        {isPaidPlan(userPlan) && !isGuest ? (
+                          <div
+                            onClick={handleUploadClick}
+                            className="border-2 border-dashed border-emerald-900/50 rounded-2xl p-16 flex flex-col items-center justify-center text-center cursor-pointer bg-[#0c0c0c] hover:border-emerald-700/60 hover:bg-[#0d110e] transition-all min-h-[380px] group"
                           >
-                            <UploadCloud className="h-8 w-8 text-emerald-400/70" />
-                          </motion.div>
-                          <h3 className="text-lg font-semibold text-slate-200 mb-2">
-                            Drag & drop your contract
-                          </h3>
-                          <p className="text-slate-500 text-sm mb-2 max-w-xs leading-relaxed">
-                            PDF, Word (.docx), or image files up to 10MB.
-                          </p>
-                          <p className="text-slate-600 text-xs mb-6">
-                            Our AI reads any format and extracts the text automatically.
-                          </p>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
-                            className="rounded-xl"
-                          >
-                            {isGuest ? (
-                              <><LogIn className="h-3.5 w-3.5 mr-2" /> Sign In to Upload</>
+                            <motion.div
+                              animate={{ y: [0, -4, 0] }}
+                              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                              className="h-16 w-16 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 flex items-center justify-center mb-5 group-hover:border-emerald-700/70"
+                            >
+                              <UploadCloud className="h-8 w-8 text-emerald-400" />
+                            </motion.div>
+                            {uploadedFileName ? (
+                              <>
+                                <h3 className="text-lg font-semibold text-emerald-300 mb-2">
+                                  {uploadedFileName}
+                                </h3>
+                                <p className="text-slate-500 text-sm mb-6">File loaded — scroll down and click Review This Contract.</p>
+                              </>
                             ) : (
-                              "Choose File — Paid Feature"
+                              <>
+                                <h3 className="text-lg font-semibold text-slate-200 mb-2">
+                                  Drag & drop your contract
+                                </h3>
+                                <p className="text-slate-500 text-sm mb-2 max-w-xs leading-relaxed">
+                                  PDF, Word (.docx), plain text, or RTF up to 10MB.
+                                </p>
+                                <p className="text-slate-600 text-xs mb-6">
+                                  Our AI reads any format and extracts the text automatically.
+                                </p>
+                              </>
                             )}
-                          </Button>
-                        </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
+                              className="rounded-xl bg-emerald-950/50 border border-emerald-800/50 text-emerald-300 hover:bg-emerald-950 hover:text-emerald-200"
+                            >
+                              <UploadCloud className="h-3.5 w-3.5 mr-2" />
+                              {uploadedFileName ? "Replace File" : "Choose File"}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={handleUploadClick}
+                            className="border-2 border-dashed border-slate-700 rounded-2xl p-16 flex flex-col items-center justify-center text-center cursor-pointer bg-[#0c0c0c] hover:border-slate-600 transition-all min-h-[380px] group"
+                          >
+                            <motion.div
+                              animate={{ y: [0, -4, 0] }}
+                              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                              className="h-16 w-16 rounded-2xl bg-emerald-950/40 border border-emerald-900/40 flex items-center justify-center mb-5 group-hover:border-emerald-800/60"
+                            >
+                              <UploadCloud className="h-8 w-8 text-emerald-400/70" />
+                            </motion.div>
+                            <h3 className="text-lg font-semibold text-slate-200 mb-2">
+                              Drag & drop your contract
+                            </h3>
+                            <p className="text-slate-500 text-sm mb-2 max-w-xs leading-relaxed">
+                              PDF, Word (.docx), or image files up to 10MB.
+                            </p>
+                            <p className="text-slate-600 text-xs mb-6">
+                              Our AI reads any format and extracts the text automatically.
+                            </p>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
+                              className="rounded-xl"
+                            >
+                              {isGuest ? (
+                                <><LogIn className="h-3.5 w-3.5 mr-2" /> Sign In to Upload</>
+                              ) : (
+                                "Choose File — Paid Feature"
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </TabsContent>
                     </Tabs>
                   </div>
