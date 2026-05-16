@@ -70,17 +70,17 @@ export function Layout({ children }: { children: ReactNode }) {
             onClick={onClose}
             className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
               active
-                ? "bg-emerald-950/50 text-emerald-300 border border-emerald-900/50"
-                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                ? "bg-slate-800/80 text-white border border-slate-700/60"
+                : "text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border border-transparent"
             }`}
           >
             <div className="flex items-center gap-3">
-              <span className={active ? "text-emerald-400" : "text-slate-500 group-hover:text-slate-300"}>
+              <span className={active ? "text-slate-200" : "text-slate-500 group-hover:text-slate-300"}>
                 {item.icon}
               </span>
               <div>
                 <div className="leading-tight">{item.label}</div>
-                <div className={`text-[10px] leading-tight mt-0.5 ${active ? "text-emerald-600" : "text-slate-600"}`}>
+                <div className={`text-[10px] leading-tight mt-0.5 ${active ? "text-slate-500" : "text-slate-600"}`}>
                   {item.sub}
                 </div>
               </div>

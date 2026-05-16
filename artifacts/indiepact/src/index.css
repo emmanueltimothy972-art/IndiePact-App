@@ -161,20 +161,20 @@
   --sidebar: 215 40% 10%;
   --sidebar-foreground: 210 30% 96%;
   --sidebar-border: 215 30% 18%;
-  /* Neon Emerald #10b981 */
-  --sidebar-primary: 160 84% 39%;
+  /* Muted teal-green — professional, not neon */
+  --sidebar-primary: 163 52% 34%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 215 35% 20%;
   --sidebar-accent-foreground: 210 30% 96%;
-  --sidebar-ring: 160 84% 39%;
+  --sidebar-ring: 163 52% 34%;
 
   --popover: 215 42% 13%;
   --popover-foreground: 210 30% 96%;
   --popover-border: 215 30% 22%;
 
-  /* Neon Emerald primary: #10b981 */
-  --primary: 160 84% 39%;
-  --primary-foreground: 0 0% 2%;
+  /* Muted teal-green primary — restrained, professional */
+  --primary: 163 52% 34%;
+  --primary-foreground: 0 0% 98%;
 
   --secondary: 215 35% 20%;
   --secondary-foreground: 210 30% 96%;
@@ -189,7 +189,7 @@
   --destructive-foreground: 0 0% 100%;
 
   --input: 215 35% 18%;
-  --ring: 160 84% 39%;
+  --ring: 163 52% 34%;
 
   --chart-1: 160 84% 39%; /* Emerald / Safe */
   --chart-2: 46 65% 52%;  /* Gold */

@@ -31,6 +31,8 @@ const GetScanQuerySchema = z.object({ userId: z.string().min(1) });
 
 // ── List scans ──────────────────────────────────────────────────────────────
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.get("/scans", async (req, res) => {
   const parse = ListScansQuerySchema.safeParse(req.query);
   if (!parse.success) {
@@ -38,6 +40,11 @@ router.get("/scans", async (req, res) => {
   }
 
   const { userId, limit, offset } = parse.data;
+
+  // Supabase requires a real UUID for user_id — return empty for dev mock IDs
+  if (!UUID_RE.test(userId)) {
+    return res.json({ scans: [], total: 0 });
+  }
 
   const { data, error, count } = await requireSupabase()
     .from("scans")

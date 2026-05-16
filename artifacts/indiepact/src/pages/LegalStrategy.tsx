@@ -388,15 +388,22 @@ export default function LegalStrategy() {
     try {
       const baseUrl = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
 
-      // When the sentinel is used, resolve the real scan ID from cache or use contractText from activeScan
-      const resolvedScanId = selectedScanId === "__active__"
-        ? (allScans.find((s) => s.contractName === activeScan?.contractName)?.id ?? selectedScanId)
-        : selectedScanId;
+      // A scan is DB-persisted only if the server actually returned it
+      const isDbPersisted = dbScans.some((s) => s.id === selectedScanId);
+      const needsContractData = !isDbPersisted || selectedScanId === "__active__";
 
-      const body: Record<string, string> = { scanId: resolvedScanId, userId };
-      // Pass contractData when using active/sentinel scan (bypasses DB lookup)
-      if (resolvedScanId === "__active__" && activeScan) {
-        body.contractData = JSON.stringify(activeScan.result);
+      const body: Record<string, string> = { scanId: selectedScanId, userId };
+
+      if (needsContractData) {
+        // Find result data from cache or active scan to bypass DB lookup
+        const selectedScan = allScans.find((s) => s.id === selectedScanId);
+        const resultSource = selectedScan?.result ?? activeScan?.result;
+        if (!resultSource) {
+          setError("Could not load scan data. Please re-run the contract review and try again.");
+          setIsAnalyzing(false);
+          return;
+        }
+        body.contractData = JSON.stringify(resultSource);
       }
 
       const res = await fetch(`${baseUrl}/api/legal-strategy`, {
@@ -563,7 +570,7 @@ export default function LegalStrategy() {
                   <Button
                     onClick={handleAnalyze}
                     disabled={!selectedScanId || isAnalyzing}
-                    className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl shadow-[0_0_16px_rgba(16,185,129,0.2)] hover:shadow-[0_0_24px_rgba(16,185,129,0.35)] transition-all"
+                    className="w-full h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-700 hover:border-slate-600 transition-all"
                   >
                     {isAnalyzing ? (
                       <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Building your strategy...</>
