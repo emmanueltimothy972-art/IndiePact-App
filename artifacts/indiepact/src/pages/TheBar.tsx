@@ -1,16 +1,17 @@
 import { PageTransition } from "@/components/PageTransition";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
 import {
-  Scale, ArrowRight, ShieldAlert, Loader2, Brain, FileText,
+  Scale, ShieldAlert, Loader2, Brain, FileText,
   AlertTriangle, CheckCircle2, Shield, TrendingUp, TrendingDown,
+  Clock, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useScanContext } from "@/contexts/ScanContext";
 import { isPaidPlan } from "@/lib/constants";
 import { Link } from "wouter";
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Risk = {
   title?: string;
@@ -19,6 +20,14 @@ type Risk = {
   severity: "Low" | "Medium" | "High";
   whyThisHurtsYou?: string;
   fixes?: { rewrittenClause?: string; direct?: string; diplomatic?: string; legal?: string };
+};
+
+type ScanEntry = {
+  id: string;
+  contractName: string;
+  protectionScore: number;
+  createdAt: string;
+  result?: { risks?: Risk[]; protectionScore?: number } | null;
 };
 
 const MOCK_RISKS: Risk[] = [
@@ -87,6 +96,12 @@ function severityBadge(severity: string): string {
   return "bg-slate-800 border-slate-700 text-slate-400";
 }
 
+function scoreColor(score: number): string {
+  if (score >= 70) return "text-emerald-500";
+  if (score >= 45) return "text-amber-400";
+  return "text-red-400";
+}
+
 function ScoreBar({ score }: { score: number }) {
   const color = score >= 70 ? "#059669" : score >= 45 ? "#d97706" : "#dc2626";
   return (
@@ -105,33 +120,62 @@ function ScoreBar({ score }: { score: number }) {
 export default function TheBar() {
   const { userId, userPlan } = useAuth();
   const { activeScan, cachedScans } = useScanContext();
+  const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [selectedRiskIdx, setSelectedRiskIdx] = useState(0);
 
   const { data, isLoading } = useListScans(
-    { userId, limit: 1, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }), retry: 1 } }
+    { userId, limit: 20, offset: 0 },
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 20, offset: 0 }), retry: 1 } }
   );
 
   const hasPaid = isPaidPlan(userPlan);
 
-  // Priority: activeScan → cachedScans[0] → API → mock
-  const sourceScan = (() => {
-    if (activeScan?.result?.risks?.length) return { contractName: activeScan.contractName, result: activeScan.result };
-    if (cachedScans.length > 0 && (cachedScans[0].result as { risks?: Risk[] })?.risks?.length) return cachedScans[0] as { contractName: string; result: { risks: Risk[]; protectionScore: number } };
-    if (data?.scans?.[0]) return data.scans[0] as { contractName: string; result: { risks: Risk[]; protectionScore: number } };
-    return null;
+  // Merge DB scans + localStorage cache (deduped)
+  const dbScans = data?.scans ?? [];
+  const dbIds = new Set(dbScans.map((s) => s.id));
+  const uniqueCached = cachedScans.filter((s) => !dbIds.has(s.id));
+  const allScans: ScanEntry[] = [...dbScans, ...uniqueCached].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  // Auto-select: prefer active scan match, then most recent
+  useEffect(() => {
+    if (selectedScanId) return;
+    if (activeScan) {
+      const match = allScans.find((s) => s.contractName === activeScan.contractName);
+      if (match) { setSelectedScanId(match.id); return; }
+    }
+    if (allScans.length > 0) setSelectedScanId(allScans[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeScan, allScans.length]);
+
+  // Reset risk detail view when scan changes
+  useEffect(() => { setSelectedRiskIdx(0); }, [selectedScanId]);
+
+  // Resolve source risks from selected scan
+  const sourceScan = selectedScanId
+    ? allScans.find((s) => s.id === selectedScanId) ?? null
+    : null;
+
+  // For the active scan we need its full result from context (not just the DB summary row)
+  const sourceResult = (() => {
+    if (sourceScan && activeScan && sourceScan.contractName === activeScan.contractName) {
+      return activeScan.result;
+    }
+    return sourceScan?.result ?? null;
   })();
 
-  const liveRisks: Risk[] = (sourceScan?.result?.risks as Risk[] | undefined) ?? [];
+  const liveRisks: Risk[] = (sourceResult?.risks as Risk[] | undefined) ?? [];
   const isUsingReal = liveRisks.length > 0;
-  const risks: Risk[] = isUsingReal ? liveRisks : (hasPaid ? MOCK_RISKS : []);
+  const risks: Risk[] = isUsingReal ? liveRisks : (hasPaid && allScans.length === 0 ? MOCK_RISKS : []);
+  const isUsingMock = !isUsingReal && hasPaid && allScans.length === 0;
 
   const selectedRisk = risks[selectedRiskIdx] ?? null;
   const highCount = risks.filter((r) => r.severity === "High").length;
   const medCount = risks.filter((r) => r.severity === "Medium").length;
 
   return (
-    <PageTransition className="space-y-6 max-w-5xl mx-auto">
+    <PageTransition className="space-y-5 max-w-5xl mx-auto">
       {/* Header */}
       <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6">
         <div className="flex items-start gap-4">
@@ -149,17 +193,11 @@ export default function TheBar() {
               Clause-by-clause risk intelligence — scored, explained, and ready to counter.
             </p>
           </div>
-          {isUsingReal && sourceScan && (
-            <div className="shrink-0 text-right">
-              <p className="text-[10px] text-slate-600 uppercase tracking-widest">Analyzing</p>
-              <p className="text-xs text-slate-300 font-medium truncate max-w-48">{sourceScan.contractName}</p>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Data source banner */}
-      {!isUsingReal && hasPaid && (
+      {/* Mock data notice */}
+      {isUsingMock && (
         <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl border border-slate-700/50 bg-slate-900/60 text-xs text-slate-500">
           <span className="h-1.5 w-1.5 rounded-full bg-slate-600 shrink-0" />
           Showing sample clause data — review a contract to populate with your real clause intelligence.
@@ -169,11 +207,12 @@ export default function TheBar() {
         </div>
       )}
 
-      {isLoading && !sourceScan ? (
+      {isLoading && allScans.length === 0 ? (
         <div className="flex justify-center items-center py-20">
-          <Loader2 className="animate-spin text-slate-500 h-6 w-6" />
+          <Loader2 className="animate-spin text-slate-600 h-6 w-6" />
         </div>
-      ) : risks.length === 0 ? (
+      ) : allScans.length === 0 && !isUsingMock ? (
+        /* Empty state — no scans at all */
         <div className="rounded-xl border border-dashed border-slate-700 p-12 text-center">
           <FileText className="h-10 w-10 text-slate-700 mx-auto mb-3" />
           <p className="text-slate-400 font-medium mb-1">No clause data yet</p>
@@ -189,181 +228,277 @@ export default function TheBar() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Summary row */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              {
-                label: "Total Clauses",
-                value: risks.length,
-                icon: <Scale className="h-4 w-4 text-slate-400" />,
-                sub: "flagged issues",
-              },
-              {
-                label: "Critical Risk",
-                value: highCount,
-                icon: <AlertTriangle className="h-4 w-4 text-red-400" />,
-                sub: "address immediately",
-                valueClass: highCount > 0 ? "text-red-400" : "text-slate-300",
-              },
-              {
-                label: "Negotiable",
-                value: medCount,
-                icon: <TrendingUp className="h-4 w-4 text-amber-400" />,
-                sub: "can be improved",
-                valueClass: "text-amber-400",
-              },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-slate-800 bg-[#0a0a0a] p-4 space-y-1">
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  {stat.icon}
-                  {stat.label}
-                </div>
-                <p className={`text-2xl font-bold font-mono ${stat.valueClass ?? "text-slate-200"}`}>
-                  {stat.value}
+        <div className="space-y-5">
+          {/* ── Scan Selector ───────────────────────────────────────── */}
+          {allScans.length > 0 && (
+            <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+                  Select Contract
                 </p>
-                <p className="text-[10px] text-slate-600">{stat.sub}</p>
+                <p className="text-[10px] text-slate-700">
+                  {allScans.length} review{allScans.length !== 1 ? "s" : ""} available
+                </p>
               </div>
-            ))}
-          </div>
-
-          {/* Risk Scoring Matrix */}
-          <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-800/80 flex items-center gap-2">
-              <Shield className="h-4 w-4 text-slate-500" />
-              <h2 className="font-semibold text-white text-sm">Clause Risk Matrix</h2>
-              <span className="ml-auto text-[10px] text-slate-600 uppercase tracking-widest font-semibold">
-                {risks.length} clause{risks.length !== 1 ? "s" : ""}
-              </span>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {allScans.map((scan) => {
+                  const isSelected = selectedScanId === scan.id;
+                  const sc = scan.protectionScore ?? 0;
+                  return (
+                    <button
+                      key={scan.id}
+                      onClick={() => setSelectedScanId(scan.id)}
+                      className={`flex-none flex flex-col gap-1.5 p-3 rounded-xl border text-left transition-all min-w-[180px] max-w-[220px] ${
+                        isSelected
+                          ? "border-slate-600 bg-slate-800/80"
+                          : "border-slate-800 bg-[#0c0c0c] hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-medium text-white leading-snug line-clamp-2 flex-1">
+                          {scan.contractName}
+                        </p>
+                        {isSelected && (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-mono font-bold ${scoreColor(sc)}`}>
+                          {sc}/100
+                        </span>
+                        <span className="text-[10px] text-slate-700 flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5" />
+                          {new Date(scan.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-[10px] text-slate-600 uppercase tracking-widest bg-slate-900/50 border-b border-slate-800">
-                  <tr>
-                    <th className="px-5 py-3 font-semibold">Clause Excerpt</th>
-                    <th className="px-5 py-3 font-semibold">Category</th>
-                    <th className="px-5 py-3 font-semibold">Severity</th>
-                    <th className="px-5 py-3 font-semibold">Risk Score</th>
-                    <th className="px-5 py-3 font-semibold">Priority</th>
-                    <th className="px-5 py-3 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {risks.map((risk, idx) => {
-                    const score = riskScore(risk.severity);
-                    const prio = leveragePriority(risk.severity);
-                    const isSelected = selectedRiskIdx === idx;
-                    return (
-                      <tr
-                        key={idx}
-                        onClick={() => setSelectedRiskIdx(idx)}
-                        className={`border-b border-slate-800/60 last:border-0 cursor-pointer transition-colors ${
-                          isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/60"
-                        }`}
-                      >
-                        <td className="px-5 py-4 font-mono text-xs text-slate-400 max-w-xs">
-                          <span className="line-clamp-2 leading-relaxed">
-                            {risk.explanation || risk.title || "—"}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 whitespace-nowrap text-xs text-slate-300">{risk.category}</td>
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${severityBadge(risk.severity)}`}>
-                            {risk.severity}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
-                              {score}
-                            </span>
-                            <ScoreBar score={score} />
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${prio.className}`}>
-                            {prio.label}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => { e.stopPropagation(); setSelectedRiskIdx(idx); }}
-                            className="h-7 px-3 text-[11px] border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+          )}
+
+          {/* ── Content: no risks for selected scan ─────────────────── */}
+          {allScans.length > 0 && !isUsingReal && !isUsingMock && (
+            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
+              <Shield className="h-8 w-8 text-slate-700 mx-auto mb-3" />
+              <p className="text-slate-400 font-medium mb-1">No risk data for this contract</p>
+              <p className="text-slate-600 text-sm">
+                This scan doesn't have detailed clause data. Try reviewing the contract again.
+              </p>
+            </div>
+          )}
+
+          {/* ── Main analytics ──────────────────────────────────────── */}
+          {(isUsingReal || isUsingMock) && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedScanId ?? "mock"}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-5"
+              >
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    {
+                      label: "Total Clauses",
+                      value: risks.length,
+                      icon: <Scale className="h-4 w-4 text-slate-400" />,
+                      sub: "flagged issues",
+                    },
+                    {
+                      label: "Critical Risk",
+                      value: highCount,
+                      icon: <AlertTriangle className="h-4 w-4 text-red-400" />,
+                      sub: "address immediately",
+                      valueClass: highCount > 0 ? "text-red-400" : "text-slate-300",
+                    },
+                    {
+                      label: "Negotiable",
+                      value: medCount,
+                      icon: <TrendingUp className="h-4 w-4 text-amber-400" />,
+                      sub: "can be improved",
+                      valueClass: "text-amber-400",
+                    },
+                  ].map((stat) => (
+                    <div key={stat.label} className="rounded-xl border border-slate-800 bg-[#0a0a0a] p-4 space-y-1">
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        {stat.icon}
+                        {stat.label}
+                      </div>
+                      <p className={`text-2xl font-bold font-mono ${stat.valueClass ?? "text-slate-200"}`}>
+                        {stat.value}
+                      </p>
+                      <p className="text-[10px] text-slate-600">{stat.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Clause Risk Matrix */}
+                <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-800/80 flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-slate-500" />
+                    <h2 className="font-semibold text-white text-sm">Clause Risk Matrix</h2>
+                    <span className="ml-auto text-[10px] text-slate-600 uppercase tracking-widest font-semibold">
+                      {risks.length} clause{risks.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-[10px] text-slate-600 uppercase tracking-widest bg-slate-900/50 border-b border-slate-800">
+                        <tr>
+                          <th className="px-5 py-3 font-semibold">Clause Excerpt</th>
+                          <th className="px-5 py-3 font-semibold">Category</th>
+                          <th className="px-5 py-3 font-semibold">Severity</th>
+                          <th className="px-5 py-3 font-semibold">Risk Score</th>
+                          <th className="px-5 py-3 font-semibold">Priority</th>
+                          <th className="px-5 py-3 font-semibold">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {risks.map((risk, idx) => {
+                          const score = riskScore(risk.severity);
+                          const prio = leveragePriority(risk.severity);
+                          const isSelected = selectedRiskIdx === idx;
+                          return (
+                            <tr
+                              key={idx}
+                              onClick={() => setSelectedRiskIdx(idx)}
+                              className={`border-b border-slate-800/60 last:border-0 cursor-pointer transition-colors ${
+                                isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/60"
+                              }`}
+                            >
+                              <td className="px-5 py-4 font-mono text-xs text-slate-400 max-w-xs">
+                                <span className="line-clamp-2 leading-relaxed">
+                                  {risk.explanation || risk.title || "—"}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 whitespace-nowrap text-xs text-slate-300">{risk.category}</td>
+                              <td className="px-5 py-4 whitespace-nowrap">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${severityBadge(risk.severity)}`}>
+                                  {risk.severity}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
+                                    {score}
+                                  </span>
+                                  <ScoreBar score={score} />
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 whitespace-nowrap">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${prio.className}`}>
+                                  {prio.label}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 whitespace-nowrap">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => { e.stopPropagation(); setSelectedRiskIdx(idx); }}
+                                  className="h-7 px-3 text-[11px] border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                >
+                                  <ShieldAlert className="w-3 h-3 mr-1" />
+                                  Review
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Clause Deep-Dive */}
+                {selectedRisk && (
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={`${selectedScanId}-${selectedRiskIdx}`}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.22 }}
+                      className="space-y-3"
+                    >
+                      <div className="flex items-center gap-2 px-1">
+                        <TrendingDown className="h-4 w-4 text-slate-500" />
+                        <h2 className="font-semibold text-white text-sm">
+                          Clause Deep-Dive —{" "}
+                          <span className="text-slate-400 font-normal">{selectedRisk.category}</span>
+                        </h2>
+                        <span className="ml-auto text-[10px] text-slate-600">
+                          {selectedRiskIdx + 1} of {risks.length}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setSelectedRiskIdx((i) => Math.max(0, i - 1))}
+                            disabled={selectedRiskIdx === 0}
+                            className="h-6 w-6 rounded flex items-center justify-center border border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           >
-                            <ShieldAlert className="w-3 h-3 mr-1" />
-                            Review
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                            <ChevronRight className="h-3 w-3 rotate-180" />
+                          </button>
+                          <button
+                            onClick={() => setSelectedRiskIdx((i) => Math.min(risks.length - 1, i + 1))}
+                            disabled={selectedRiskIdx === risks.length - 1}
+                            className="h-6 w-6 rounded flex items-center justify-center border border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <ChevronRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
 
-          {/* Comparison Engine */}
-          {selectedRisk && (
-            <motion.div
-              key={selectedRiskIdx}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-3"
-            >
-              <div className="flex items-center gap-2 px-1">
-                <TrendingDown className="h-4 w-4 text-slate-500" />
-                <h2 className="font-semibold text-white text-sm">
-                  Clause Deep-Dive — <span className="text-slate-400 font-normal">{selectedRisk.category}</span>
-                </h2>
-              </div>
+                      {/* Why it hurts */}
+                      {selectedRisk.whyThisHurtsYou && (
+                        <div className="rounded-xl border border-amber-900/30 bg-amber-950/5 px-5 py-4 text-sm text-amber-300/80 leading-relaxed">
+                          <span className="font-semibold text-amber-400">Why this hurts you: </span>
+                          {selectedRisk.whyThisHurtsYou}
+                        </div>
+                      )}
 
-              {/* Why it hurts */}
-              {selectedRisk.whyThisHurtsYou && (
-                <div className="rounded-xl border border-amber-900/30 bg-amber-950/5 px-5 py-4 text-sm text-amber-300/80 leading-relaxed">
-                  <span className="font-semibold text-amber-400">Why this hurts you: </span>
-                  {selectedRisk.whyThisHurtsYou}
-                </div>
-              )}
+                      {/* Before / After comparison */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-red-900/30 bg-[#0a0a0a] flex flex-col overflow-hidden">
+                          <div className="px-4 py-3 border-b border-red-900/20 bg-red-950/10 flex items-center gap-2">
+                            <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                            <span className="text-xs font-semibold text-red-400">Client's Version</span>
+                          </div>
+                          <div className="p-5 font-mono text-xs leading-relaxed text-slate-400 flex-1">
+                            {selectedRisk.explanation || selectedRisk.title || "No clause excerpt available."}
+                          </div>
+                        </div>
 
-              {/* Before / After */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-red-900/30 bg-[#0a0a0a] flex flex-col overflow-hidden">
-                  <div className="px-4 py-3 border-b border-red-900/20 bg-red-950/10 flex items-center gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                    <span className="text-xs font-semibold text-red-400">Client's Version</span>
-                  </div>
-                  <div className="p-5 font-mono text-xs leading-relaxed text-slate-400 flex-1">
-                    {selectedRisk.explanation || selectedRisk.title || "No clause excerpt available."}
-                  </div>
-                </div>
+                        <div className="rounded-xl border border-slate-700/50 bg-[#0a0a0a] flex flex-col overflow-hidden">
+                          <div className="px-4 py-3 border-b border-slate-700/50 bg-slate-900/50 flex items-center gap-2">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="text-xs font-semibold text-slate-300">Protected Version</span>
+                          </div>
+                          <div className="p-5 font-mono text-xs leading-relaxed text-slate-300 flex-1">
+                            {selectedRisk.fixes?.rewrittenClause || "No replacement clause available for this risk."}
+                          </div>
+                        </div>
+                      </div>
 
-                <div className="rounded-xl border border-slate-700/50 bg-[#0a0a0a] flex flex-col overflow-hidden">
-                  <div className="px-4 py-3 border-b border-slate-700/50 bg-slate-900/50 flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
-                    <span className="text-xs font-semibold text-slate-300">Protected Version</span>
-                    <ArrowRight className="h-3 w-3 text-slate-600 ml-auto" />
-                  </div>
-                  <div className="p-5 font-mono text-xs leading-relaxed text-slate-300 flex-1">
-                    {selectedRisk.fixes?.rewrittenClause || "No replacement clause available for this risk."}
-                  </div>
-                </div>
-              </div>
-
-              {/* Copy actions */}
-              {selectedRisk.fixes?.rewrittenClause && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => { void navigator.clipboard.writeText(selectedRisk.fixes?.rewrittenClause ?? ""); }}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700"
-                  >
-                    Copy protected clause
-                  </button>
-                </div>
-              )}
-            </motion.div>
+                      {/* Copy action */}
+                      {selectedRisk.fixes?.rewrittenClause && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => { void navigator.clipboard.writeText(selectedRisk.fixes?.rewrittenClause ?? ""); }}
+                            className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700"
+                          >
+                            Copy protected clause
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                )}
+              </motion.div>
+            </AnimatePresence>
           )}
         </div>
       )}
