@@ -87,8 +87,8 @@ export default function DocumentLab() {
         onSuccess: (result) => {
           pendingResult.current = result;
 
-          // Commit to global store immediately so other pages see it
-          setActiveScan(finalName, result);
+          // Commit to global store immediately so other pages see it (include contractText)
+          setActiveScan(finalName, result, contractText);
 
           // Optimistically add to local cache with a temp ID
           const tempId = `temp_${Date.now()}`;

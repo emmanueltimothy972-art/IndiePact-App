@@ -28,6 +28,8 @@ const SaveScanBodySchema = z.object({
 const GetScanParamsSchema = z.object({ scanId: z.string() });
 const GetScanQuerySchema = z.object({ userId: z.string().min(1) });
 
+// ── List scans ──────────────────────────────────────────────────────────────
+
 router.get("/scans", async (req, res) => {
   const parse = ListScansQuerySchema.safeParse(req.query);
   if (!parse.success) {
@@ -48,9 +50,11 @@ router.get("/scans", async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch scans" });
   }
 
-  const scans = (data ?? []).map(mapScanRow);
+  const scans = (data ?? []).map((row) => mapScanRow(row));
   return res.json({ scans, total: count ?? 0 });
 });
+
+// ── Save scan ───────────────────────────────────────────────────────────────
 
 router.post("/scans", async (req, res) => {
   const parse = SaveScanBodySchema.safeParse(req.body);
@@ -64,13 +68,13 @@ router.post("/scans", async (req, res) => {
     .from("scans")
     .insert({
       user_id: userId,
-      client_name: contractName,
+      contract_name: contractName,
       contract_text: contractText,
-      risks_json: result.risks,
-      fixes_json: result.rawExtractedClauses,
+      result,
       protection_score: Math.round(result.protectionScore),
-      leverage_score: Math.round(result.protectionScore),
-      money_risk: result.revenueAtRiskMax,
+      revenue_at_risk_min: Math.round(result.revenueAtRiskMin),
+      revenue_at_risk_max: Math.round(result.revenueAtRiskMax),
+      risk_count: result.risks.length,
     })
     .select()
     .single();
@@ -80,11 +84,12 @@ router.post("/scans", async (req, res) => {
     return res.status(500).json({ error: "Failed to save scan" });
   }
 
-  // Increment usage count — fire-and-forget, never block the scan response
   void incrementScanUsage(userId);
 
   return res.status(201).json(mapScanRow(data, result));
 });
+
+// ── Get scan by ID ──────────────────────────────────────────────────────────
 
 router.get("/scans/:scanId", async (req, res) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
@@ -111,6 +116,8 @@ router.get("/scans/:scanId", async (req, res) => {
   return res.json(mapScanRow(data));
 });
 
+// ── Delete scan ─────────────────────────────────────────────────────────────
+
 router.delete("/scans/:scanId", async (req, res) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
@@ -135,6 +142,8 @@ router.delete("/scans/:scanId", async (req, res) => {
 
   return res.json({ success: true });
 });
+
+// ── Report ──────────────────────────────────────────────────────────────────
 
 router.get("/report/:scanId", async (req, res) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
@@ -166,6 +175,8 @@ router.get("/report/:scanId", async (req, res) => {
   return res.json({ reportBase64: base64, filename });
 });
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
 async function incrementScanUsage(userId: string): Promise<void> {
   try {
     const db = requireSupabase();
@@ -192,40 +203,53 @@ async function incrementScanUsage(userId: string): Promise<void> {
       });
     }
   } catch {
-    // Non-critical — usage tracking failure should never block scan flow
+    // Non-critical — usage tracking failure never blocks scan response
   }
 }
 
 type DbRow = Record<string, unknown>;
 
 function mapScanRow(row: DbRow, liveResult?: Record<string, unknown>) {
-  const risks = (row["risks_json"] as unknown[]) ?? [];
-  const protectionScore = Number(row["protection_score"]) || 0;
-  const moneyRisk = Number(row["money_risk"]) || 0;
+  // Prefer liveResult (fresh from AI), then stored result JSONB
+  const storedResult = (row["result"] as Record<string, unknown>) ?? {};
+  const resultSource = liveResult ?? storedResult;
 
-  const result = liveResult ?? {
-    moneyImpactSummary: `${risks.length} risk(s) detected. Revenue exposure estimated.`,
-    revenueAtRiskMin: Math.round(moneyRisk * 0.5),
-    revenueAtRiskMax: moneyRisk,
+  const risks = (resultSource["risks"] as unknown[]) ?? [];
+  const protectionScore =
+    Number(row["protection_score"]) || Number(resultSource["protectionScore"]) || 0;
+  const revenueAtRiskMin =
+    Number(row["revenue_at_risk_min"]) ?? Number(resultSource["revenueAtRiskMin"]) ?? 0;
+  const revenueAtRiskMax =
+    Number(row["revenue_at_risk_max"]) ?? Number(resultSource["revenueAtRiskMax"]) ?? 0;
+  const riskCount = Number(row["risk_count"]) || risks.length;
+
+  const result = {
+    moneyImpactSummary: String(
+      resultSource["moneyImpactSummary"] ?? `${risks.length} risk(s) detected.`
+    ),
+    revenueAtRiskMin,
+    revenueAtRiskMax,
     protectionScore,
     risks,
-    nextStep: "Review all flagged clauses before signing.",
-    rawExtractedClauses: (row["fixes_json"] as string[]) ?? [],
+    nextStep: String(resultSource["nextStep"] ?? "Review all flagged clauses before signing."),
+    rawExtractedClauses: (resultSource["rawExtractedClauses"] as string[]) ?? [],
   };
 
   return {
     id: row["id"] as string,
     userId: row["user_id"] as string,
-    contractName: (row["client_name"] as string) ?? "",
+    contractName: (row["contract_name"] as string) ?? "",
     contractText: (row["contract_text"] as string) ?? "",
     result,
     createdAt: row["created_at"] as string,
     protectionScore,
-    revenueAtRiskMin: Math.round(moneyRisk * 0.5),
-    revenueAtRiskMax: moneyRisk,
-    riskCount: risks.length,
+    revenueAtRiskMin,
+    revenueAtRiskMax,
+    riskCount,
   };
 }
+
+// ── HTML Report generator ───────────────────────────────────────────────────
 
 function severityColor(severity: string): string {
   if (severity === "High") return "#ef4444";
@@ -267,7 +291,6 @@ function generateReportHtml(scan: ReturnType<typeof mapScanRow>): string {
         <span style="background:#1e293b;color:#64748b;font-family:monospace;font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase;">${risk["category"] ?? ""}</span>
       </div>
       <h3 style="color:#f1f5f9;font-size:16px;font-weight:700;margin:0 0 16px 0;font-family:Georgia,serif;">${String(idx + 1).padStart(2, "0")}. ${risk["title"] ?? ""}</h3>
-
       <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
         <tr>
           <td style="width:33%;padding:14px;vertical-align:top;border:1px solid #1e293b;background:#0a0a0a;">
@@ -280,9 +303,8 @@ function generateReportHtml(scan: ReturnType<typeof mapScanRow>): string {
             <p style="color:#6ee7b7;font-size:12px;font-family:monospace;line-height:1.7;margin:0;">${fixes["rewrittenClause"] ?? ""}</p>
           </td>
           <td style="width:33%;padding:14px;vertical-align:top;border:1px solid #1e293b;background:#080d18;">
-            <div style="font-family:monospace;font-size:9px;color:#60a5fa;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">▸ Rebuttal Strategy — Attorney's Voice</div>
+            <div style="font-family:monospace;font-size:9px;color:#60a5fa;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">▸ Rebuttal Strategy</div>
             <p style="color:#bfdbfe;font-size:12px;font-family:'Georgia',serif;line-height:1.7;margin:0;font-style:italic;">"${fixes["direct"] ?? ""}"</p>
-            <p style="color:#94a3b8;font-size:11px;font-family:monospace;line-height:1.6;margin:10px 0 0 0;">${fixes["legal"] ?? ""}</p>
           </td>
         </tr>
       </table>
@@ -299,21 +321,15 @@ function generateReportHtml(scan: ReturnType<typeof mapScanRow>): string {
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>IndiePact Forensic Audit — ${scan.contractName}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:#050505;color:#f1f5f9;font-family:'Space Mono',monospace;font-size:13px;line-height:1.6;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  @media print{body{background:#050505;}@page{margin:16mm;size:A4;}}
+  body{background:#050505;color:#f1f5f9;font-family:'Space Mono',monospace;font-size:13px;line-height:1.6;-webkit-print-color-adjust:exact;}
+  @media print{@page{margin:16mm;size:A4;}}
   .page{max-width:1050px;margin:0 auto;padding:48px 40px;}
-  h1,h2,h3{font-family:Georgia,serif;}
 </style>
 </head>
-<body>
-<div class="page">
-
-  <!-- HEADER -->
+<body><div class="page">
   <div style="display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2px solid #10b981;padding-bottom:28px;margin-bottom:32px;">
     <div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
@@ -321,79 +337,48 @@ function generateReportHtml(scan: ReturnType<typeof mapScanRow>): string {
         <span style="color:#10b981;font-family:monospace;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">IndiePact AI</span>
       </div>
       <h1 style="font-size:26px;font-weight:700;color:#f1f5f9;line-height:1.2;margin-bottom:6px;">Forensic Contract Audit Report</h1>
-      <p style="color:#64748b;font-family:monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Revenue Protection & Risk Intelligence</p>
     </div>
     <div style="text-align:right;">
-      <p style="color:#64748b;font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;">Report ID</p>
-      <p style="color:#94a3b8;font-family:monospace;font-size:12px;margin-bottom:12px;">${scan.id?.slice(0, 8).toUpperCase() ?? "N/A"}</p>
-      <p style="color:#64748b;font-family:monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;">Analysis Date</p>
+      <p style="color:#64748b;font-family:monospace;font-size:10px;text-transform:uppercase;">Analysis Date</p>
       <p style="color:#94a3b8;font-family:monospace;font-size:12px;">${analysisDate}</p>
     </div>
   </div>
-
-  <!-- CASE METADATA -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;margin-bottom:36px;">
     <div style="padding:16px;border:1px solid #1e293b;border-radius:8px;background:#0c0c0c;">
-      <p style="font-family:monospace;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Contract</p>
-      <p style="color:#f1f5f9;font-size:13px;font-weight:700;font-family:Georgia,serif;">${scan.contractName}</p>
+      <p style="font-family:monospace;font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Contract</p>
+      <p style="color:#f1f5f9;font-size:13px;font-weight:700;">${scan.contractName}</p>
     </div>
     <div style="padding:16px;border:1px solid #1e293b;border-radius:8px;background:#0c0c0c;">
-      <p style="font-family:monospace;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Protection Score</p>
+      <p style="font-family:monospace;font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Protection Score</p>
       <p style="color:${sc};font-size:22px;font-weight:700;font-family:monospace;">${scan.protectionScore}<span style="font-size:13px;color:#64748b;">/100</span></p>
     </div>
     <div style="padding:16px;border:1px solid #ef444440;border-radius:8px;background:#1a0000;">
-      <p style="font-family:monospace;font-size:9px;color:#f87171;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Revenue at Risk</p>
+      <p style="font-family:monospace;font-size:9px;color:#f87171;text-transform:uppercase;margin-bottom:6px;">Revenue at Risk</p>
       <p style="color:#ef4444;font-size:14px;font-weight:700;font-family:monospace;">\$${scan.revenueAtRiskMin.toLocaleString()}–\$${scan.revenueAtRiskMax.toLocaleString()}</p>
     </div>
     <div style="padding:16px;border:1px solid #1e293b;border-radius:8px;background:#0c0c0c;">
-      <p style="font-family:monospace;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Findings</p>
+      <p style="font-family:monospace;font-size:9px;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Findings</p>
       <p style="color:#f1f5f9;font-size:22px;font-weight:700;font-family:monospace;">${risks.length}<span style="font-size:13px;color:#64748b;"> clauses</span></p>
     </div>
   </div>
-
-  <!-- EXECUTIVE SUMMARY -->
   <div style="padding:20px 24px;border:1px solid #1e293b;border-left:3px solid #10b981;border-radius:8px;background:#0a0a0a;margin-bottom:36px;">
-    <p style="font-family:monospace;font-size:9px;color:#10b981;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">Executive Summary</p>
-    <p style="color:#cbd5e1;font-size:14px;font-family:Georgia,serif;line-height:1.8;">${summary}</p>
+    <p style="font-family:monospace;font-size:9px;color:#10b981;text-transform:uppercase;margin-bottom:10px;">Executive Summary</p>
+    <p style="color:#cbd5e1;font-size:14px;line-height:1.8;">${summary}</p>
   </div>
-
-  <!-- FORENSIC DISCOVERY TABLE -->
   <div style="margin-bottom:48px;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid #1e293b;">
-      <h2 style="font-size:18px;font-weight:700;color:#f1f5f9;">Forensic Discovery Table</h2>
-      <span style="background:#1e293b;color:#94a3b8;font-family:monospace;font-size:10px;padding:3px 10px;border-radius:20px;">${risks.length} FINDINGS</span>
-    </div>
-    ${riskRows || '<p style="color:#64748b;font-family:monospace;font-size:12px;padding:20px 0;">No risk findings detected in this contract.</p>'}
+    <h2 style="font-size:18px;font-weight:700;color:#f1f5f9;margin-bottom:20px;">Forensic Discovery Table</h2>
+    ${riskRows || '<p style="color:#64748b;font-family:monospace;font-size:12px;padding:20px 0;">No risk findings detected.</p>'}
   </div>
-
-  <!-- PATH TO VICTORY -->
-  ${pathToVictory.length > 0 ? `
-  <div style="padding:24px;border:1px solid #10b98140;border-radius:8px;background:#071510;margin-bottom:36px;">
-    <p style="font-family:monospace;font-size:9px;color:#10b981;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:16px;">▸ Path to Victory — Tactical Sequence</p>
-    ${victorySteps}
-  </div>` : ""}
-
-  <!-- NEXT STEP -->
+  ${pathToVictory.length > 0 ? `<div style="padding:24px;border:1px solid #10b98140;border-radius:8px;background:#071510;margin-bottom:36px;"><p style="font-family:monospace;font-size:9px;color:#10b981;text-transform:uppercase;margin-bottom:16px;">▸ Path to Victory</p>${victorySteps}</div>` : ""}
   <div style="padding:20px 24px;border:1px solid #1e293b;border-left:3px solid #f59e0b;border-radius:8px;background:#0c0a00;margin-bottom:48px;">
-    <p style="font-family:monospace;font-size:9px;color:#f59e0b;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">Recommended Next Step</p>
-    <p style="color:#fef3c7;font-size:14px;font-family:Georgia,serif;line-height:1.7;">${nextStep}</p>
+    <p style="font-family:monospace;font-size:9px;color:#f59e0b;text-transform:uppercase;margin-bottom:10px;">Recommended Next Step</p>
+    <p style="color:#fef3c7;font-size:14px;line-height:1.7;">${nextStep}</p>
   </div>
-
-  <!-- FOOTER -->
   <div style="border-top:1px solid #1e293b;padding-top:24px;display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <p style="color:#10b981;font-family:monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;">INDIEPACT AI</p>
-      <p style="color:#334155;font-family:monospace;font-size:10px;margin-top:4px;">Forensic Contract Intelligence — Revenue Protection OS</p>
-    </div>
-    <div style="text-align:right;">
-      <p style="color:#334155;font-family:monospace;font-size:10px;">CONFIDENTIAL — ATTORNEY-CLIENT PRIVILEGED</p>
-      <p style="color:#334155;font-family:monospace;font-size:10px;margin-top:3px;">Generated ${new Date().toISOString().split("T")[0]}</p>
-    </div>
+    <p style="color:#10b981;font-family:monospace;font-size:11px;font-weight:700;">INDIEPACT AI</p>
+    <p style="color:#334155;font-family:monospace;font-size:10px;">Generated ${new Date().toISOString().split("T")[0]}</p>
   </div>
-
-</div>
-</body>
-</html>`;
+</div></body></html>`;
 }
 
 export default router;

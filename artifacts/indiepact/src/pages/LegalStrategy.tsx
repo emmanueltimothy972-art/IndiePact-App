@@ -394,9 +394,9 @@ export default function LegalStrategy() {
         : selectedScanId;
 
       const body: Record<string, string> = { scanId: resolvedScanId, userId };
-      // Pass raw contract text as fallback when we have it from activeScan
+      // Pass contractData when using active/sentinel scan (bypasses DB lookup)
       if (resolvedScanId === "__active__" && activeScan) {
-        body.contractText = JSON.stringify(activeScan.result);
+        body.contractData = JSON.stringify(activeScan.result);
       }
 
       const res = await fetch(`${baseUrl}/api/legal-strategy`, {

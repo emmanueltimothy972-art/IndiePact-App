@@ -3,7 +3,8 @@ import { PageTransition } from "@/components/PageTransition";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
 import { Lock, CheckSquare, Square, AlertTriangle, DollarSign, Loader2, Link as LinkIcon } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useScanContext } from "@/contexts/ScanContext";
 
 interface Milestone {
   label: string;
@@ -13,7 +14,15 @@ interface Milestone {
   checked: boolean;
 }
 
-function deriveMilestones(risks: Array<{ category: string; title: string; explanation: string; whyThisHurtsYou: string; fixes: { direct: string } }>): Milestone[] {
+type RiskItem = {
+  category: string;
+  title: string;
+  explanation: string;
+  whyThisHurtsYou: string;
+  fixes: { direct: string };
+};
+
+function deriveMilestones(risks: RiskItem[]): Milestone[] {
   const paymentRisks = risks.filter(
     (r) => r.category === "paymentDelay" || r.category === "termination" || r.category === "scopeCreep"
   );
@@ -31,7 +40,7 @@ function deriveMilestones(risks: Array<{ category: string; title: string; explan
         label: "Mid-Project Milestone",
         amount: "Verify in contract",
         trigger: "Due at 50% deliverable completion",
-        stopWork: "If payment is 7 days overdue, Section governing payment allows you to pause all deliverables until cleared.",
+        stopWork: "If payment is 7 days overdue, you may pause all deliverables until cleared.",
         checked: false,
       },
       {
@@ -57,16 +66,46 @@ function deriveMilestones(risks: Array<{ category: string; title: string; explan
 
 export default function EscrowLock() {
   const { userId } = useAuth();
-  const { data, isLoading } = useListScans(
-    { userId, limit: 1, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }) } }
-  );
-
-  const recentScan = data?.scans?.[0];
-  const risks = (recentScan?.result?.risks ?? []) as Array<{ category: string; title: string; explanation: string; whyThisHurtsYou: string; fixes: { direct: string } }>;
-  const baseMilestones = deriveMilestones(risks);
+  const { activeScan, cachedScans } = useScanContext();
   const [milestones, setMilestones] = useState<Milestone[] | null>(null);
 
+  const { data: apiData, isLoading: apiLoading } = useListScans(
+    { userId, limit: 1, offset: 0 },
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 1, offset: 0 }), retry: 1 } }
+  );
+
+  // Priority: activeScan → latest cachedScan → latest API scan
+  const resolvedScan = useMemo(() => {
+    if (activeScan) {
+      return {
+        contractName: activeScan.contractName,
+        result: activeScan.result,
+        revenueAtRiskMax: activeScan.result.revenueAtRiskMax ?? 0,
+      };
+    }
+    if (cachedScans.length > 0) {
+      const s = cachedScans[0];
+      return {
+        contractName: s.contractName,
+        result: s.result,
+        revenueAtRiskMax: s.revenueAtRiskMax ?? 0,
+      };
+    }
+    const apiScan = apiData?.scans?.[0];
+    if (apiScan) {
+      return {
+        contractName: apiScan.contractName,
+        result: apiScan.result,
+        revenueAtRiskMax: apiScan.revenueAtRiskMax ?? 0,
+      };
+    }
+    return null;
+  }, [activeScan, cachedScans, apiData]);
+
+  const isLoading = apiLoading && !activeScan && cachedScans.length === 0;
+
+  const risks = (resolvedScan?.result?.risks ?? []) as RiskItem[];
+  const baseMilestones = useMemo(() => deriveMilestones(risks), [risks]);
   const displayed: Milestone[] = milestones ?? baseMilestones;
 
   const toggle = (idx: number) => {
@@ -75,8 +114,8 @@ export default function EscrowLock() {
   };
 
   const completedCount = displayed.filter((m) => m.checked).length;
-  const riskAmount = recentScan
-    ? `$${(recentScan.revenueAtRiskMax ?? 0).toLocaleString()}`
+  const riskAmount = resolvedScan?.revenueAtRiskMax
+    ? `$${resolvedScan.revenueAtRiskMax.toLocaleString()}`
     : null;
 
   return (
@@ -85,11 +124,16 @@ export default function EscrowLock() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <Lock className="text-[#D4AF37] h-8 w-8" />
-            Ironclad Escrow Lock
+            Payment Lock
           </h1>
           <p className="text-muted-foreground mt-2">
             Your financial bodyguard. Track milestones, know your stop-work triggers, and never let a payment slip.
           </p>
+          {resolvedScan && (
+            <p className="text-slate-500 text-sm mt-1 font-mono">
+              Based on: <span className="text-slate-300">{resolvedScan.contractName}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -97,16 +141,19 @@ export default function EscrowLock() {
         <div className="flex justify-center items-center py-20">
           <Loader2 className="animate-spin text-primary h-8 w-8" />
         </div>
-      ) : !recentScan ? (
+      ) : !resolvedScan ? (
         <div className="border border-border rounded-xl bg-card p-12 text-center space-y-4">
           <Lock className="h-12 w-12 text-muted-foreground mx-auto" />
-          <h2 className="text-xl font-semibold">No Contract Analyzed Yet</h2>
+          <h2 className="text-xl font-semibold">No Contract Reviewed Yet</h2>
           <p className="text-muted-foreground max-w-sm mx-auto">
-            Run a scan in Document Lab to generate your personalized Milestone Tracker.
+            Run a contract review first to generate your personalized Payment Lock Milestone Tracker.
           </p>
-          <Link href="/scan" className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-md font-medium text-sm hover:bg-primary/90 transition-colors">
+          <Link
+            href="/scan"
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-md font-medium text-sm hover:bg-primary/90 transition-colors"
+          >
             <LinkIcon className="h-4 w-4" />
-            Open Document Lab
+            Review a Contract
           </Link>
         </div>
       ) : (
@@ -117,19 +164,25 @@ export default function EscrowLock() {
                 <DollarSign className="h-6 w-6 text-[#D4AF37]" />
               </div>
               <div>
-                <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Capital at Stake in This Contract</div>
+                <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                  Capital at Stake
+                </div>
                 <div className="text-3xl font-bold font-mono text-[#D4AF37]">{riskAmount}</div>
               </div>
               <div className="ml-auto text-right">
                 <div className="text-sm text-muted-foreground mb-0.5">Milestones Cleared</div>
-                <div className="text-2xl font-bold font-mono text-foreground">{completedCount}/{displayed.length}</div>
+                <div className="text-2xl font-bold font-mono text-foreground">
+                  {completedCount}/{displayed.length}
+                </div>
               </div>
             </div>
           )}
 
           <div>
             <h2 className="text-xl font-bold mb-1">Milestone Tracker</h2>
-            <p className="text-muted-foreground text-sm mb-5">Check off each milestone as it's completed. Stop-work triggers fire automatically if a checkpoint is missed.</p>
+            <p className="text-muted-foreground text-sm mb-5">
+              Check off each milestone as it's completed. Stop-work triggers fire automatically if a checkpoint is missed.
+            </p>
 
             <div className="space-y-4">
               {displayed.map((milestone, idx) => (
@@ -156,9 +209,13 @@ export default function EscrowLock() {
                           <h3 className={`font-semibold text-base leading-tight ${milestone.checked ? "line-through text-muted-foreground" : ""}`}>
                             {milestone.label}
                           </h3>
-                          <span className="font-mono text-sm font-bold text-[#D4AF37] shrink-0">{milestone.amount}</span>
+                          <span className="font-mono text-sm font-bold text-[#D4AF37] shrink-0">
+                            {milestone.amount}
+                          </span>
                         </div>
-                        <p className="text-muted-foreground text-sm mt-2 leading-relaxed">{milestone.trigger}</p>
+                        <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
+                          {milestone.trigger}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -166,7 +223,9 @@ export default function EscrowLock() {
                   {!milestone.checked && (
                     <div className="border-t border-destructive/20 bg-destructive/5 px-5 py-3 flex items-start gap-3">
                       <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                      <p className="text-xs text-destructive leading-relaxed font-medium">{milestone.stopWork}</p>
+                      <p className="text-xs text-destructive leading-relaxed font-medium">
+                        {milestone.stopWork}
+                      </p>
                     </div>
                   )}
                 </div>
