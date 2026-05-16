@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { FeatureGate } from "@/components/FeatureGate";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
+import { useScanContext } from "@/contexts/ScanContext";
 import {
   Brain, Zap, Scale, AlertTriangle, CheckCircle2, ChevronRight,
   ArrowRight, Loader2, MessageSquare, FileSearch, Star,
@@ -340,6 +341,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
 
 export default function LegalStrategy() {
   const { userId, isGuest } = useAuth();
+  const { activeScan, cachedScans } = useScanContext();
   const [selectedScanId, setSelectedScanId] = useState("");
   const [result, setResult] = useState<LegalStrategyResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -348,10 +350,34 @@ export default function LegalStrategy() {
 
   const { data: scansData, isLoading: scansLoading } = useListScans(
     { userId, limit: 20, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId, limit: 20, offset: 0 }), enabled: !isGuest } }
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 20, offset: 0 }), enabled: !isGuest, retry: 1 } }
   );
 
-  const scans = scansData?.scans ?? [];
+  const dbScans = scansData?.scans ?? [];
+
+  // Merge DB scans with localStorage cache, deduplicating by ID
+  const allScans = (() => {
+    const dbIds = new Set(dbScans.map((s) => s.id));
+    const uniqueCached = cachedScans.filter((s) => !dbIds.has(s.id));
+    return [...dbScans, ...uniqueCached];
+  })();
+
+  const scans = allScans;
+
+  // Auto-select active scan when navigating here fresh from a review
+  useEffect(() => {
+    if (!activeScan || selectedScanId) return;
+    const match = allScans.find((s) => s.contractName === activeScan.contractName);
+    if (match) {
+      setSelectedScanId(match.id);
+      setSelectedContractName(match.contractName);
+    } else if (allScans.length === 0) {
+      // activeScan exists but no DB/cache entry yet — use a special sentinel
+      setSelectedScanId("__active__");
+      setSelectedContractName(activeScan.contractName);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeScan, allScans.length]);
 
   const handleAnalyze = async () => {
     if (!selectedScanId) return;
@@ -361,10 +387,22 @@ export default function LegalStrategy() {
 
     try {
       const baseUrl = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+
+      // When the sentinel is used, resolve the real scan ID from cache or use contractText from activeScan
+      const resolvedScanId = selectedScanId === "__active__"
+        ? (allScans.find((s) => s.contractName === activeScan?.contractName)?.id ?? selectedScanId)
+        : selectedScanId;
+
+      const body: Record<string, string> = { scanId: resolvedScanId, userId };
+      // Pass raw contract text as fallback when we have it from activeScan
+      if (resolvedScanId === "__active__" && activeScan) {
+        body.contractText = JSON.stringify(activeScan.result);
+      }
+
       const res = await fetch(`${baseUrl}/api/legal-strategy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scanId: selectedScanId, userId }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -451,7 +489,7 @@ export default function LegalStrategy() {
                 </p>
               </div>
 
-              {scansLoading ? (
+              {scansLoading && scans.length === 0 ? (
                 <div className="flex items-center gap-3 text-slate-500 text-sm py-4">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading your reviews...

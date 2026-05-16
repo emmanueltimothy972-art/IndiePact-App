@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, lazy, Suspense } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ScanProvider } from "@/contexts/ScanContext";
 import { AuthModal } from "@/components/AuthModal";
 import { Layout } from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -75,17 +76,19 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <ErrorBoundary>
-              <Layout>
-                <Router />
-              </Layout>
-            </ErrorBoundary>
-            <ErrorBoundary fallback={null}>
-              <AuthModal />
-            </ErrorBoundary>
-          </WouterRouter>
-          <Toaster />
+          <ScanProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <ErrorBoundary>
+                <Layout>
+                  <Router />
+                </Layout>
+              </ErrorBoundary>
+              <ErrorBoundary fallback={null}>
+                <AuthModal />
+              </ErrorBoundary>
+            </WouterRouter>
+            <Toaster />
+          </ScanProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

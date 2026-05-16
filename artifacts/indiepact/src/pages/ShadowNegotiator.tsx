@@ -10,6 +10,7 @@ import {
   TrendingDown, Mail, Zap, DollarSign, Target,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useScanContext } from "@/contexts/ScanContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,7 @@ function ProsecutorBubble({ data }: { data: ProsecutorResponse }) {
 
 export default function ShadowNegotiator() {
   const { userId } = useAuth();
+  const { activeScan, cachedScans } = useScanContext();
   const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [selectedScanId, setSelectedScanId] = useState<string>("");
@@ -204,15 +206,52 @@ export default function ShadowNegotiator() {
     fetch(`${base}/api/scans?userId=${userId}&limit=10`)
       .then((r) => r.json())
       .then((d) => {
-        const items = (d.scans as ScanItem[]) || [];
-        setScans(items);
-        if (items.length > 0) {
-          setSelectedScanId(items[0].id);
-          setSelectedRisks(items[0].result?.risks || []);
+        const dbItems = (d.scans as ScanItem[]) || [];
+        // Merge DB items with localStorage-cached scans (dedup by id)
+        const dbIds = new Set(dbItems.map((s) => s.id));
+        const cachedItems: ScanItem[] = cachedScans
+          .filter((s) => !dbIds.has(s.id))
+          .map((s) => ({
+            id: s.id,
+            contractName: s.contractName,
+            result: { risks: (s.result?.risks || []) as Risk[], protectionScore: s.protectionScore },
+          }));
+        const merged = [...dbItems, ...cachedItems];
+        setScans(merged);
+        // Auto-select: prefer the activeScan match, then first item
+        if (activeScan) {
+          const match = merged.find((s) => s.contractName === activeScan.contractName);
+          if (match) {
+            setSelectedScanId(match.id);
+            setSelectedRisks(match.result?.risks || []);
+          } else if (merged.length > 0) {
+            setSelectedScanId(merged[0].id);
+            setSelectedRisks(merged[0].result?.risks || []);
+          }
+        } else if (merged.length > 0) {
+          setSelectedScanId(merged[0].id);
+          setSelectedRisks(merged[0].result?.risks || []);
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        // API unavailable — fall back entirely to localStorage cache
+        const cachedItems: ScanItem[] = cachedScans.map((s) => ({
+          id: s.id,
+          contractName: s.contractName,
+          result: { risks: (s.result?.risks || []) as Risk[], protectionScore: s.protectionScore },
+        }));
+        setScans(cachedItems);
+        if (activeScan) {
+          const match = cachedItems.find((s) => s.contractName === activeScan.contractName);
+          const first = match ?? cachedItems[0];
+          if (first) { setSelectedScanId(first.id); setSelectedRisks(first.result?.risks || []); }
+        } else if (cachedItems.length > 0) {
+          setSelectedScanId(cachedItems[0].id);
+          setSelectedRisks(cachedItems[0].result?.risks || []);
+        }
+      })
       .finally(() => setTableLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

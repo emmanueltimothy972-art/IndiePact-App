@@ -5,13 +5,24 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { ChevronRight, FileText, Calendar, DollarSign, AlertTriangle, History } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useScanContext } from "@/contexts/ScanContext";
 
 export default function IntelligenceVault() {
   const { userId } = useAuth();
+  const { cachedScans } = useScanContext();
   const { data, isLoading } = useListScans(
     { userId, limit: 50, offset: 0 },
-    { query: { queryKey: getListScansQueryKey({ userId, limit: 50, offset: 0 }) } }
+    { query: { queryKey: getListScansQueryKey({ userId, limit: 50, offset: 0 }), retry: 1 } }
   );
+
+  const dbScans = data?.scans ?? [];
+  const dbIds = new Set(dbScans.map((s) => s.id));
+  const uniqueCached = cachedScans.filter((s) => !dbIds.has(s.id));
+  const allScans = [...dbScans, ...uniqueCached].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const showEmpty = !isLoading && allScans.length === 0;
 
   return (
     <PageTransition className="space-y-6 max-w-5xl mx-auto">
@@ -28,13 +39,13 @@ export default function IntelligenceVault() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading && allScans.length === 0 ? (
         <div className="space-y-4">
           {[1, 2, 3, 4].map(i => (
             <div key={i} className="h-24 bg-muted/50 rounded-xl animate-pulse border border-border"></div>
           ))}
         </div>
-      ) : data?.scans.length === 0 ? (
+      ) : showEmpty ? (
         <div className="text-center py-20 border border-dashed border-border rounded-xl bg-card/50">
           <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-semibold mb-2">The vault is empty</h3>
@@ -47,7 +58,7 @@ export default function IntelligenceVault() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {data?.scans.map(scan => (
+          {allScans.map(scan => (
             <Link key={scan.id} href={`/scan/${scan.id}`}>
               <div className="group flex items-center p-5 rounded-xl border border-border bg-card hover:border-primary/50 hover:bg-accent/30 transition-all cursor-pointer relative overflow-hidden">
                 {/* Score indicator strip */}

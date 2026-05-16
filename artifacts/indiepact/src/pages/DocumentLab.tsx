@@ -15,6 +15,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { ScanResult } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { PLAN_DISPLAY_NAMES, isPaidPlan } from "@/lib/constants";
+import { useScanContext } from "@/contexts/ScanContext";
+import { SavedScan } from "@workspace/api-client-react";
 import {
   FileText, Zap, UploadCloud, LogIn, AlertTriangle,
   CheckCircle2, DollarSign, MessageSquare, Shield, TrendingUp,
@@ -41,6 +43,7 @@ export default function DocumentLab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { userId, isGuest, openAuthModal, userPlan, scansUsed, scansLimit, refreshSubscription } = useAuth();
+  const { setActiveScan, addToCache, updateCacheId } = useScanContext();
   const { mutate: analyzeContract, isPending: isAnalyzing } = useAnalyzeContract();
   const { mutate: saveScan } = useSaveScan();
   const { toast } = useToast();
@@ -83,10 +86,35 @@ export default function DocumentLab() {
       {
         onSuccess: (result) => {
           pendingResult.current = result;
+
+          // Commit to global store immediately so other pages see it
+          setActiveScan(finalName, result);
+
+          // Optimistically add to local cache with a temp ID
+          const tempId = `temp_${Date.now()}`;
+          const nowIso = new Date().toISOString();
+          const optimisticScan: SavedScan = {
+            id: tempId,
+            userId,
+            contractName: finalName,
+            contractText,
+            result,
+            createdAt: nowIso,
+            protectionScore: result.protectionScore,
+            revenueAtRiskMin: result.revenueAtRiskMin ?? 0,
+            revenueAtRiskMax: result.revenueAtRiskMax ?? 0,
+            riskCount: result.risks?.length ?? 0,
+          };
+          addToCache(optimisticScan);
+
           saveScan(
             { data: { userId, contractName: finalName, contractText, result } },
             {
-              onSuccess: () => void refreshSubscription(),
+              onSuccess: (saved) => {
+                // Swap temp ID for real DB ID when save succeeds
+                if (saved && (saved as SavedScan).id) updateCacheId(tempId, (saved as SavedScan).id);
+                void refreshSubscription();
+              },
             }
           );
           tryReveal();
