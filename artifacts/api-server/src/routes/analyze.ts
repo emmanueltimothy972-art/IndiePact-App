@@ -4,6 +4,7 @@ import { extractRiskyClauses, truncateForAI } from "../lib/prefilter.js";
 import { analyzeContractClauses, buildFallbackResult } from "../lib/openai.js";
 import { hashContractText } from "../lib/contract-hash.js";
 import { requireSupabase } from "../lib/supabase.js";
+import { analyzeRateLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const AnalyzeBodySchema = z.object({
   contractName: z.string().optional(),
 });
 
-router.post("/analyze", async (req, res) => {
+router.post("/analyze", analyzeRateLimiter, async (req, res) => {
   const parse = AnalyzeBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });

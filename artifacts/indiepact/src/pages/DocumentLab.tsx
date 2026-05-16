@@ -119,10 +119,24 @@ export default function DocumentLab() {
           );
           tryReveal();
         },
-        onError: () => {
+        onError: (err: unknown) => {
           setShowTrace(false);
           pendingResult.current = null;
           traceComplete.current = false;
+
+          // Detect rate-limit (429) and surface a specific, actionable message
+          const status = (err as { status?: number })?.status;
+          const data = (err as { data?: { retryAfter?: number; message?: string } })?.data;
+          if (status === 429) {
+            const wait = data?.retryAfter ?? 60;
+            toast({
+              title: "Slow down a little",
+              description: `You've submitted several contracts in quick succession. Please wait ${wait} seconds before reviewing another.`,
+              variant: "destructive",
+            });
+            return;
+          }
+
           toast({
             title: "Review Failed",
             description: "Something went wrong. Please try again.",
