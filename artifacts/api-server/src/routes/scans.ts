@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
+import { hashContractText } from "../lib/contract-hash.js";
 
 const router = Router();
 
@@ -64,13 +65,20 @@ router.post("/scans", async (req, res) => {
 
   const { userId, contractName, contractText, result } = parse.data;
 
+  // Strip internal meta fields the analyze route attaches (_cached, _contractHash)
+  // before storing — they are not part of the ScanResult schema.
+  const { _cached: _c, _contractHash: _ch, ...cleanResult } = result as Record<string, unknown>;
+  const contractHash =
+    typeof _ch === "string" ? _ch : hashContractText(contractText);
+
   const { data, error } = await requireSupabase()
     .from("scans")
     .insert({
       user_id: userId,
       contract_name: contractName,
       contract_text: contractText,
-      result,
+      contract_hash: contractHash,
+      result: cleanResult,
       protection_score: Math.round(result.protectionScore),
       revenue_at_risk_min: Math.round(result.revenueAtRiskMin),
       revenue_at_risk_max: Math.round(result.revenueAtRiskMax),
