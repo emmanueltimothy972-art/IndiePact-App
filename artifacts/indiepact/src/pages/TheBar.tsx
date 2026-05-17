@@ -3,7 +3,7 @@ import { useListScans, getListScansQueryKey } from "@workspace/api-client-react"
 import {
   Scale, ShieldAlert, Loader2, Brain, FileText,
   AlertTriangle, CheckCircle2, Shield, TrendingUp, TrendingDown,
-  Clock, ChevronRight,
+  Clock, ChevronRight, Search, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -122,6 +122,8 @@ export default function TheBar() {
   const { activeScan, cachedScans } = useScanContext();
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
   const [selectedRiskIdx, setSelectedRiskIdx] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterSeverity, setFilterSeverity] = useState<"All" | "High" | "Medium" | "Low">("All");
 
   const { data, isLoading } = useListScans(
     { userId, limit: 20, offset: 0 },
@@ -149,8 +151,12 @@ export default function TheBar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeScan, allScans.length]);
 
-  // Reset risk detail view when scan changes
-  useEffect(() => { setSelectedRiskIdx(0); }, [selectedScanId]);
+  // Reset risk detail view and filters when scan changes
+  useEffect(() => {
+    setSelectedRiskIdx(0);
+    setSearchQuery("");
+    setFilterSeverity("All");
+  }, [selectedScanId]);
 
   // Resolve source risks from selected scan
   const sourceScan = selectedScanId
@@ -170,9 +176,25 @@ export default function TheBar() {
   const risks: Risk[] = isUsingReal ? liveRisks : (hasPaid && allScans.length === 0 ? MOCK_RISKS : []);
   const isUsingMock = !isUsingReal && hasPaid && allScans.length === 0;
 
-  const selectedRisk = risks[selectedRiskIdx] ?? null;
   const highCount = risks.filter((r) => r.severity === "High").length;
   const medCount = risks.filter((r) => r.severity === "Medium").length;
+
+  const filteredRisks = risks.filter((r) => {
+    const matchesSeverity = filterSeverity === "All" || r.severity === filterSeverity;
+    if (!matchesSeverity) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (r.explanation ?? "").toLowerCase().includes(q) ||
+      (r.title ?? "").toLowerCase().includes(q) ||
+      r.category.toLowerCase().includes(q) ||
+      (r.whyThisHurtsYou ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  // Keep selected row index in bounds as filters change
+  const clampedIdx = Math.min(selectedRiskIdx, Math.max(0, filteredRisks.length - 1));
+  const selectedRisk = filteredRisks[clampedIdx] ?? null;
 
   return (
     <PageTransition className="space-y-5 max-w-5xl mx-auto">
@@ -337,13 +359,60 @@ export default function TheBar() {
                   ))}
                 </div>
 
+                {/* ── Search + Filter bar ─────────────────────────────── */}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {/* Search */}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setSelectedRiskIdx(0); }}
+                      placeholder="Search clauses, categories, or keywords…"
+                      className="w-full h-9 pl-8 pr-8 rounded-lg border border-slate-700 bg-slate-900/80 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-slate-500 transition-colors"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => { setSearchQuery(""); setSelectedRiskIdx(0); }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Severity filter pills */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {(["All", "High", "Medium", "Low"] as const).map((sev) => {
+                      const active = filterSeverity === sev;
+                      const colors = {
+                        All:    active ? "bg-slate-700 text-white border-slate-600"    : "text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300",
+                        High:   active ? "bg-red-950/60 text-red-300 border-red-800/60"   : "text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300",
+                        Medium: active ? "bg-amber-950/60 text-amber-300 border-amber-800/60" : "text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300",
+                        Low:    active ? "bg-slate-800 text-slate-200 border-slate-600"  : "text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300",
+                      };
+                      return (
+                        <button
+                          key={sev}
+                          onClick={() => { setFilterSeverity(sev); setSelectedRiskIdx(0); }}
+                          className={`h-9 px-3 rounded-lg border text-xs font-medium transition-all ${colors[sev]}`}
+                        >
+                          {sev}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Clause Risk Matrix */}
                 <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] overflow-hidden">
                   <div className="px-5 py-4 border-b border-slate-800/80 flex items-center gap-2">
                     <Shield className="h-4 w-4 text-slate-500" />
                     <h2 className="font-semibold text-white text-sm">Clause Risk Matrix</h2>
                     <span className="ml-auto text-[10px] text-slate-600 uppercase tracking-widest font-semibold">
-                      {risks.length} clause{risks.length !== 1 ? "s" : ""}
+                      {filteredRisks.length === risks.length
+                        ? `${risks.length} clause${risks.length !== 1 ? "s" : ""}`
+                        : `${filteredRisks.length} of ${risks.length}`}
                     </span>
                   </div>
                   <div className="overflow-x-auto">
@@ -367,10 +436,23 @@ export default function TheBar() {
                         </tr>
                       </thead>
                       <tbody>
-                        {risks.map((risk, idx) => {
+                        {filteredRisks.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-5 py-10 text-center">
+                              <Search className="h-5 w-5 text-slate-700 mx-auto mb-2" />
+                              <p className="text-slate-500 text-sm">No clauses match your search.</p>
+                              <button
+                                onClick={() => { setSearchQuery(""); setFilterSeverity("All"); setSelectedRiskIdx(0); }}
+                                className="mt-2 text-xs text-slate-600 hover:text-slate-400 underline underline-offset-2 transition-colors"
+                              >
+                                Clear filters
+                              </button>
+                            </td>
+                          </tr>
+                        ) : filteredRisks.map((risk, idx) => {
                           const score = riskScore(risk.severity);
                           const prio = leveragePriority(risk.severity);
-                          const isSelected = selectedRiskIdx === idx;
+                          const isSelected = clampedIdx === idx;
                           return (
                             <tr
                               key={idx}
@@ -441,19 +523,19 @@ export default function TheBar() {
                           <span className="text-slate-400 font-normal">{selectedRisk.category}</span>
                         </h2>
                         <span className="ml-auto text-[10px] text-slate-600">
-                          {selectedRiskIdx + 1} of {risks.length}
+                          {clampedIdx + 1} of {filteredRisks.length}
                         </span>
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setSelectedRiskIdx((i) => Math.max(0, i - 1))}
-                            disabled={selectedRiskIdx === 0}
+                            disabled={clampedIdx === 0}
                             className="h-6 w-6 rounded flex items-center justify-center border border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           >
                             <ChevronRight className="h-3 w-3 rotate-180" />
                           </button>
                           <button
-                            onClick={() => setSelectedRiskIdx((i) => Math.min(risks.length - 1, i + 1))}
-                            disabled={selectedRiskIdx === risks.length - 1}
+                            onClick={() => setSelectedRiskIdx((i) => Math.min(filteredRisks.length - 1, i + 1))}
+                            disabled={clampedIdx === filteredRisks.length - 1}
                             className="h-6 w-6 rounded flex items-center justify-center border border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           >
                             <ChevronRight className="h-3 w-3" />
