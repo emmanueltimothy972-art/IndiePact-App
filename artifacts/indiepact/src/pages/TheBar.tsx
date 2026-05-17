@@ -347,15 +347,23 @@ export default function TheBar() {
                     </span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full table-fixed text-sm text-left min-w-[640px]">
+                      <colgroup>
+                        <col style={{ width: "38%" }} />
+                        <col style={{ width: "14%" }} />
+                        <col style={{ width: "10%" }} />
+                        <col style={{ width: "13%" }} />
+                        <col style={{ width: "13%" }} />
+                        <col style={{ width: "12%" }} />
+                      </colgroup>
                       <thead className="text-[10px] text-slate-600 uppercase tracking-widest bg-slate-900/50 border-b border-slate-800">
                         <tr>
-                          <th className="px-5 py-3 font-semibold">Clause Excerpt</th>
-                          <th className="px-5 py-3 font-semibold">Category</th>
-                          <th className="px-5 py-3 font-semibold">Severity</th>
-                          <th className="px-5 py-3 font-semibold">Risk Score</th>
-                          <th className="px-5 py-3 font-semibold">Priority</th>
-                          <th className="px-5 py-3 font-semibold">Action</th>
+                          <th className="px-5 py-3 font-semibold text-left">Clause Excerpt</th>
+                          <th className="px-5 py-3 font-semibold text-left">Category</th>
+                          <th className="px-5 py-3 font-semibold text-left">Severity</th>
+                          <th className="px-5 py-3 font-semibold text-left">Risk Score</th>
+                          <th className="px-5 py-3 font-semibold text-left">Priority</th>
+                          <th className="px-5 py-3 font-semibold text-left">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -371,18 +379,19 @@ export default function TheBar() {
                                 isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/60"
                               }`}
                             >
-                              <td className="px-5 py-4 font-mono text-xs text-slate-400 max-w-xs">
-                                <span className="line-clamp-2 leading-relaxed">
-                                  {risk.explanation || risk.title || "—"}
-                                </span>
+                              <td className="px-5 py-4 font-mono text-xs text-slate-400 align-top"
+                                style={{ wordBreak: "break-word", whiteSpace: "normal", overflowWrap: "break-word" }}>
+                                {risk.explanation || risk.title || "—"}
                               </td>
-                              <td className="px-5 py-4 whitespace-nowrap text-xs text-slate-300">{risk.category}</td>
-                              <td className="px-5 py-4 whitespace-nowrap">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${severityBadge(risk.severity)}`}>
+                              <td className="px-5 py-4 text-xs text-slate-300 align-top" style={{ whiteSpace: "normal" }}>
+                                {risk.category}
+                              </td>
+                              <td className="px-5 py-4 align-top">
+                                <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${severityBadge(risk.severity)}`}>
                                   {risk.severity}
                                 </span>
                               </td>
-                              <td className="px-5 py-4 whitespace-nowrap">
+                              <td className="px-5 py-4 align-top">
                                 <div className="flex items-center gap-2">
                                   <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
                                     {score}
@@ -390,12 +399,12 @@ export default function TheBar() {
                                   <ScoreBar score={score} />
                                 </div>
                               </td>
-                              <td className="px-5 py-4 whitespace-nowrap">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${prio.className}`}>
+                              <td className="px-5 py-4 align-top">
+                                <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${prio.className}`}>
                                   {prio.label}
                                 </span>
                               </td>
-                              <td className="px-5 py-4 whitespace-nowrap">
+                              <td className="px-5 py-4 align-top">
                                 <Button
                                   size="sm"
                                   variant="outline"
