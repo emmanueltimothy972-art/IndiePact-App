@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { consumeReturnTo } from "@/contexts/AuthContext";
 import { ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -8,48 +9,57 @@ import { motion } from "framer-motion";
  *
  * Flow:
  * 1. User clicks "Continue with Google" → signInWithOAuth redirects to Google
- * 2. Google redirects back to this page (/auth/callback)
+ * 2. Google redirects back to /auth/callback
  * 3. Supabase exchanges the PKCE code for a session automatically
- * 4. onAuthStateChange fires with SIGNED_IN → we redirect to /dashboard
+ * 4. onAuthStateChange fires with SIGNED_IN
+ * 5. We read the saved returnTo from sessionStorage and navigate there.
+ *    Falls back to /dashboard if nothing was saved.
  *
- * If no session is established within 5 seconds, we fall back to home.
+ * Works in Replit preview and Vercel because the redirect URL is constructed
+ * from window.location.origin + BASE_URL at the time signInWithGoogle is called.
  */
 export default function AuthCallback() {
   useEffect(() => {
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
 
-    function toDashboard() {
-      window.location.replace(`${window.location.origin}${base}/dashboard`);
+    function navigateTo(appRelativePath: string) {
+      // appRelativePath is relative to the app root (e.g. "/scan", "/dashboard")
+      window.location.replace(`${window.location.origin}${base}${appRelativePath}`);
     }
 
-    function toHome() {
-      window.location.replace(`${window.location.origin}${base}/`);
+    function getDestination(): string {
+      const returnTo = consumeReturnTo();
+      // Validate: must be a relative path starting with /
+      if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+        return returnTo;
+      }
+      return "/dashboard";
     }
 
-    // If there is already an active session (e.g. user clicked an older link
-    // and Supabase exchanged it), send them straight to the dashboard.
+    // If Supabase already has a session (e.g. user revisited an older link),
+    // send them to their destination immediately.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        toDashboard();
+        navigateTo(getDestination());
         return;
       }
 
-      // Listen in case Supabase is mid-exchange (PKCE flow from an old link).
+      // Wait for Supabase to finish the PKCE exchange.
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
           subscription.unsubscribe();
-          toDashboard();
+          navigateTo(getDestination());
         } else if (event === "SIGNED_OUT") {
           subscription.unsubscribe();
-          toHome();
+          navigateTo("/");
         }
       });
 
-      // If nothing fires in 5 seconds, give up and go home.
+      // Timeout safety net — if nothing fires within 8 seconds, go home.
       const timeout = setTimeout(() => {
         subscription.unsubscribe();
-        toHome();
-      }, 5_000);
+        navigateTo("/");
+      }, 8_000);
 
       return () => {
         subscription.unsubscribe();
@@ -66,25 +76,18 @@ export default function AuthCallback() {
         transition={{ duration: 0.3 }}
         className="flex flex-col items-center text-center gap-5"
       >
-        <div
-          className="h-16 w-16 rounded-2xl flex items-center justify-center"
-          style={{
-            background: "radial-gradient(circle at 30% 30%, rgba(16,185,129,0.2), rgba(16,185,129,0.05))",
-            border: "1px solid rgba(16,185,129,0.3)",
-            boxShadow: "0 0 32px rgba(16,185,129,0.15)",
-          }}
-        >
-          <ShieldCheck className="h-8 w-8 text-emerald-400" />
+        <div className="h-14 w-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center">
+          <ShieldCheck className="h-7 w-7 text-emerald-600" />
         </div>
-        <div className="space-y-2">
-          <p className="text-white font-semibold text-lg">Signing you in…</p>
+        <div className="space-y-1.5">
+          <p className="text-white font-semibold">Signing you in…</p>
           <p className="text-slate-500 text-sm">You'll be redirected automatically.</p>
         </div>
         <div className="flex gap-1.5">
           {[0, 1, 2].map((i) => (
             <motion.div
               key={i}
-              className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+              className="h-1.5 w-1.5 rounded-full bg-emerald-700"
               animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
               transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2, ease: "easeInOut" }}
             />

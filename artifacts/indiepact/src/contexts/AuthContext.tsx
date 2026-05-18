@@ -5,7 +5,6 @@ import { DEMO_USER_ID, PLAN_LIMITS } from "@/lib/constants";
 import { DEV_AUTH_BYPASS, DEV_MOCK_USER } from "@/lib/devMode";
 
 // ─── Dev tier override (localStorage) ────────────────────────────────────────
-// Only used when DEV_AUTH_BYPASS=true. Persists across refreshes.
 
 const DEV_TIER_KEY = "indiepact_dev_tier";
 const DEV_TIER_DEFAULT = "pro";
@@ -17,6 +16,30 @@ function readDevTier(): string {
 
 function writeDevTier(tier: string) {
   try { localStorage.setItem(DEV_TIER_KEY, tier); } catch {}
+}
+
+// ─── Return-to intent (sessionStorage) ───────────────────────────────────────
+// Saved when the auth modal opens so both Google OAuth and OTP flows
+// can redirect the user back to what they were doing after sign-in.
+
+export const RETURN_TO_KEY = "indiepact_return_to";
+
+export function saveReturnTo(returnTo?: string): void {
+  try {
+    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    // Strip the Vite base prefix from the current pathname so we store an
+    // app-relative path (e.g. "/scan") that works in both Replit and Vercel.
+    const fallback = window.location.pathname.replace(base, "") || "/";
+    sessionStorage.setItem(RETURN_TO_KEY, returnTo ?? fallback);
+  } catch {}
+}
+
+export function consumeReturnTo(): string | null {
+  try {
+    const val = sessionStorage.getItem(RETURN_TO_KEY);
+    sessionStorage.removeItem(RETURN_TO_KEY);
+    return val;
+  } catch { return null; }
 }
 
 // ─── Subscription state ───────────────────────────────────────────────────────
@@ -52,7 +75,9 @@ interface AuthContextType {
   isGuest: boolean;
 
   showAuthModal: boolean;
-  openAuthModal: () => void;
+  /** Open the auth modal. Pass a returnTo path (e.g. "/scan") to redirect
+   *  the user back there after sign-in instead of the current page. */
+  openAuthModal: (returnTo?: string) => void;
   closeAuthModal: () => void;
 
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -91,10 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(!DEV_AUTH_BYPASS);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  // Dev tier switcher state — only meaningful when DEV_AUTH_BYPASS=true
   const [devTier, setDevTierState] = useState<string>(() => readDevTier());
 
-  // Subscription for real auth
   const [subscription, setSubscription] = useState<SubscriptionState>(() => {
     const plan = DEV_AUTH_BYPASS ? readDevTier() : "free";
     return {
@@ -108,7 +131,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!DEV_AUTH_BYPASS) return;
     writeDevTier(tier);
     setDevTierState(tier);
-    // Also update live subscription so all isPaidPlan() checks react immediately
     setSubscription({
       userPlan: tier,
       scansUsed: DEV_MOCK_USER.scansUsed,
@@ -154,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Auth actions ──────────────────────────────────────────────────────────
 
   const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
-    if (DEV_AUTH_BYPASS) return { error: null }; // no-op in dev mode
+    if (DEV_AUTH_BYPASS) return { error: null };
 
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
     const redirectTo = `${window.location.origin}${base}/auth/callback`;
@@ -173,8 +195,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSubscription({ userPlan: "free", scansUsed: 0, scansLimit: 2 });
   }, []);
 
-  const openAuthModal = useCallback(() => {
+  const openAuthModal = useCallback((returnTo?: string) => {
     if (DEV_AUTH_BYPASS) return;
+    // Persist the intended destination so both Google OAuth (page-away) and
+    // OTP (inline) flows can return the user to the right place after sign-in.
+    saveReturnTo(returnTo);
     setShowAuthModal(true);
   }, []);
 
