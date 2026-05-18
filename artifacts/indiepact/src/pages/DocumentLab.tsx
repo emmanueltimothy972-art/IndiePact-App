@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,12 @@ import { PLAN_DISPLAY_NAMES, isPaidPlan } from "@/lib/constants";
 import { useScanContext } from "@/contexts/ScanContext";
 import { SavedScan } from "@workspace/api-client-react";
 import {
-  FileText, Zap, UploadCloud, LogIn, AlertTriangle,
+  FileText, Zap, UploadCloud, LogIn, AlertTriangle, X,
   CheckCircle2, DollarSign, MessageSquare, Shield, TrendingUp,
 } from "lucide-react";
+
+const PENDING_TEXT_KEY = "indiepact_pending_contract_text";
+const PENDING_NAME_KEY = "indiepact_pending_contract_name";
 
 const WHAT_WE_CHECK = [
   { icon: <DollarSign className="h-4 w-4" />, label: "Payment terms & delays" },
@@ -42,7 +45,26 @@ export default function DocumentLab() {
   const traceComplete = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { userId, isGuest, openAuthModal, userPlan, scansUsed, scansLimit, refreshSubscription } = useAuth();
+  const { userId, isGuest, isLoading, openAuthModal, userPlan, scansUsed, scansLimit, refreshSubscription } = useAuth();
+  const [contractRestored, setContractRestored] = useState(false);
+  const restoredRef = useRef(false);
+
+  // After auth resolves, check for a contract the user entered before signing in.
+  useEffect(() => {
+    if (restoredRef.current || isLoading || isGuest) return;
+    restoredRef.current = true;
+    try {
+      const savedText = sessionStorage.getItem(PENDING_TEXT_KEY);
+      if (!savedText) return;
+      const savedName = sessionStorage.getItem(PENDING_NAME_KEY) ?? "";
+      setContractText(savedText);
+      if (savedName) setContractName(savedName);
+      setContractRestored(true);
+      sessionStorage.removeItem(PENDING_TEXT_KEY);
+      sessionStorage.removeItem(PENDING_NAME_KEY);
+    } catch {}
+  }, [isLoading, isGuest]);
+
   const { setActiveScan, addToCache, updateCacheId } = useScanContext();
   const { mutate: analyzeContract, isPending: isAnalyzing } = useAnalyzeContract();
   const { mutate: saveScan } = useSaveScan();
@@ -67,7 +89,18 @@ export default function DocumentLab() {
   }, [tryReveal]);
 
   const handleAnalyze = () => {
-    if (isGuest) { openAuthModal("/scan", "review your contract"); return; }
+    if (isGuest) {
+      // Preserve any text the user already entered so it survives the auth redirect.
+      try {
+        if (contractText.trim().length >= 10) {
+          sessionStorage.setItem(PENDING_TEXT_KEY, contractText);
+          sessionStorage.setItem(PENDING_NAME_KEY, contractName);
+        }
+      } catch {}
+      openAuthModal("/scan", "review your contract");
+      return;
+    }
+    setContractRestored(false);
     if (isAtLimit) return; // button is disabled, but guard anyway
     if (!contractText || contractText.length < 50) {
       toast({
@@ -301,6 +334,32 @@ export default function DocumentLab() {
               {/* Input form — only shown when not at limit */}
               {!isAtLimit && (
                 <div className="space-y-5">
+
+                  {/* Restored-contract banner */}
+                  {contractRestored && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.25 }}
+                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-emerald-950/30 border border-emerald-800/40"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <p className="text-sm text-emerald-300/90 font-medium">
+                          Your contract is waiting — ready to review.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setContractRestored(false)}
+                        className="text-slate-600 hover:text-slate-400 transition-colors shrink-0"
+                        aria-label="Dismiss"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </motion.div>
+                  )}
+
                   <div className="space-y-1.5">
                     <Label htmlFor="contractName" className="text-sm font-medium text-slate-300">
                       Contract name <span className="text-slate-600 font-normal">(optional)</span>
