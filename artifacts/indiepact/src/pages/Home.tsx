@@ -271,7 +271,7 @@ export default function Home() {
 
   const handleReviewCta = () => {
     if (isGuest) {
-      openAuthModal();
+      openAuthModal("/scan");
     } else {
       window.location.href = import.meta.env.BASE_URL + "scan";
     }
@@ -295,7 +295,7 @@ export default function Home() {
           {isGuest ? (
             <>
               <button
-                onClick={openAuthModal}
+                onClick={() => openAuthModal("/scan")}
                 className="text-sm text-slate-400 hover:text-white transition-colors hidden sm:block"
               >
                 Sign In
