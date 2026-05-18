@@ -44,6 +44,7 @@ export default function DocumentLab() {
   const pendingResult = useRef<ScanResult | null>(null);
   const traceComplete = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const { userId, isGuest, isLoading, openAuthModal, userPlan, scansUsed, scansLimit, refreshSubscription } = useAuth();
   const [contractRestored, setContractRestored] = useState(false);
@@ -64,6 +65,12 @@ export default function DocumentLab() {
       sessionStorage.removeItem(PENDING_NAME_KEY);
     } catch {}
   }, [isLoading, isGuest]);
+
+  // Scroll results into view the moment they appear.
+  useEffect(() => {
+    if (!scanResult) return;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [scanResult]);
 
   const { setActiveScan, addToCache, updateCacheId } = useScanContext();
   const { mutate: analyzeContract, isPending: isAnalyzing } = useAnalyzeContract();
@@ -218,7 +225,7 @@ export default function DocumentLab() {
   return (
     <PageTransition className="space-y-6 max-w-4xl mx-auto">
       {scanResult ? (
-        <div className="space-y-6">
+        <div ref={resultsRef} className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">{contractName || "Untitled Contract"}</h1>
