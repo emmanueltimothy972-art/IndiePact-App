@@ -92,7 +92,7 @@ function navigateToReturnTo() {
 }
 
 export function AuthModal() {
-  const { showAuthModal, closeAuthModal, signInWithGoogle } = useAuth();
+  const { showAuthModal, authContext, closeAuthModal, signInWithGoogle } = useAuth();
   const [step, setStep] = useState<Step>("options");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -206,13 +206,19 @@ export function AuthModal() {
               <ShieldCheck className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white tracking-tight">Sign in to IndiePact</h2>
+              <h2 className="text-lg font-semibold text-white tracking-tight">
+                {step === "success"
+                  ? "You're signed in"
+                  : authContext
+                  ? `Sign in to ${authContext}`
+                  : "Sign in to IndiePact"}
+              </h2>
               <p className="text-slate-500 text-sm mt-1">
                 {step === "verify"
                   ? `We sent a 6-digit code to ${email}`
                   : step === "success"
-                  ? "Signed in successfully"
-                  : "Review contracts and protect your work."}
+                  ? "Taking you there now…"
+                  : "Free to start — no password needed."}
               </p>
             </div>
           </div>

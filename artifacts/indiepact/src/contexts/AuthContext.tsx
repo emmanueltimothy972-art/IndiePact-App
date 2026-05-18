@@ -75,9 +75,15 @@ interface AuthContextType {
   isGuest: boolean;
 
   showAuthModal: boolean;
-  /** Open the auth modal. Pass a returnTo path (e.g. "/scan") to redirect
-   *  the user back there after sign-in instead of the current page. */
-  openAuthModal: (returnTo?: string) => void;
+  /** Short phrase shown in the auth modal, e.g. "review your contract".
+   *  The modal prepends "Sign in to " to this string. */
+  authContext: string | null;
+  /** Open the auth modal.
+   *  @param returnTo  App-relative path to redirect to after sign-in (e.g. "/scan").
+   *                   Defaults to the current page.
+   *  @param context   Short phrase for contextual headline, e.g. "review your contract".
+   */
+  openAuthModal: (returnTo?: string, context?: string) => void;
   closeAuthModal: () => void;
 
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -115,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(!DEV_AUTH_BYPASS);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authContext, setAuthContext] = useState<string | null>(null);
 
   const [devTier, setDevTierState] = useState<string>(() => readDevTier());
 
@@ -195,15 +202,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSubscription({ userPlan: "free", scansUsed: 0, scansLimit: 2 });
   }, []);
 
-  const openAuthModal = useCallback((returnTo?: string) => {
+  const openAuthModal = useCallback((returnTo?: string, context?: string) => {
     if (DEV_AUTH_BYPASS) return;
-    // Persist the intended destination so both Google OAuth (page-away) and
-    // OTP (inline) flows can return the user to the right place after sign-in.
     saveReturnTo(returnTo);
+    setAuthContext(context ?? null);
     setShowAuthModal(true);
   }, []);
 
-  const closeAuthModal = useCallback(() => setShowAuthModal(false), []);
+  const closeAuthModal = useCallback(() => {
+    setShowAuthModal(false);
+    setAuthContext(null);
+  }, []);
 
   const userId = user?.id ?? DEMO_USER_ID;
   const isGuest = !user;
@@ -211,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, isLoading, userId, isGuest,
-      showAuthModal, openAuthModal, closeAuthModal,
+      showAuthModal, authContext, openAuthModal, closeAuthModal,
       signInWithGoogle, signOut,
       userPlan: subscription.userPlan,
       scansUsed: subscription.scansUsed,

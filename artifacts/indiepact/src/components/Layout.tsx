@@ -21,7 +21,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const handleGenerateReport = async () => {
     if (!scanId) return;
-    if (isGuest) { openAuthModal(); return; }
+    if (isGuest) { openAuthModal(undefined, "download your report"); return; }
     setIsGenerating(true);
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
@@ -141,7 +141,7 @@ export function Layout({ children }: { children: ReactNode }) {
           ) : !isLoading && (
             isGuest ? (
               <button
-                onClick={openAuthModal}
+                onClick={() => openAuthModal(undefined, "save your work")}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-emerald-400/80 hover:bg-emerald-950/30 hover:text-emerald-300 transition-all border border-emerald-900/30 hover:border-emerald-800/50"
               >
                 <LogIn size={15} />
@@ -192,7 +192,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <div className="border-t border-border p-3">
                   {isGuest ? (
                     <button
-                      onClick={() => { setMobileMenuOpen(false); openAuthModal(); }}
+                      onClick={() => { setMobileMenuOpen(false); openAuthModal(undefined, "save your work"); }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-emerald-400 border border-emerald-900/40"
                     >
                       <LogIn size={15} /> Sign in with Google
@@ -240,7 +240,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={openAuthModal}
+                  onClick={() => openAuthModal(undefined, "save your work")}
                   className="gap-1.5 h-8 text-xs border-emerald-800/50 text-emerald-400 hover:bg-emerald-950/30 hover:border-emerald-700"
                 >
                   <LogIn className="h-3.5 w-3.5" />

@@ -67,7 +67,7 @@ export default function DocumentLab() {
   }, [tryReveal]);
 
   const handleAnalyze = () => {
-    if (isGuest) { openAuthModal(); return; }
+    if (isGuest) { openAuthModal("/scan", "review your contract"); return; }
     if (isAtLimit) return; // button is disabled, but guard anyway
     if (!contractText || contractText.length < 50) {
       toast({
@@ -167,7 +167,7 @@ export default function DocumentLab() {
   }, [contractName, toast]);
 
   const handleUploadClick = () => {
-    if (isGuest) { openAuthModal(); return; }
+    if (isGuest) { openAuthModal("/scan", "upload PDF contracts"); return; }
     if (!isPaidPlan(userPlan)) { setShowProModal(true); return; }
     fileInputRef.current?.click();
   };

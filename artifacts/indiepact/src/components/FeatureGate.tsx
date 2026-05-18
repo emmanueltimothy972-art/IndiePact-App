@@ -14,12 +14,14 @@ interface FeatureGateProps {
 export function FeatureGate({ requires, children, featureName, featureDescription }: FeatureGateProps) {
   const { isGuest, openAuthModal, userPlan } = useAuth();
 
+  const context = featureName ? `unlock ${featureName}` : undefined;
+
   if (requires === "auth" && isGuest) {
     return (
       <AuthGate
         featureName={featureName}
         featureDescription={featureDescription}
-        onSignIn={openAuthModal}
+        onSignIn={() => openAuthModal(undefined, context)}
       />
     );
   }
@@ -29,7 +31,7 @@ export function FeatureGate({ requires, children, featureName, featureDescriptio
       <ProGate
         featureName={featureName}
         featureDescription={featureDescription}
-        onSignIn={openAuthModal}
+        onSignIn={() => openAuthModal(undefined, context)}
         isGuest={isGuest}
       />
     );
