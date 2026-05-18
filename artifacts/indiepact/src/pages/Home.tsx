@@ -239,7 +239,7 @@ function SpotlightSection({ onReview }: { onReview: () => void }) {
 
         <div className="flex bg-[#050505] h-1">
           {SPOTLIGHT_CLAUSES.map((_, i) => (
-            <div key={i} className={`flex-1 transition-colors duration-500 ${i === active ? "bg-emerald-500" : "bg-slate-800"}`} />
+            <div key={i} className={`flex-1 transition-colors duration-500 ${i === active ? "bg-emerald-700" : "bg-slate-800"}`} />
           ))}
         </div>
       </div>
@@ -248,7 +248,7 @@ function SpotlightSection({ onReview }: { onReview: () => void }) {
         <Button
           size="lg"
           onClick={onReview}
-          className="h-13 px-10 bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_24px_rgba(16,185,129,0.35)] hover:shadow-[0_0_36px_rgba(16,185,129,0.55)] transition-all"
+          className="h-13 px-10 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold transition-all"
         >
           Review My Contract Now
           <ArrowRight className="ml-2 h-5 w-5" />
@@ -303,7 +303,7 @@ export default function Home() {
               <Button
                 size="sm"
                 onClick={handleReviewCta}
-                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold h-9 px-4 shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all"
+                className="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold h-9 px-4 transition-all"
               >
                 Get Started Free
               </Button>
@@ -333,7 +333,7 @@ export default function Home() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 bg-emerald-950/40 border border-emerald-800/40 text-emerald-400 text-xs font-semibold px-4 py-1.5 rounded-full mb-8 uppercase tracking-widest"
+            className="inline-flex items-center gap-2 bg-emerald-950/30 border border-emerald-900/30 text-emerald-500/80 text-xs font-medium px-4 py-1.5 rounded-full mb-8 uppercase tracking-widest"
           >
             <Lock className="h-3 w-3" />
             AI Contract Protection
@@ -347,7 +347,7 @@ export default function Home() {
           >
             Review any contract
             <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">
               in minutes.
             </span>
           </motion.h1>
@@ -371,7 +371,7 @@ export default function Home() {
             <Button
               size="lg"
               onClick={handleReviewCta}
-              className="h-13 px-10 text-base font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_28px_rgba(16,185,129,0.4)] hover:shadow-[0_0_40px_rgba(16,185,129,0.6)] transition-all"
+              className="h-13 px-10 text-base font-semibold bg-emerald-700 hover:bg-emerald-600 text-white transition-all"
             >
               Review Your First Contract Free
               <ArrowRight className="ml-2 h-5 w-5" />
@@ -416,9 +416,9 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.45, delay: i * 0.06 }}
-                className="group p-6 rounded-2xl border border-slate-800 bg-[#0a0a0a] hover:border-emerald-900/60 hover:bg-[#0c110e] transition-all cursor-default"
+                className="group p-6 rounded-2xl border border-slate-800 bg-[#0a0a0a] hover:border-slate-700 hover:bg-[#0d0d0d] transition-all cursor-default"
               >
-                <div className="h-11 w-11 rounded-xl bg-emerald-950/50 border border-emerald-900/40 flex items-center justify-center text-emerald-400 mb-4 group-hover:border-emerald-800/60 transition-colors">
+                <div className="h-11 w-11 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center justify-center text-slate-400 mb-4 group-hover:border-slate-600 transition-colors">
                   {f.icon}
                 </div>
                 <h3 className="font-bold text-white mb-2">{f.title}</h3>
@@ -509,7 +509,7 @@ export default function Home() {
             <Button
               size="lg"
               onClick={handleReviewCta}
-              className="h-13 px-10 bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_24px_rgba(16,185,129,0.35)] transition-all"
+              className="h-13 px-10 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold transition-all"
             >
               Start Reviewing Now
               <FileDown className="ml-2 h-5 w-5" />
@@ -590,7 +590,7 @@ export default function Home() {
           <Button
             size="lg"
             onClick={handleReviewCta}
-            className="h-13 px-12 text-base font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_28px_rgba(16,185,129,0.4)] hover:shadow-[0_0_40px_rgba(16,185,129,0.6)] transition-all"
+            className="h-13 px-12 text-base font-semibold bg-emerald-700 hover:bg-emerald-600 text-white transition-all"
           >
             Get Started — It's Free
             <ArrowRight className="ml-2 h-5 w-5" />

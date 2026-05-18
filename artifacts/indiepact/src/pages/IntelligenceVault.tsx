@@ -52,7 +52,7 @@ export default function IntelligenceVault() {
           <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
             No contracts reviewed yet. Upload one to start spotting risks, understanding payment terms, and negotiating better deals.
           </p>
-          <Link href="/scan" className="inline-flex items-center justify-center rounded-xl text-sm font-semibold transition-colors bg-emerald-500 hover:bg-emerald-400 text-black h-10 px-5">
+          <Link href="/scan" className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-colors bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200 h-10 px-5 border border-emerald-800/40">
             Review Your First Contract
           </Link>
         </div>

@@ -304,7 +304,7 @@ export default function Pricing() {
                   className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
                     isPayPerScanCurrent
                       ? "bg-slate-800 text-slate-500 cursor-default"
-                      : "bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_32px_rgba(16,185,129,0.5)]"
+                      : "bg-emerald-700 hover:bg-emerald-600 text-white"
                   }`}
                 >
                   {loadingPlan === "pay_per_scan" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -432,7 +432,7 @@ export default function Pricing() {
                     isCurrentPlan
                       ? "bg-slate-800 text-slate-500 cursor-default"
                       : plan.popular
-                      ? "bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_16px_rgba(212,175,55,0.3)]"
+                      ? "bg-amber-700/80 hover:bg-amber-600/80 text-white"
                       : "bg-slate-800 hover:bg-slate-700 text-white"
                   }`}
                 >

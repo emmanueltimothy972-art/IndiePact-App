@@ -99,7 +99,7 @@ export function RevenueStressTest({ result }: { result: ScanResult }) {
 
   const { rating, flags } = analysis;
 
-  const gaugeColor = rating >= 70 ? "#10b981" : rating >= 40 ? "#f59e0b" : "#ef4444";
+  const gaugeColor = rating >= 70 ? "#2d8c6e" : rating >= 40 ? "#b07a2e" : "#943535";
   const gaugeLabel = rating >= 70 ? "LOW FRICTION" : rating >= 40 ? "MODERATE RISK" : "HIGH EXPOSURE";
   const circumference = 2 * Math.PI * 54;
   const dashOffset = circumference - (circumference * rating) / 100;
@@ -129,7 +129,7 @@ export function RevenueStressTest({ result }: { result: ScanResult }) {
                 strokeDasharray={circumference}
                 strokeDashoffset={dashOffset}
                 strokeLinecap="round"
-                style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease", filter: `drop-shadow(0 0 6px ${gaugeColor}60)` }}
+                style={{ transition: "stroke-dashoffset 1s ease, stroke 0.5s ease" }}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">

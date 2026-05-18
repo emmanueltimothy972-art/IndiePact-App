@@ -95,17 +95,17 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 function SeverityBadge({ severity }: { severity: string }) {
   if (severity === "High") return (
-    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-red-800/60 bg-red-950/40 text-red-400">
+    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-red-900/40 bg-red-950/20 text-red-300/80">
       <ShieldAlert className="h-3 w-3" /> STRUCTURAL VULNERABILITY
     </span>
   );
   if (severity === "Medium") return (
-    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-700/50 bg-amber-950/30 text-amber-400">
+    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-900/30 bg-amber-950/20 text-amber-300/80">
       <AlertTriangle className="h-3 w-3" /> UNREASONABLE RISK
     </span>
   );
   return (
-    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-800/50 bg-emerald-950/30 text-emerald-400">
+    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-slate-700/50 bg-slate-800/40 text-slate-400">
       <AlertCircle className="h-3 w-3" /> STRATEGIC OBSERVATION
     </span>
   );
@@ -117,49 +117,49 @@ function ProsecutorBubble({ data }: { data: ProsecutorResponse }) {
   return (
     <div className="space-y-3 font-mono text-xs w-full max-w-[90%]">
       {/* Diagnosis */}
-      <div className="rounded-lg border border-red-900/40 bg-red-950/20 p-4 space-y-1.5">
+      <div className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-4 space-y-1.5">
         <div className="flex items-center gap-2 mb-2">
-          <Search className="h-3 w-3 text-red-400 shrink-0" />
-          <span className="text-[10px] text-red-400 uppercase tracking-widest font-bold">Diagnosis</span>
+          <Search className="h-3 w-3 text-slate-400 shrink-0" />
+          <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Diagnosis</span>
         </div>
         <p className="text-slate-200 leading-relaxed">{data.diagnosis}</p>
       </div>
 
       {/* Exposure */}
-      <div className="rounded-lg border border-amber-900/40 bg-amber-950/15 p-4 space-y-1.5">
+      <div className="rounded-lg border border-amber-900/25 bg-amber-950/10 p-4 space-y-1.5">
         <div className="flex items-center gap-2 mb-2">
-          <DollarSign className="h-3 w-3 text-amber-400 shrink-0" />
-          <span className="text-[10px] text-amber-400 uppercase tracking-widest font-bold">Financial Exposure</span>
+          <DollarSign className="h-3 w-3 text-amber-400/80 shrink-0" />
+          <span className="text-[10px] text-amber-400/80 uppercase tracking-widest font-bold">Financial Exposure</span>
         </div>
-        <p className="text-amber-200/80 leading-relaxed">{data.exposure}</p>
+        <p className="text-slate-300 leading-relaxed">{data.exposure}</p>
       </div>
 
       {/* Counter-Move */}
-      <div className="rounded-lg border border-emerald-900/40 bg-emerald-950/15 p-4 space-y-2">
+      <div className="rounded-lg border border-emerald-900/25 bg-emerald-950/10 p-4 space-y-2">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <Target className="h-3 w-3 text-emerald-400 shrink-0" />
-            <span className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">Counter-Move</span>
+            <Target className="h-3 w-3 text-emerald-500/80 shrink-0" />
+            <span className="text-[10px] text-emerald-500/80 uppercase tracking-widest font-bold">Counter-Move</span>
           </div>
           <CopyButton text={data.counterMove} />
         </div>
-        <p className="text-emerald-200/90 leading-relaxed">{data.counterMove}</p>
+        <p className="text-slate-200 leading-relaxed">{data.counterMove}</p>
       </div>
 
       {/* Rebuttal Email */}
       {data.rebuttalEmail && (
-        <div className="rounded-lg border border-blue-900/40 bg-blue-950/15 p-4 space-y-2">
+        <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 space-y-2">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
-              <Mail className="h-3 w-3 text-blue-400 shrink-0" />
-              <span className="text-[10px] text-blue-400 uppercase tracking-widest font-bold">
+              <Mail className="h-3 w-3 text-slate-400 shrink-0" />
+              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
                 Rebuttal Email — Ready to Send
               </span>
             </div>
             <CopyButton text={data.rebuttalEmail} label="Copy email" />
           </div>
-          <div className="bg-[#050505]/60 rounded-md p-3 border border-blue-900/20">
-            <pre className="text-blue-100/80 leading-relaxed whitespace-pre-wrap text-[11px] font-mono">
+          <div className="bg-slate-950/60 rounded-md p-3 border border-slate-700/30">
+            <pre className="text-slate-300 leading-relaxed whitespace-pre-wrap text-[11px] font-mono">
               {data.rebuttalEmail}
             </pre>
           </div>
@@ -167,13 +167,13 @@ function ProsecutorBubble({ data }: { data: ProsecutorResponse }) {
       )}
 
       {/* Tactical Directive */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-violet-900/40 bg-violet-950/15">
-        <Zap className="h-3.5 w-3.5 text-violet-400 mt-0.5 shrink-0" />
+      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-slate-700/60 bg-slate-800/40">
+        <Zap className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
         <div>
-          <span className="text-[10px] text-violet-400 uppercase tracking-widest font-bold block mb-1">
+          <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold block mb-1">
             Tactical Directive — Next 24 Hours
           </span>
-          <p className="text-violet-200/90 leading-relaxed font-bold">{data.tacticalDirective}</p>
+          <p className="text-slate-200 leading-relaxed font-bold">{data.tacticalDirective}</p>
         </div>
       </div>
     </div>
@@ -429,7 +429,7 @@ export default function ShadowNegotiator() {
               if (r.category === "termination")  score -= r.severity === "High" ? 20 : r.severity === "Medium" ? 10 : 0;
             }
             score = Math.max(0, Math.min(100, score));
-            const color = score >= 70 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
+            const color = score >= 70 ? "#2d8c6e" : score >= 40 ? "#b07a2e" : "#943535";
             const label = score >= 70 ? "LOW FRICTION" : score >= 40 ? "MODERATE RISK" : "HIGH EXPOSURE";
             const circumference = 2 * Math.PI * 28;
             const dashOffset = circumference - (circumference * score) / 100;
@@ -444,7 +444,7 @@ export default function ShadowNegotiator() {
                     <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/20" />
                     <circle cx="32" cy="32" r="28" fill="none" stroke={color} strokeWidth="6"
                       strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round"
-                      style={{ filter: `drop-shadow(0 0 4px ${color}60)` }}
+                      style={{ transition: "stroke-dashoffset 1s ease" }}
                     />
                   </svg>
                   <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{score}</span>
@@ -478,13 +478,13 @@ export default function ShadowNegotiator() {
             <div className="rounded-xl border border-border overflow-hidden">
               {/* Table header */}
               <div className="grid grid-cols-3 border-b border-border bg-[#050505]/80">
-                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-red-400 border-r border-border flex items-center gap-2">
+                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
                   <AlertTriangle className="h-3 w-3" /> Col A — Predatory Clause
                 </div>
-                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-emerald-400 border-r border-border flex items-center gap-2">
+                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
                   <ShieldCheck className="h-3 w-3" /> Col B — The Shield
                 </div>
-                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-blue-400 flex items-center gap-2">
+                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-500 flex items-center gap-2">
                   <Scale className="h-3 w-3" /> Col C — Rebuttal Strategy
                 </div>
               </div>
@@ -577,7 +577,7 @@ export default function ShadowNegotiator() {
                     <div
                       key={i}
                       className={`h-1 w-8 rounded-full transition-colors ${
-                        i < qualifyingStep ? "bg-emerald-500" : i === qualifyingStep ? "bg-amber-400 animate-pulse" : "bg-border"
+                        i < qualifyingStep ? "bg-emerald-700" : i === qualifyingStep ? "bg-amber-600/70 animate-pulse" : "bg-border"
                       }`}
                     />
                   ))}

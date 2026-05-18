@@ -31,7 +31,7 @@ export default function NotFound() {
         </div>
 
         <Link href="/">
-          <button className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-all shadow-[0_0_16px_rgba(16,185,129,0.25)] hover:shadow-[0_0_24px_rgba(16,185,129,0.4)]">
+          <button className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-medium text-sm transition-all">
             <ArrowLeft className="h-4 w-4" />
             Back to Home
           </button>

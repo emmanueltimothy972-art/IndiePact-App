@@ -43,20 +43,20 @@ export default function Dashboard() {
             <p className="text-xs text-slate-600 mt-1 italic">Example: See how many high-risk clauses were flagged across all your contracts this month.</p>
           </div>
         </div>
-        <Link href="/scan" className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors shrink-0 self-start md:self-center shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+        <Link href="/scan" className="bg-emerald-700 hover:bg-emerald-600 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center gap-2 transition-colors shrink-0 self-start md:self-center">
           <FileText size={15} /> Review a Contract
         </Link>
       </div>
 
       {/* Upgrade banner when at limit */}
       {isAtLimit && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="rounded-2xl border border-amber-800/30 bg-amber-950/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-amber-400 font-semibold text-sm mb-0.5">You've used all your reviews this month</p>
+            <p className="text-amber-300/90 font-semibold text-sm mb-0.5">You've used all your reviews this month</p>
             <p className="text-slate-500 text-xs">Upgrade to keep reviewing contracts without interruption.</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <Link href="/pricing" className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-colors shadow-[0_0_12px_rgba(212,175,55,0.2)]">
+            <Link href="/pricing" className="bg-amber-700 hover:bg-amber-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-colors">
               <Zap size={14} /> Upgrade Plan
             </Link>
             <Link href="/pricing" className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1 whitespace-nowrap">
@@ -68,9 +68,9 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-4 p-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 shadow-[0_0_15px_rgba(212,175,55,0.08)] flex flex-col justify-center items-center text-center">
-          <h3 className="text-xs font-semibold text-amber-400/70 uppercase tracking-widest mb-2">Total Value Protected</h3>
-          <div className="text-5xl font-bold font-mono tracking-tighter text-amber-400 mb-1">
+        <div className="lg:col-span-4 p-6 rounded-2xl border border-amber-800/20 bg-amber-950/10 flex flex-col justify-center items-center text-center">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Total Value Protected</h3>
+          <div className="text-5xl font-bold font-mono tracking-tighter text-amber-300/90 mb-1">
             {isSummaryLoading ? "..." : `$${(summary?.totalMoneyProtected ?? 0).toLocaleString()}`}
           </div>
           <div className="text-sm text-slate-500">Estimated value of unfair clauses caught across all your reviews</div>

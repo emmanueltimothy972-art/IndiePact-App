@@ -44,9 +44,9 @@ function categorizeClause(text: string): string {
 }
 
 const RISK_COLORS: Record<string, string> = {
-  High:   "text-red-400 bg-red-950/40 border-red-900/50",
-  Medium: "text-amber-400 bg-amber-950/40 border-amber-900/50",
-  Low:    "text-emerald-400 bg-emerald-950/40 border-emerald-900/50",
+  High:   "text-red-300/80 bg-red-950/20 border-red-900/30",
+  Medium: "text-amber-300/80 bg-amber-950/20 border-amber-900/30",
+  Low:    "text-emerald-300/80 bg-emerald-950/20 border-emerald-900/30",
 };
 
 export default function ClauseArmory() {
@@ -139,16 +139,16 @@ export default function ClauseArmory() {
   };
 
   const categoryColors: Record<string, string> = {
-    Payment: "text-amber-400 border-amber-900/60 bg-amber-950/30",
-    IP: "text-purple-400 border-purple-900/60 bg-purple-950/30",
-    Termination: "text-red-400 border-red-900/60 bg-red-950/30",
-    Scope: "text-blue-400 border-blue-900/60 bg-blue-950/30",
-    Liability: "text-orange-400 border-orange-900/60 bg-orange-950/30",
-    Confidentiality: "text-cyan-400 border-cyan-900/60 bg-cyan-950/30",
-    Exclusivity: "text-rose-400 border-rose-900/60 bg-rose-950/30",
-    Dispute: "text-indigo-400 border-indigo-900/60 bg-indigo-950/30",
-    Renewal: "text-emerald-400 border-emerald-900/60 bg-emerald-950/30",
-    General: "text-slate-400 border-slate-700 bg-slate-900/30",
+    Payment: "text-amber-300/80 border-amber-900/30 bg-amber-950/15",
+    IP: "text-violet-300/80 border-violet-900/30 bg-violet-950/15",
+    Termination: "text-rose-300/80 border-rose-900/30 bg-rose-950/15",
+    Scope: "text-sky-300/80 border-sky-900/30 bg-sky-950/15",
+    Liability: "text-orange-300/80 border-orange-900/30 bg-orange-950/15",
+    Confidentiality: "text-teal-300/80 border-teal-900/30 bg-teal-950/15",
+    Exclusivity: "text-pink-300/80 border-pink-900/30 bg-pink-950/15",
+    Dispute: "text-indigo-300/80 border-indigo-900/30 bg-indigo-950/15",
+    Renewal: "text-emerald-300/80 border-emerald-900/30 bg-emerald-950/15",
+    General: "text-slate-400 border-slate-700/50 bg-slate-800/30",
   };
 
   return (
@@ -181,20 +181,20 @@ export default function ClauseArmory() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1 w-fit">
+      <div className="flex gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1 w-fit">
         <button
           onClick={() => setActiveTab("contract")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === "contract"
-              ? "bg-emerald-500 text-black shadow"
-              : "text-slate-400 hover:text-white"
+              ? "bg-slate-700 text-white border border-slate-600"
+              : "text-slate-400 hover:text-slate-200"
           }`}
         >
           <FileText className="h-4 w-4" />
           My Contract
           {contractClauses.length > 0 && (
             <span className={`text-xs px-1.5 py-0.5 rounded-full font-mono ${
-              activeTab === "contract" ? "bg-black/20 text-black" : "bg-slate-800 text-slate-400"
+              activeTab === "contract" ? "bg-slate-600/60 text-slate-200" : "bg-slate-800 text-slate-500"
             }`}>
               {contractClauses.length}
             </span>
@@ -204,8 +204,8 @@ export default function ClauseArmory() {
           onClick={() => setActiveTab("library")}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             activeTab === "library"
-              ? "bg-emerald-500 text-black shadow"
-              : "text-slate-400 hover:text-white"
+              ? "bg-slate-700 text-white border border-slate-600"
+              : "text-slate-400 hover:text-slate-200"
           }`}
         >
           <Swords className="h-4 w-4" />
@@ -229,7 +229,7 @@ export default function ClauseArmory() {
               </div>
               <a
                 href="/scan"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200 font-medium text-sm transition-colors border border-emerald-800/40"
               >
                 <Shield className="h-4 w-4" />
                 Review a Contract
@@ -305,7 +305,7 @@ export default function ClauseArmory() {
                             </div>
                             <Button
                               size="sm"
-                              className="mt-2 h-7 text-xs bg-emerald-500 hover:bg-emerald-400 text-black font-semibold"
+                              className="mt-2 h-7 text-xs bg-emerald-800/50 hover:bg-emerald-700/60 text-emerald-200 font-medium border border-emerald-800/40"
                               onClick={() => handleSwap(clause.suggestion!)}
                             >
                               <ShieldAlert className="h-3 w-3 mr-1" />
@@ -358,7 +358,7 @@ export default function ClauseArmory() {
                   <Button
                     size="sm"
                     onClick={() => handleSwap(item.clause)}
-                    className="h-8 text-xs bg-emerald-500 hover:bg-emerald-400 text-black font-semibold ml-4"
+                    className="h-8 text-xs bg-emerald-800/50 hover:bg-emerald-700/60 text-emerald-200 font-medium border border-emerald-800/40 ml-4"
                   >
                     <ShieldAlert className="w-3 h-3 mr-1.5" /> Swap & Shield
                   </Button>

@@ -82,8 +82,7 @@ function AuthGate({
 
       <button
         onClick={onSignIn}
-        className="flex items-center gap-2 px-7 py-3 rounded-xl font-bold text-sm transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:shadow-[0_0_32px_rgba(16,185,129,0.4)]"
-        style={{ background: "linear-gradient(135deg, #10b981, #059669)", color: "#000" }}
+        className="flex items-center gap-2 px-7 py-3 rounded-xl font-semibold text-sm transition-all active:scale-[0.98] bg-emerald-700 hover:bg-emerald-600 text-white"
       >
         Create free account
         <ArrowRight className="h-4 w-4" />
@@ -163,7 +162,7 @@ function ProGate({
       {/* Primary: upgrade */}
       <Link
         href="/pricing"
-        className="flex items-center gap-2 px-7 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all shadow-[0_0_16px_rgba(212,175,55,0.25)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] active:scale-[0.98]"
+        className="flex items-center gap-2 px-7 py-3 rounded-xl bg-amber-700/80 hover:bg-amber-600/80 text-white font-semibold text-sm transition-all active:scale-[0.98]"
       >
         <Zap className="h-4 w-4" /> Unlock Now
       </Link>

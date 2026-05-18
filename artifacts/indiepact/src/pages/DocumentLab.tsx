@@ -243,7 +243,7 @@ export default function DocumentLab() {
                   {/* $9.99 Pay-Per-Scan — primary option */}
                   <Link
                     href="/pricing"
-                    className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-8 py-3 rounded-xl text-sm flex items-center gap-2 transition-colors shadow-[0_0_16px_rgba(16,185,129,0.25)]"
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold px-8 py-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
                   >
                     <CheckCircle2 className="h-4 w-4" /> Buy One Scan — $9.99
                   </Link>
@@ -450,7 +450,7 @@ export default function DocumentLab() {
                       size="lg"
                       onClick={handleAnalyze}
                       disabled={isAnalyzing || (!isGuest && !contractText.trim())}
-                      className="px-8 bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_16px_rgba(16,185,129,0.2)] hover:shadow-[0_0_24px_rgba(16,185,129,0.4)] transition-all rounded-xl"
+                      className="px-8 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold transition-all rounded-xl"
                     >
                       {isGuest ? (
                         <><LogIn className="mr-2 h-4 w-4" />Sign In to Review</>

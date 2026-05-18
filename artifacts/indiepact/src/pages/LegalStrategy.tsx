@@ -24,22 +24,22 @@ interface LegalStrategyResult {
 }
 
 const TACTIC_COLORS: Record<string, string> = {
-  Anchor: "bg-blue-950/40 border-blue-800/40 text-blue-400",
-  Trade: "bg-purple-950/40 border-purple-800/40 text-purple-400",
-  Reframe: "bg-teal-950/40 border-teal-800/40 text-teal-400",
-  "Walk Away": "bg-red-950/40 border-red-800/40 text-red-400",
-  Request: "bg-emerald-950/40 border-emerald-800/40 text-emerald-400",
+  Anchor: "bg-slate-800/60 border-slate-700/60 text-slate-300",
+  Trade: "bg-slate-800/60 border-slate-700/60 text-slate-300",
+  Reframe: "bg-slate-800/60 border-slate-700/60 text-slate-300",
+  "Walk Away": "bg-red-950/20 border-red-900/30 text-red-300/80",
+  Request: "bg-slate-800/60 border-slate-700/60 text-slate-300",
 };
 
 const URGENCY_COLORS: Record<string, string> = {
-  Immediate: "bg-red-950/40 border-red-800/40 text-red-400",
-  High: "bg-amber-950/40 border-amber-800/40 text-amber-400",
-  Moderate: "bg-emerald-950/40 border-emerald-800/40 text-emerald-400",
+  Immediate: "bg-red-950/20 border-red-900/30 text-red-300/80",
+  High: "bg-amber-950/20 border-amber-900/30 text-amber-300/80",
+  Moderate: "bg-slate-800/50 border-slate-700/50 text-slate-400",
 };
 
 function PowerMeter({ score, label, explanation }: { score: number; label: string; explanation: string }) {
-  const color = score >= 65 ? "#10b981" : score >= 40 ? "#f59e0b" : "#ef4444";
-  const labelColor = score >= 65 ? "text-emerald-400" : score >= 40 ? "text-amber-400" : "text-red-400";
+  const color = score >= 65 ? "#2d8c6e" : score >= 40 ? "#b07a2e" : "#943535";
+  const labelColor = score >= 65 ? "text-emerald-500/80" : score >= 40 ? "text-amber-400/80" : "text-red-400/80";
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6 space-y-4">
@@ -302,7 +302,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
             >
               <div className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
                 item.completed
-                  ? "bg-emerald-500 border-emerald-500"
+                  ? "bg-emerald-700 border-emerald-700"
                   : "border-slate-600"
               }`}>
                 {item.completed && <CheckCircle2 className="h-3.5 w-3.5 text-black" />}
@@ -443,7 +443,7 @@ export default function LegalStrategy() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-bold tracking-tight">AI Legal Strategy</h1>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/30 border border-emerald-800/30 text-emerald-500/80 uppercase tracking-wider">
                     NEW
                   </span>
                 </div>
@@ -508,7 +508,7 @@ export default function LegalStrategy() {
                   <p className="text-slate-600 text-sm mb-5">Review a contract first, then come back here for AI Legal Strategy.</p>
                   <a
                     href="/scan"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-sm transition-colors"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200 font-medium text-sm transition-colors border border-emerald-800/40"
                   >
                     <FileSearch className="h-4 w-4" />
                     Review a Contract First

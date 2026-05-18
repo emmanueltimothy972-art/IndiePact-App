@@ -185,17 +185,17 @@
   --accent: 215 35% 20%;
   --accent-foreground: 210 30% 96%;
 
-  --destructive: 0 84% 60%;
+  --destructive: 0 65% 50%;
   --destructive-foreground: 0 0% 100%;
 
   --input: 215 35% 18%;
   --ring: 163 52% 34%;
 
-  --chart-1: 160 84% 39%; /* Emerald / Safe */
-  --chart-2: 46 65% 52%;  /* Gold */
-  --chart-3: 38 92% 50%;  /* Warning / Medium */
-  --chart-4: 0 84% 60%;   /* Destructive / High Risk */
-  --chart-5: 210 30% 96%; /* Off-white */
+  --chart-1: 160 45% 36%; /* Muted Emerald / Safe */
+  --chart-2: 46 50% 48%;  /* Muted Gold */
+  --chart-3: 38 55% 44%;  /* Muted Amber / Medium */
+  --chart-4: 0 58% 46%;   /* Muted Crimson / High Risk */
+  --chart-5: 210 20% 80%; /* Off-white */
 }
 
 @layer base {

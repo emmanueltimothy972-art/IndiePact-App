@@ -77,7 +77,7 @@ export default function ScanDetail() {
             </Link>
             <Link
               href="/scan"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-sm font-semibold transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200 text-sm font-medium transition-colors border border-emerald-800/40"
             >
               Review a Contract
             </Link>
