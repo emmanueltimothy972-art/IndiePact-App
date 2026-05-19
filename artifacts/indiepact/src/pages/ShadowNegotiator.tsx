@@ -96,18 +96,18 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 function SeverityBadge({ severity }: { severity: string }) {
   if (severity === "High") return (
-    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-red-900/40 bg-red-950/20 text-red-300/80">
-      <ShieldAlert className="h-3 w-3" /> STRUCTURAL VULNERABILITY
+    <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-red-900/40 bg-red-950/20 text-red-300/80">
+      <ShieldAlert className="h-3 w-3" /> High Risk
     </span>
   );
   if (severity === "Medium") return (
-    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-900/30 bg-amber-950/20 text-amber-300/80">
-      <AlertTriangle className="h-3 w-3" /> UNREASONABLE RISK
+    <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-amber-900/30 bg-amber-950/20 text-amber-300/80">
+      <AlertTriangle className="h-3 w-3" /> Medium Risk
     </span>
   );
   return (
-    <span className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-slate-700/50 bg-slate-800/40 text-slate-400">
-      <AlertCircle className="h-3 w-3" /> STRATEGIC OBSERVATION
+    <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-slate-700/50 bg-slate-800/40 text-slate-400">
+      <AlertCircle className="h-3 w-3" /> Low Risk
     </span>
   );
 }
@@ -366,31 +366,38 @@ export default function ShadowNegotiator() {
         featureName="Negotiation War Room"
         featureDescription="The Negotiation War Room is available on the Pro plan and above. Upgrade to get clause-level negotiation scripts, danger-word detection, and multi-tactic negotiation playbooks."
       >
-      <div className="border-b border-border pb-5 mb-6">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-          <Swords className="text-primary h-8 w-8" />
-          War Room — Forensic Analysis Dashboard
-        </h1>
-        <p className="text-muted-foreground mt-2 font-mono text-sm">
-          INDIEPACT / FORENSIC DISCOVERY / CONTRACT INTELLIGENCE SUITE
-        </p>
+      <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+            <Swords className="h-5 w-5 text-slate-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold tracking-tight text-white">Negotiation War Room</h1>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 uppercase tracking-wider">Pro</span>
+            </div>
+            <p className="text-slate-500 text-sm mt-0.5">
+              Clause-level negotiation scripts, danger-word detection, and multi-tactic playbooks.
+            </p>
+          </div>
+        </div>
       </div>
 
       <Tabs defaultValue="table">
         <TabsList className="border border-border bg-card rounded-lg mb-6 p-1 h-auto gap-1">
           <TabsTrigger
             value="table"
-            className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-mono text-xs uppercase tracking-widest px-5 py-2"
+            className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs font-medium px-5 py-2"
           >
             <Search className="h-3.5 w-3.5 mr-2" />
-            Forensic Discovery Table
+            Clause Analysis
           </TabsTrigger>
           <TabsTrigger
             value="prosecutor"
-            className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-mono text-xs uppercase tracking-widest px-5 py-2"
+            className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs font-medium px-5 py-2"
           >
             <Scale className="h-3.5 w-3.5 mr-2" />
-            The Prosecutor
+            AI Negotiation Advisor
           </TabsTrigger>
         </TabsList>
 
@@ -450,7 +457,6 @@ export default function ShadowNegotiator() {
                     <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/20" />
                     <circle cx="32" cy="32" r="28" fill="none" stroke={color} strokeWidth="6"
                       strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round"
-                      style={{ transition: "stroke-dashoffset 1s ease" }}
                     />
                   </svg>
                   <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{score}</span>
@@ -469,8 +475,8 @@ export default function ShadowNegotiator() {
           })()}
 
           {tableLoading ? (
-            <div className="flex items-center justify-center h-64 text-muted-foreground font-mono text-sm animate-pulse">
-              Retrieving case file...
+            <div className="flex items-center justify-center h-64 text-muted-foreground text-sm animate-pulse">
+              Loading clause data...
             </div>
           ) : selectedRisks.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 border border-dashed border-border rounded-xl text-muted-foreground font-mono text-sm gap-3">
@@ -484,14 +490,14 @@ export default function ShadowNegotiator() {
             <div className="rounded-xl border border-border overflow-hidden">
               {/* Table header */}
               <div className="grid grid-cols-3 border-b border-border bg-[#050505]/80">
-                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
-                  <AlertTriangle className="h-3 w-3" /> Col A — Predatory Clause
+                <div className="px-5 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
+                  <AlertTriangle className="h-3 w-3" /> Flagged Clause
                 </div>
-                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
-                  <ShieldCheck className="h-3 w-3" /> Col B — The Shield
+                <div className="px-5 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
+                  <ShieldCheck className="h-3 w-3" /> Protective Rewrite
                 </div>
-                <div className="px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                  <Scale className="h-3 w-3" /> Col C — Rebuttal Strategy
+                <div className="px-5 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <Scale className="h-3 w-3" /> Negotiation Script
                 </div>
               </div>
 
@@ -531,11 +537,11 @@ export default function ShadowNegotiator() {
 
                   {/* Column C */}
                   <div className="px-5 py-5 space-y-3">
-                    <span className="text-[10px] font-mono text-blue-400 uppercase tracking-widest">
-                      Attorney's Voice — Direct Script
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Negotiation Script
                     </span>
-                    <div className="p-3 rounded-lg border border-blue-900/30 bg-blue-950/10">
-                      <p className="text-xs text-blue-200 leading-relaxed italic">
+                    <div className="p-3 rounded-lg border border-slate-700/40 bg-slate-900/40">
+                      <p className="text-xs text-slate-300 leading-relaxed italic">
                         "{risk.fixes.direct}"
                       </p>
                     </div>
@@ -560,8 +566,8 @@ export default function ShadowNegotiator() {
             <div className="px-5 py-3 border-b border-border bg-[#050505] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono text-xs text-muted-foreground uppercase tracking-widest">
-                  THE PROSECUTOR — Active Investigation
+                <span className="text-xs text-muted-foreground font-medium">
+                  AI Negotiation Advisor
                 </span>
                 {caseContext && (
                   <span className="font-mono text-[10px] border border-border px-2 py-0.5 rounded text-muted-foreground">
@@ -599,7 +605,7 @@ export default function ShadowNegotiator() {
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   {msg.role === "ai" && (
-                    <div className="h-7 w-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-mono text-[10px] font-bold mr-3 mt-1 shrink-0">
+                    <div className="h-7 w-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-semibold mr-3 mt-1 shrink-0">
                       AI
                     </div>
                   )}
@@ -623,7 +629,7 @@ export default function ShadowNegotiator() {
 
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="h-7 w-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-mono text-[10px] font-bold mr-3 mt-1 shrink-0">AI</div>
+                  <div className="h-7 w-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-semibold mr-3 mt-1 shrink-0">AI</div>
                   <div className="bg-muted border border-border rounded-xl rounded-tl-sm px-5 py-4 flex gap-1 items-center">
                     <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
                     <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />

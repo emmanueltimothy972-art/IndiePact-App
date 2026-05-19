@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { FeatureGate } from "@/components/FeatureGate";
 import { Button } from "@/components/ui/button";
@@ -58,12 +57,9 @@ function PowerMeter({ score, label, explanation }: { score: number; label: strin
           <span>Strong</span>
         </div>
         <div className="relative h-3 w-full bg-slate-800 rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${score}%` }}
-            transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
-            className="absolute left-0 top-0 h-full rounded-full"
-            style={{ background: `linear-gradient(90deg, ${color}80, ${color})` }}
+          <div
+            className="absolute left-0 top-0 h-full rounded-full transition-[width] duration-700 ease-out"
+            style={{ width: `${score}%`, backgroundColor: color }}
           />
           <div className="absolute left-1/2 top-0 h-full w-px bg-slate-600" />
         </div>
@@ -91,12 +87,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
   const completedCount = checklist.filter((i) => i.completed).length;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
+    <div className="space-y-6">
       {/* Contract name */}
       <div className="flex items-center gap-2 text-sm text-slate-500">
         <FileSearch className="h-4 w-4" />
@@ -105,10 +96,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
       </div>
 
       {/* Overall Assessment */}
-      <div
-        className="rounded-2xl p-6 border border-emerald-900/30 space-y-3"
-        style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.04) 0%, rgba(10,10,10,0.98) 80%)" }}
-      >
+      <div className="rounded-2xl p-6 border border-slate-800 bg-[#0a0a0a] space-y-3">
         <div className="flex items-center gap-2.5">
           <Brain className="h-5 w-5 text-emerald-400" />
           <h3 className="font-semibold text-white">Strategic Assessment</h3>
@@ -134,11 +122,8 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
             Priority Issues to Address
           </h3>
           {result.priorityRisks.length > 0 ? result.priorityRisks.map((risk) => (
-            <motion.div
+            <div
               key={risk.rank}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: risk.rank * 0.06 }}
               className="rounded-xl border border-slate-800 bg-[#0a0a0a] p-4 space-y-2.5"
             >
               <div className="flex items-start justify-between gap-3">
@@ -158,7 +143,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
                   <span className="font-semibold">Approach: </span>{risk.negotiationApproach}
                 </p>
               </div>
-            </motion.div>
+            </div>
           )) : (
             <div className="rounded-xl border border-slate-800 bg-[#0a0a0a] p-5 text-center text-slate-500 text-sm">
               No critical priority risks identified.
@@ -174,11 +159,8 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
           </h3>
           <div className="space-y-2">
             {result.negotiationOrder.map((step, i) => (
-              <motion.div
+              <div
                 key={step.step}
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.07 }}
                 className="flex gap-3 rounded-xl border border-slate-800 bg-[#0a0a0a] p-4"
               >
                 <div className="flex flex-col items-center shrink-0">
@@ -198,7 +180,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">{step.rationale}</p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -213,12 +195,9 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {result.redFlags.map((flag, i) => (
-              <motion.div
+              <div
                 key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.07 }}
-                className="rounded-xl border border-red-900/30 bg-red-950/5 p-4 space-y-3"
+                className="rounded-xl border border-red-900/20 bg-[#0a0a0a] p-4 space-y-3"
               >
                 <div className="text-xs text-slate-400 italic leading-relaxed border-l-2 border-red-800/50 pl-3">
                   "{flag.clause}"
@@ -231,7 +210,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
                     <span className="font-semibold text-red-400">Impact: </span>{flag.realWorldImpact}
                   </p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -245,28 +224,19 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
         </h3>
         <ul className="space-y-2.5">
           {result.questionsToAsk.map((q, i) => (
-            <motion.li
+            <li
               key={i}
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.05 }}
               className="flex items-start gap-3 text-sm text-slate-300 leading-relaxed"
             >
               <ChevronRight className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
               {q}
-            </motion.li>
+            </li>
           ))}
         </ul>
       </div>
 
       {/* Recommended Move */}
-      <div
-        className="rounded-2xl p-6 border border-emerald-500/20 space-y-3"
-        style={{
-          background: "linear-gradient(135deg, rgba(16,185,129,0.07) 0%, rgba(10,10,10,0.98) 80%)",
-          boxShadow: "0 0 32px rgba(16,185,129,0.06)",
-        }}
-      >
+      <div className="rounded-2xl p-6 border border-slate-700/60 bg-[#0a0a0a] space-y-3">
         <div className="flex items-center gap-2.5">
           <Zap className="h-5 w-5 text-emerald-400" />
           <h3 className="font-semibold text-emerald-300">Your Recommended Next Move</h3>
@@ -324,18 +294,14 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
         </div>
 
         {completedCount === checklist.length && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl bg-emerald-950/30 border border-emerald-900/40 p-4 text-center"
-          >
+          <div className="rounded-xl bg-emerald-950/20 border border-emerald-900/30 p-4 text-center">
             <p className="text-emerald-400 font-semibold text-sm">
               ✓ All items complete — you're ready to negotiate or sign.
             </p>
-          </motion.div>
+          </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -429,11 +395,7 @@ export default function LegalStrategy() {
   return (
     <PageTransition className="space-y-6 max-w-5xl mx-auto">
       {/* Page intro */}
-      <div
-        className="rounded-2xl border border-slate-800 p-6 relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.04) 0%, rgba(10,10,10,0.99) 70%)" }}
-      >
-        <div className="absolute inset-0 -z-10 [background:radial-gradient(ellipse_60%_80%_at_0%_50%,rgba(16,185,129,0.05)_0%,transparent_70%)]" />
+      <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6">
         <div className="flex flex-col md:flex-row md:items-start gap-5">
           <div className="flex-1">
             <div className="flex items-center gap-2.5 mb-2 flex-wrap">
@@ -526,17 +488,15 @@ export default function LegalStrategy() {
                         }}
                         className={`flex items-center justify-between p-4 rounded-xl border text-left transition-all ${
                           selectedScanId === scan.id
-                            ? "border-emerald-500/50 bg-emerald-950/20 shadow-[0_0_12px_rgba(16,185,129,0.06)]"
+                            ? "border-slate-600 bg-slate-800/40"
                             : "border-slate-800 bg-[#0c0c0c] hover:border-slate-700"
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
-                            selectedScanId === scan.id
-                              ? "bg-emerald-950/60 border border-emerald-900/50"
-                              : "bg-slate-800"
+                            selectedScanId === scan.id ? "bg-slate-700 border border-slate-600" : "bg-slate-800"
                           }`}>
-                            <Shield className={`h-4 w-4 ${selectedScanId === scan.id ? "text-emerald-400" : "text-slate-500"}`} />
+                            <Shield className={`h-4 w-4 ${selectedScanId === scan.id ? "text-slate-300" : "text-slate-500"}`} />
                           </div>
                           <div className="min-w-0">
                             <p className="font-medium text-white text-sm truncate">{scan.contractName}</p>
@@ -580,22 +540,9 @@ export default function LegalStrategy() {
                   </Button>
 
                   {isAnalyzing && (
-                    <div className="text-center space-y-1">
-                      <p className="text-xs text-slate-500">Analyzing {selectedContractName}...</p>
-                      <div className="flex justify-center gap-1">
-                        {["Assessing power balance", "Ranking risks", "Building roadmap", "Drafting questions"].map((step, i) => (
-                          <motion.span
-                            key={step}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: [0, 1, 0.5] }}
-                            transition={{ delay: i * 0.6, duration: 1.2, repeat: Infinity }}
-                            className="text-[10px] text-emerald-600"
-                          >
-                            {step}{i < 3 ? " · " : ""}
-                          </motion.span>
-                        ))}
-                      </div>
-                    </div>
+                    <p className="text-center text-xs text-slate-500">
+                      Analyzing {selectedContractName}...
+                    </p>
                   )}
                 </div>
               )}
@@ -603,25 +550,23 @@ export default function LegalStrategy() {
           )}
 
           {/* Results */}
-          <AnimatePresence>
-            {result && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Star className="h-4 w-4 text-emerald-400" />
-                    <span className="text-slate-300 font-medium">Strategy Ready</span>
-                  </div>
-                  <button
-                    onClick={() => { setResult(null); setSelectedScanId(""); setSelectedContractName(""); }}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
-                  >
-                    Analyze another
-                  </button>
+          {result && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <Star className="h-4 w-4 text-emerald-400" />
+                  <span className="text-slate-300 font-medium">Strategy Ready</span>
                 </div>
-                <StrategyResults result={result} contractName={selectedContractName} />
+                <button
+                  onClick={() => { setResult(null); setSelectedScanId(""); setSelectedContractName(""); }}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+                >
+                  Analyze another
+                </button>
               </div>
-            )}
-          </AnimatePresence>
+              <StrategyResults result={result} contractName={selectedContractName} />
+            </div>
+          )}
         </FeatureGate>
       </FeatureGate>
     </PageTransition>

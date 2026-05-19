@@ -126,20 +126,25 @@ export default function EscrowLock() {
         featureName="Payment Lock"
         featureDescription="Payment Lock is available on the Pro plan and above. Upgrade to track milestones, set stop-work triggers, and protect your payments on every contract."
       >
-      <div className="flex items-start justify-between border-b border-border pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <Lock className="text-[#D4AF37] h-8 w-8" />
-            Payment Lock
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Your financial bodyguard. Track milestones, know your stop-work triggers, and never let a payment slip.
-          </p>
-          {resolvedScan && (
-            <p className="text-slate-500 text-sm mt-1 font-mono">
-              Based on: <span className="text-slate-300">{resolvedScan.contractName}</span>
+      <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6">
+        <div className="flex items-start gap-4">
+          <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+            <Lock className="h-5 w-5 text-slate-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold tracking-tight text-white">Payment Lock</h1>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 uppercase tracking-wider">Pro</span>
+            </div>
+            <p className="text-slate-500 text-sm mt-0.5">
+              Track milestones, enforce stop-work triggers, and protect every payment.
             </p>
-          )}
+            {resolvedScan && (
+              <p className="text-slate-500 text-xs mt-1 font-mono">
+                Based on: <span className="text-slate-300">{resolvedScan.contractName}</span>
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -165,15 +170,15 @@ export default function EscrowLock() {
       ) : (
         <div className="space-y-8">
           {riskAmount && (
-            <div className="border border-[#D4AF37]/40 bg-[#D4AF37]/5 rounded-xl p-5 flex items-center gap-5">
-              <div className="h-12 w-12 rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/30 flex items-center justify-center shrink-0">
-                <DollarSign className="h-6 w-6 text-[#D4AF37]" />
+            <div className="border border-slate-700/50 bg-[#0a0a0a] rounded-xl p-5 flex items-center gap-5">
+              <div className="h-12 w-12 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+                <DollarSign className="h-6 w-6 text-amber-400" />
               </div>
               <div>
-                <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                <div className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">
                   Capital at Stake
                 </div>
-                <div className="text-3xl font-bold font-mono text-[#D4AF37]">{riskAmount}</div>
+                <div className="text-2xl font-bold font-mono text-amber-400">{riskAmount}</div>
               </div>
               <div className="ml-auto text-right">
                 <div className="text-sm text-muted-foreground mb-0.5">Milestones Cleared</div>
@@ -215,7 +220,7 @@ export default function EscrowLock() {
                           <h3 className={`font-semibold text-base leading-tight ${milestone.checked ? "line-through text-muted-foreground" : ""}`}>
                             {milestone.label}
                           </h3>
-                          <span className="font-mono text-sm font-bold text-[#D4AF37] shrink-0">
+                          <span className="font-mono text-sm font-bold text-amber-400 shrink-0">
                             {milestone.amount}
                           </span>
                         </div>
@@ -241,7 +246,7 @@ export default function EscrowLock() {
 
           <div className="border border-border rounded-xl bg-card p-6">
             <h2 className="text-base font-bold mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-[#D4AF37]" />
+              <AlertTriangle className="h-5 w-5 text-amber-400" />
               Stop-Work Protocol
             </h2>
             <ol className="list-decimal pl-5 space-y-2 text-sm text-muted-foreground">

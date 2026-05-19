@@ -1,9 +1,9 @@
 import { PageTransition } from "@/components/PageTransition";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
 import {
-  Scale, ShieldAlert, Loader2, Brain, FileText,
+  Scale, Loader2, Brain, FileText,
   AlertTriangle, CheckCircle2, Shield, TrendingUp, TrendingDown,
-  Clock, ChevronRight, Search, X,
+  Clock, ChevronRight, Search, X, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
@@ -102,28 +102,10 @@ function severityStyles(severity: string): { badge: string; bar: string; row: st
   };
 }
 
-function priorityLabel(severity: string): { text: string; className: string } {
-  if (severity === "High") return { text: "Address First", className: "bg-red-950/40 border-red-800/40 text-red-400" };
-  if (severity === "Medium") return { text: "Negotiate", className: "bg-amber-950/40 border-amber-800/40 text-amber-400" };
-  return { text: "Monitor", className: "bg-slate-800 border-slate-700 text-slate-400" };
-}
-
 function scoreColor(score: number): string {
   if (score >= 70) return "text-emerald-500";
   if (score >= 45) return "text-amber-400";
   return "text-red-400";
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const color = score >= 70 ? "bg-emerald-600" : score >= 45 ? "bg-amber-500" : "bg-red-500";
-  return (
-    <div className="h-1 w-14 bg-slate-800 rounded-full overflow-hidden">
-      <div
-        className={`h-full rounded-full transition-all duration-700 ${color}`}
-        style={{ width: `${score}%` }}
-      />
-    </div>
-  );
 }
 
 export default function TheBar() {
@@ -403,8 +385,8 @@ export default function TheBar() {
                 </div>
               </div>
 
-              {/* ── Clause Risk Matrix (card list) ───────────────────── */}
-              <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a]">
+              {/* ── Clause Risk Matrix ───────────────────────────────── */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] overflow-hidden">
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-slate-800 flex items-center gap-2">
                   <Shield className="h-4 w-4 text-slate-500" />
@@ -416,109 +398,158 @@ export default function TheBar() {
                   </span>
                 </div>
 
-                {/* Column labels — visible on sm+ */}
-                <div className="hidden sm:grid grid-cols-[1fr_120px_80px_90px_110px_80px] gap-x-4 px-5 py-2.5 border-b border-slate-800">
-                  {["Clause Excerpt", "Category", "Severity", "Risk Score", "Priority", ""].map((h) => (
-                    <span key={h} className="text-[10px] font-semibold text-slate-600 uppercase tracking-widest">
-                      {h}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Rows */}
-                <div className="divide-y divide-slate-800">
-                  {filteredRisks.length === 0 ? (
-                    <div className="px-5 py-10 text-center">
-                      <Search className="h-5 w-5 text-slate-700 mx-auto mb-2" />
-                      <p className="text-slate-500 text-sm">No clauses match your search.</p>
-                      <button
-                        onClick={() => { setSearchQuery(""); setFilterSeverity("All"); setSelectedRiskIdx(0); }}
-                        className="mt-2 text-xs text-slate-600 hover:text-slate-400 underline underline-offset-2 transition-colors"
-                      >
-                        Clear filters
-                      </button>
+                {filteredRisks.length === 0 ? (
+                  <div className="px-5 py-10 text-center">
+                    <Search className="h-5 w-5 text-slate-700 mx-auto mb-2" />
+                    <p className="text-slate-500 text-sm">No clauses match your search.</p>
+                    <button
+                      onClick={() => { setSearchQuery(""); setFilterSeverity("All"); setSelectedRiskIdx(0); }}
+                      className="mt-2 text-xs text-slate-600 hover:text-slate-400 underline underline-offset-2 transition-colors"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800">
+                            {["Clause Excerpt", "Category", "Severity", "Score", "Recommended Rewrite", ""].map((h) => (
+                              <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-slate-600 uppercase tracking-widest whitespace-nowrap">
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRisks.map((risk, idx) => {
+                            const score = riskScore(risk.severity);
+                            const sty = severityStyles(risk.severity);
+                            const isSelected = clampedIdx === idx;
+                            return (
+                              <tr
+                                key={idx}
+                                onClick={() => setSelectedRiskIdx(idx)}
+                                className={`cursor-pointer border-b border-slate-800/60 last:border-b-0 transition-colors ${isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/50"}`}
+                              >
+                                <td className="px-4 py-4 align-top w-[28%]">
+                                  <p className="font-mono text-xs text-slate-400 leading-relaxed">
+                                    {risk.explanation || risk.title || "—"}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-4 align-top whitespace-nowrap">
+                                  <span className="text-xs text-slate-400">{risk.category}</span>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sty.badge}`}>
+                                    {risk.severity}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
+                                      {score}
+                                    </span>
+                                    <div className="h-1 w-10 bg-slate-800 rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full ${sty.bar}`} style={{ width: `${score}%` }} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 align-top w-[28%]">
+                                  <p className="font-mono text-[11px] text-slate-500 leading-relaxed">
+                                    {risk.fixes?.rewrittenClause || "—"}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <div className="flex items-center gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={(e) => { e.stopPropagation(); setSelectedRiskIdx(idx); }}
+                                      className="h-7 px-3 text-[11px] border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white whitespace-nowrap"
+                                    >
+                                      Review
+                                    </Button>
+                                    {risk.fixes?.rewrittenClause && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); void navigator.clipboard.writeText(risk.fixes?.rewrittenClause ?? ""); }}
+                                        className="h-7 w-7 flex items-center justify-center rounded border border-slate-700 text-slate-500 hover:text-slate-300 hover:border-slate-600 transition-colors"
+                                        title="Copy rewrite"
+                                      >
+                                        <Copy className="h-3 w-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                  ) : filteredRisks.map((risk, idx) => {
-                    const score = riskScore(risk.severity);
-                    const prio = priorityLabel(risk.severity);
-                    const sty = severityStyles(risk.severity);
-                    const isSelected = clampedIdx === idx;
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => setSelectedRiskIdx(idx)}
-                        className={`cursor-pointer transition-colors ${isSelected ? "bg-slate-800/50" : "hover:bg-slate-900/60"}`}
-                      >
-                        {/* Mobile layout */}
-                        <div className="sm:hidden p-4 space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${sty.badge}`}>
-                              {risk.severity}
-                            </span>
-                            <span className="text-[10px] text-slate-500">{risk.category}</span>
-                          </div>
-                          <p className="font-mono text-xs text-slate-400 leading-relaxed">
-                            {risk.explanation || risk.title || "—"}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
-                                {score}
-                              </span>
-                              <ScoreBar score={score} />
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => { e.stopPropagation(); setSelectedRiskIdx(idx); }}
-                              className="h-7 px-3 text-[11px] border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
-                            >
-                              <ShieldAlert className="w-3 h-3 mr-1" />
-                              Review
-                            </Button>
-                          </div>
-                        </div>
 
-                        {/* Desktop layout */}
-                        <div className="hidden sm:grid grid-cols-[1fr_120px_80px_90px_110px_80px] gap-x-4 items-center px-5 py-4">
-                          <p className="font-mono text-xs text-slate-400 leading-relaxed break-words pr-2">
-                            {risk.explanation || risk.title || "—"}
-                          </p>
-                          <p className="text-xs text-slate-300 truncate">
-                            {risk.category}
-                          </p>
-                          <div>
-                            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${sty.badge}`}>
-                              {risk.severity}
-                            </span>
+                    {/* Mobile card list */}
+                    <div className="md:hidden divide-y divide-slate-800">
+                      {filteredRisks.map((risk, idx) => {
+                        const score = riskScore(risk.severity);
+                        const sty = severityStyles(risk.severity);
+                        const isSelected = clampedIdx === idx;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setSelectedRiskIdx(idx)}
+                            className={`p-4 space-y-3 cursor-pointer transition-colors ${isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/40"}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sty.badge}`}>
+                                {risk.severity}
+                              </span>
+                              <span className="text-[10px] text-slate-500">{risk.category}</span>
+                            </div>
+                            <p className="font-mono text-xs text-slate-400 leading-relaxed">
+                              {risk.explanation || risk.title || "—"}
+                            </p>
+                            {risk.fixes?.rewrittenClause && (
+                              <p className="font-mono text-[11px] text-slate-600 leading-relaxed border-l-2 border-slate-700 pl-3">
+                                {risk.fixes.rewrittenClause}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
+                                  {score}
+                                </span>
+                                <div className="h-1 w-10 bg-slate-800 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${sty.bar}`} style={{ width: `${score}%` }} />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => { e.stopPropagation(); setSelectedRiskIdx(idx); }}
+                                  className="h-7 px-3 text-[11px] border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                                >
+                                  Review
+                                </Button>
+                                {risk.fixes?.rewrittenClause && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); void navigator.clipboard.writeText(risk.fixes?.rewrittenClause ?? ""); }}
+                                    className="h-7 w-7 flex items-center justify-center rounded border border-slate-700 text-slate-500 hover:text-slate-300 transition-colors"
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <span className={`text-xs font-mono font-bold ${score < 35 ? "text-red-400" : score < 65 ? "text-amber-400" : "text-emerald-500"}`}>
-                              {score}
-                            </span>
-                            <ScoreBar score={score} />
-                          </div>
-                          <div>
-                            <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full border ${prio.className}`}>
-                              {prio.text}
-                            </span>
-                          </div>
-                          <div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => { e.stopPropagation(); setSelectedRiskIdx(idx); }}
-                              className="h-7 px-3 text-[11px] border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
-                            >
-                              <ShieldAlert className="w-3 h-3 mr-1" />
-                              Review
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* ── Clause Deep-Dive ─────────────────────────────────── */}
