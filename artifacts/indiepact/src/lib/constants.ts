@@ -1,19 +1,53 @@
 export const DEMO_USER_ID = "d41ce8b9-22a5-4a5b-bd0c-0e8fe3ae7adf";
 
-// ─── Plan helpers ─────────────────────────────────────────────────────────────
+// ─── Tier order ───────────────────────────────────────────────────────────────
+// free < starter < pro < business < agency < enterprise
+// pay_per_scan is treated as business-level for feature access.
 
-/** Plans that unlock paid negotiation scripts and Path to Victory */
+// ─── Feature permission sets ─────────────────────────────────────────────────
+
+/** Any paid plan — unlocks AI Attorney, PDF uploads, clause rewrites, exports, scan history */
 export const PAID_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
 
-/** Plans that include PDF/report export */
-export const EXPORT_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
+/** Starter and above — PDF/DOCX uploads */
+export const UPLOAD_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
+
+/** Starter and above — export to PDF */
+export const EXPORT_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
+
+/** Pro and above — Negotiation War Room, Payment Lock, revenue stress analysis */
+export const NEGOTIATION_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
+
+/** Pro and above — Payment Lock / EscrowLock */
+export const PAYMENT_LOCK_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
+
+/** Business and above — AI Legal Strategy */
+export const LEGAL_STRATEGY_PLANS = new Set(["business", "agency", "enterprise", "pay_per_scan"]);
+
+// ─── Permission helpers ───────────────────────────────────────────────────────
 
 export function isPaidPlan(plan: string): boolean {
   return PAID_PLANS.has(plan);
 }
 
+export function canUploadFiles(plan: string): boolean {
+  return UPLOAD_PLANS.has(plan);
+}
+
 export function canExport(plan: string): boolean {
   return EXPORT_PLANS.has(plan);
+}
+
+export function canAccessNegotiation(plan: string): boolean {
+  return NEGOTIATION_PLANS.has(plan);
+}
+
+export function canAccessPaymentLock(plan: string): boolean {
+  return PAYMENT_LOCK_PLANS.has(plan);
+}
+
+export function canAccessLegalStrategy(plan: string): boolean {
+  return LEGAL_STRATEGY_PLANS.has(plan);
 }
 
 // ─── Plan limits (scans per month) ───────────────────────────────────────────
@@ -31,12 +65,12 @@ export const PLAN_LIMITS: Record<string, number> = {
 // ─── Prices in cents ──────────────────────────────────────────────────────────
 
 export const PLAN_PRICES_CENTS: Record<string, number> = {
-  pay_per_scan: 999,   // $9.99 one-time
-  starter: 1900,       // $19/mo
-  pro: 4999,           // $49.99/mo
-  business: 9900,      // $99/mo
-  agency: 14900,       // $149/mo
-  enterprise: 19900,   // $199/mo
+  pay_per_scan: 999,    // $9.99 one-time
+  starter: 1900,        // $19/mo
+  pro: 4900,            // $49/mo
+  business: 9900,       // $99/mo
+  agency: 14900,        // $149/mo
+  enterprise: 19900,    // $199/mo
 };
 
 // ─── Display names ────────────────────────────────────────────────────────────
@@ -51,7 +85,13 @@ export const PLAN_DISPLAY_NAMES: Record<string, string> = {
   enterprise: "Enterprise",
 };
 
+// ─── Minimum plan label for upgrade copy ─────────────────────────────────────
+
+export const PLAN_UPGRADE_FROM: Record<string, string> = {
+  starter: "Starter",
+  pro: "Pro",
+  business: "Business",
+};
+
 // ─── Legacy — DO NOT USE in new code ─────────────────────────────────────────
-// Kept only so old import sites compile while being migrated.
-// Use isPaidPlan(userPlan) from AuthContext instead.
 export const IS_PRO = false;

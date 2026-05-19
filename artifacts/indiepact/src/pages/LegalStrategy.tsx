@@ -482,9 +482,9 @@ export default function LegalStrategy() {
         featureDescription="Sign in to build a complete legal strategy for any contract you've reviewed. Understand your negotiating position, risk priorities, and the exact questions to ask before signing."
       >
         <FeatureGate
-          requires="pro"
+          requires="business"
           featureName="AI Legal Strategy"
-          featureDescription="AI Legal Strategy is a Pro feature. Upgrade to Pro ($49.99/month) to unlock power balance analysis, negotiation roadmaps, and pre-signing checklists for every contract."
+          featureDescription="AI Legal Strategy is available on the Business plan and above. Upgrade to unlock power balance analysis, negotiation roadmaps, and pre-signing checklists for every contract."
         >
           {/* Scan Selector */}
           {!result && (

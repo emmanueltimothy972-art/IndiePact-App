@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { PageTransition } from "@/components/PageTransition";
+import { FeatureGate } from "@/components/FeatureGate";
 import { useListScans, getListScansQueryKey } from "@workspace/api-client-react";
 import { Lock, CheckSquare, Square, AlertTriangle, DollarSign, Loader2, Link as LinkIcon } from "lucide-react";
 import { Link } from "wouter";
@@ -120,6 +121,11 @@ export default function EscrowLock() {
 
   return (
     <PageTransition className="space-y-8 max-w-4xl mx-auto">
+      <FeatureGate
+        requires="pro"
+        featureName="Payment Lock"
+        featureDescription="Payment Lock is available on the Pro plan and above. Upgrade to track milestones, set stop-work triggers, and protect your payments on every contract."
+      >
       <div className="flex items-start justify-between border-b border-border pb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
@@ -247,6 +253,7 @@ export default function EscrowLock() {
           </div>
         </div>
       )}
+      </FeatureGate>
     </PageTransition>
   );
 }

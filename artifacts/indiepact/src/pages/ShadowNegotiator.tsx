@@ -1,4 +1,5 @@
 import { PageTransition } from "@/components/PageTransition";
+import { FeatureGate } from "@/components/FeatureGate";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -360,6 +361,11 @@ export default function ShadowNegotiator() {
 
   return (
     <PageTransition className="space-y-0 max-w-7xl mx-auto">
+      <FeatureGate
+        requires="pro"
+        featureName="Negotiation War Room"
+        featureDescription="The Negotiation War Room is available on the Pro plan and above. Upgrade to get clause-level negotiation scripts, danger-word detection, and multi-tactic negotiation playbooks."
+      >
       <div className="border-b border-border pb-5 mb-6">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
           <Swords className="text-primary h-8 w-8" />
@@ -654,6 +660,7 @@ export default function ShadowNegotiator() {
           </div>
         </TabsContent>
       </Tabs>
+      </FeatureGate>
     </PageTransition>
   );
 }

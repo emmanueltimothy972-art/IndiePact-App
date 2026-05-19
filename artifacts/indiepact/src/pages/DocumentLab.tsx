@@ -541,14 +541,13 @@ export default function DocumentLab() {
         <DialogContent className="rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
-              <span className="bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-lg text-xs font-bold border border-amber-500/20">
-                PAID
+              <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-lg text-xs font-bold border border-slate-700">
+                Starter+
               </span>
-              File upload is a paid feature
+              File upload requires the Starter plan
             </DialogTitle>
             <DialogDescription className="text-base pt-2 leading-relaxed">
-              Upgrade to any paid plan to upload PDF, Word, and image files. Our AI extracts the text automatically — 
-              no copying and pasting needed.
+              Upgrade to Starter ($19/mo) or above to upload PDF, Word, and image files. Our AI extracts the text automatically — no copying and pasting needed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
@@ -556,7 +555,7 @@ export default function DocumentLab() {
             <Link href="/pricing">
               <Button
                 onClick={() => setShowProModal(false)}
-                className="bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl"
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl"
               >
                 See Plans & Upgrade
               </Button>
