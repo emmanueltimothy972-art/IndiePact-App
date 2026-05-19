@@ -6,7 +6,7 @@ export const DEMO_USER_ID = "d41ce8b9-22a5-4a5b-bd0c-0e8fe3ae7adf";
 
 // ─── Feature permission sets ─────────────────────────────────────────────────
 
-/** Any paid plan — unlocks AI Attorney, PDF uploads, clause rewrites, exports, scan history */
+/** Any paid plan — unlocks PDF uploads, exports, scan history, improved AI summaries */
 export const PAID_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
 
 /** Starter and above — PDF/DOCX uploads */
@@ -14,6 +14,12 @@ export const UPLOAD_PLANS = new Set(["starter", "pro", "business", "agency", "en
 
 /** Starter and above — export to PDF */
 export const EXPORT_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
+
+/** Pro and above — AI Attorney (clause-by-clause risk intelligence) */
+export const AI_ATTORNEY_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
+
+/** Pro and above — Clause Armory (protective clause library + live scan matching) */
+export const CLAUSE_ARMORY_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
 
 /** Pro and above — Negotiation War Room, Payment Lock, revenue stress analysis */
 export const NEGOTIATION_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
@@ -36,6 +42,14 @@ export function canUploadFiles(plan: string): boolean {
 
 export function canExport(plan: string): boolean {
   return EXPORT_PLANS.has(plan);
+}
+
+export function canAccessAIAttorney(plan: string): boolean {
+  return AI_ATTORNEY_PLANS.has(plan);
+}
+
+export function canAccessClauseArmory(plan: string): boolean {
+  return CLAUSE_ARMORY_PLANS.has(plan);
 }
 
 export function canAccessNegotiation(plan: string): boolean {

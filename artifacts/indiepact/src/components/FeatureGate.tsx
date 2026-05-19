@@ -30,10 +30,10 @@ function planMeetsTier(plan: string, tier: RequiresTier): boolean {
 }
 
 const TIER_META: Record<RequiresTier, { label: string; price: string; cta: string }> = {
-  auth:     { label: "",          price: "Free",           cta: "Create free account" },
-  starter:  { label: "Starter",  price: "from $19/mo",    cta: "Upgrade to Starter" },
-  pro:      { label: "Pro",       price: "from $49/mo",    cta: "Upgrade to Pro" },
-  business: { label: "Business", price: "from $99/mo",    cta: "Upgrade to Business" },
+  auth:     { label: "",          price: "Free",        cta: "Create free account" },
+  starter:  { label: "Starter",  price: "from $19/mo", cta: "Upgrade to Starter" },
+  pro:      { label: "Pro",      price: "from $49/mo",  cta: "Upgrade to Pro" },
+  business: { label: "Business", price: "from $99/mo", cta: "Upgrade to Business" },
 };
 
 // ─── Gate component ───────────────────────────────────────────────────────────
@@ -139,8 +139,8 @@ function UpgradeGate({
 
   const defaultDescriptions: Record<RequiresTier, string> = {
     auth: "",
-    starter: "Available on the Starter plan and above — includes PDF uploads, AI Attorney, clause rewrites, and export.",
-    pro:     "Available on the Pro plan and above — includes the Negotiation War Room, Payment Lock, and advanced negotiation tools.",
+    starter: "Available on the Starter plan and above — includes PDF uploads, improved AI summaries, scan history, and PDF export.",
+    pro:     "Available on the Pro plan and above — includes AI Attorney, Clause Armory, Negotiation War Room, Payment Lock, and advanced clause rewriting.",
     business: "Available on the Business plan and above — includes AI Legal Strategy, full platform access, and priority processing.",
   };
 

@@ -1,4 +1,5 @@
 import { PageTransition } from "@/components/PageTransition";
+import { FeatureGate } from "@/components/FeatureGate";
 import { useState, useMemo } from "react";
 import { Shield, Copy, CheckCircle2, Search, ShieldAlert, Swords, FileText, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -153,6 +154,11 @@ export default function ClauseArmory() {
 
   return (
     <PageTransition className="space-y-6 max-w-6xl mx-auto">
+      <FeatureGate
+        requires="pro"
+        featureName="Clause Armory"
+        featureDescription="Clause Armory is available on the Pro plan and above. Upgrade to access battle-tested protective clauses and live matching against your scanned contracts."
+      >
 
       {/* Header */}
       <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6">
@@ -373,6 +379,7 @@ export default function ClauseArmory() {
           )}
         </div>
       )}
+      </FeatureGate>
     </PageTransition>
   );
 }

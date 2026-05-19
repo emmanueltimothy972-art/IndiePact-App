@@ -8,7 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useScanContext } from "@/contexts/ScanContext";
-import { isPaidPlan } from "@/lib/constants";
+import { canAccessAIAttorney } from "@/lib/constants";
+import { FeatureGate } from "@/components/FeatureGate";
 import { Link } from "wouter";
 import { useState, useEffect, useMemo } from "react";
 
@@ -138,7 +139,7 @@ export default function TheBar() {
     { query: { queryKey: getListScansQueryKey({ userId, limit: 20, offset: 0 }), retry: 1 } }
   );
 
-  const hasPaid = isPaidPlan(userPlan);
+  const hasPaid = canAccessAIAttorney(userPlan);
 
   const dbScans = data?.scans ?? [];
   const dbIds = new Set(dbScans.map((s) => s.id));
@@ -202,6 +203,11 @@ export default function TheBar() {
 
   return (
     <PageTransition className="space-y-5 max-w-5xl mx-auto">
+      <FeatureGate
+        requires="pro"
+        featureName="AI Attorney"
+        featureDescription="AI Attorney is available on the Pro plan and above. Upgrade to get clause-by-clause risk scoring, priority rankings, and ready-to-use protective rewrites for every flagged clause."
+      >
       {/* Header */}
       <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6">
         <div className="flex items-start gap-4">
@@ -593,6 +599,7 @@ export default function TheBar() {
           )}
         </div>
       )}
+      </FeatureGate>
     </PageTransition>
   );
 }
