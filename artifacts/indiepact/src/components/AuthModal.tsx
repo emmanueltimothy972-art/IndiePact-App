@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth, consumeReturnTo } from "@/contexts/AuthContext";
-import { ShieldCheck, Loader2, Lock, ArrowLeft, Mail, CheckCircle2 } from "lucide-react";
-import { useState, useRef } from "react";
+import { ShieldCheck, Loader2, Lock, ArrowLeft, Mail, CheckCircle2, Timer } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 
@@ -18,7 +18,7 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-// ─── OTP digit input ──────────────────────────────────────────────────────────
+// ─── 6-digit OTP input ────────────────────────────────────────────────────────
 
 function OtpInput({ value, onChange, disabled }: {
   value: string;
@@ -53,12 +53,11 @@ function OtpInput({ value, onChange, disabled }: {
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     onChange(pasted.padEnd(6, "").slice(0, 6));
-    const focusIdx = Math.min(pasted.length, 5);
-    refs.current[focusIdx]?.focus();
+    refs.current[Math.min(pasted.length, 5)]?.focus();
   };
 
   return (
-    <div className="flex gap-2 justify-center">
+    <div className="flex gap-2.5 justify-center">
       {digits.map((d, i) => (
         <input
           key={i}
@@ -71,18 +70,50 @@ function OtpInput({ value, onChange, disabled }: {
           onChange={e => handleChange(i, e.target.value)}
           onKeyDown={e => handleKey(i, e)}
           onPaste={handlePaste}
-          className={`h-12 w-10 rounded-lg text-center text-lg font-mono font-bold bg-slate-900 border transition-colors outline-none
-            ${d ? "border-slate-500 text-white" : "border-slate-800 text-slate-600"}
-            focus:border-slate-500 focus:ring-0 disabled:opacity-40`}
+          className={`h-13 w-11 rounded-xl text-center text-xl font-mono font-bold bg-slate-900 border-2 transition-all outline-none
+            ${d ? "border-emerald-600/70 text-white shadow-[0_0_12px_rgba(16,185,129,0.12)]" : "border-slate-800 text-slate-600"}
+            focus:border-emerald-600/60 focus:shadow-[0_0_14px_rgba(16,185,129,0.15)] disabled:opacity-40`}
         />
       ))}
     </div>
   );
 }
 
-// ─── Main modal ───────────────────────────────────────────────────────────────
+// ─── Countdown timer hook ─────────────────────────────────────────────────────
 
-type Step = "options" | "email" | "verify" | "success";
+function useCountdown(startAt: number) {
+  const [seconds, setSeconds] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const start = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setSeconds(startAt);
+    intervalRef.current = setInterval(() => {
+      setSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(intervalRef.current!);
+          intervalRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [startAt]);
+
+  const reset = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setSeconds(0);
+  }, []);
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  const formatted = `0:${String(seconds).padStart(2, "0")}`;
+  return { seconds, formatted, start, reset };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+type Step = "initial" | "verify" | "success";
 
 function navigateToReturnTo() {
   const returnTo = consumeReturnTo();
@@ -91,29 +122,40 @@ function navigateToReturnTo() {
   window.location.replace(`${window.location.origin}${base}${path}`);
 }
 
+const slideVariants = {
+  enter: { opacity: 0, x: 16 },
+  center: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -16 },
+};
+
+// ─── Main modal ───────────────────────────────────────────────────────────────
+
 export function AuthModal() {
   const { showAuthModal, authContext, closeAuthModal, signInWithGoogle } = useAuth();
-  const [step, setStep] = useState<Step>("options");
+
+  const [step, setStep] = useState<Step>("initial");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const countdown = useCountdown(60);
+
   const reset = () => {
-    setStep("options");
+    setStep("initial");
     setEmail("");
     setOtp("");
     setError(null);
     setIsLoading(false);
+    countdown.reset();
   };
 
   const handleClose = () => {
     closeAuthModal();
-    // Delay reset so the close animation plays first
     setTimeout(reset, 300);
   };
 
-  // ── Google OAuth ──────────────────────────────────────────────────────────
+  // ── Google OAuth ────────────────────────────────────────────────────────────
 
   const handleGoogleSignIn = async () => {
     setError(null);
@@ -123,14 +165,11 @@ export function AuthModal() {
       setError("Couldn't connect to Google. Please try again.");
       setIsLoading(false);
     }
-    // On success the browser navigates away to Google — no cleanup needed
   };
 
-  // ── Email OTP — send ──────────────────────────────────────────────────────
+  // ── Email OTP — send / resend ───────────────────────────────────────────────
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
+  const sendOtp = useCallback(async (targetEmail: string) => {
     setError(null);
     setIsLoading(true);
     try {
@@ -138,23 +177,44 @@ export function AuthModal() {
       const res = await fetch(`${window.location.origin}${base}/api/auth/otp/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({ email: targetEmail }),
       });
       const data = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || !data.success) {
         setError(data.error ?? "Failed to send code. Please try again.");
-        setIsLoading(false);
-        return;
+        return false;
       }
-      setStep("verify");
+      return true;
     } catch {
-      setError("Network error. Please check your connection and try again.");
+      setError("Network error. Please check your connection.");
+      return false;
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const handleSendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) return;
+    const ok = await sendOtp(trimmed);
+    if (ok) {
+      setOtp("");
+      setStep("verify");
+      countdown.start();
+    }
   };
 
-  // ── Email OTP — verify ────────────────────────────────────────────────────
+  const handleResend = async () => {
+    if (countdown.seconds > 0 || isLoading) return;
+    const ok = await sendOtp(email.trim().toLowerCase());
+    if (ok) {
+      setOtp("");
+      countdown.start();
+    }
+  };
+
+  // ── Email OTP — verify ──────────────────────────────────────────────────────
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,10 +232,8 @@ export function AuthModal() {
         setIsLoading(false);
         return;
       }
-      // Session established — AuthContext will close the modal via onAuthStateChange,
-      // but we navigate here so the user lands where they intended.
       setStep("success");
-      setTimeout(navigateToReturnTo, 800);
+      setTimeout(navigateToReturnTo, 900);
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);
@@ -184,14 +242,24 @@ export function AuthModal() {
 
   const otpComplete = otp.replace(/\D/g, "").length === 6;
 
+  // ── Headlines ───────────────────────────────────────────────────────────────
+
+  const headline =
+    step === "success" ? "You're signed in!" :
+    step === "verify" ? "Check your inbox" :
+    authContext ? `Sign in to ${authContext}` :
+    "Sign in to IndiePact";
+
+  const subline =
+    step === "success" ? "Taking you there now…" :
+    step === "verify" ? `We sent a 6-digit code to ${email}` :
+    "Free to start — no password, no friction.";
+
   return (
-    <Dialog
-      open={showAuthModal}
-      onOpenChange={(open) => { if (!open) handleClose(); }}
-    >
+    <Dialog open={showAuthModal} onOpenChange={open => { if (!open) handleClose(); }}>
       <DialogContent
-        className="p-0 border border-slate-800 max-w-sm w-full overflow-hidden rounded-2xl bg-[#080808]"
-        style={{ boxShadow: "0 40px 80px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04)" }}
+        className="p-0 border border-slate-800/80 max-w-sm w-full overflow-hidden rounded-2xl bg-[#080808]"
+        style={{ boxShadow: "0 48px 96px rgba(0,0,0,0.9), 0 0 0 1px rgba(255,255,255,0.04)" }}
       >
         <DialogTitle className="sr-only">Sign in to IndiePact</DialogTitle>
         <DialogDescription className="sr-only">
@@ -200,169 +268,132 @@ export function AuthModal() {
 
         <div className="px-7 pt-8 pb-7 flex flex-col gap-6">
 
-          {/* Header */}
+          {/* ── Header ── */}
           <div className="flex flex-col items-center text-center gap-3">
-            <div className="h-11 w-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center">
-              <ShieldCheck className="h-5 w-5 text-emerald-600" />
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-900/30 border border-emerald-500/20 flex items-center justify-center">
+              {step === "success"
+                ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                : step === "verify"
+                ? <Mail className="h-5 w-5 text-emerald-400" />
+                : <ShieldCheck className="h-5 w-5 text-emerald-500" />}
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white tracking-tight">
-                {step === "success"
-                  ? "You're signed in"
-                  : authContext
-                  ? `Sign in to ${authContext}`
-                  : "Sign in to IndiePact"}
-              </h2>
-              <p className="text-slate-500 text-sm mt-1">
-                {step === "verify"
-                  ? `We sent a 6-digit code to ${email}`
-                  : step === "success"
-                  ? "Taking you there now…"
-                  : "Free to start — no password needed."}
-              </p>
+              <h2 className="text-[17px] font-bold text-white tracking-tight">{headline}</h2>
+              <p className="text-slate-500 text-sm mt-1 leading-relaxed">{subline}</p>
             </div>
           </div>
 
-          {/* Step content */}
+          {/* ── Step content ── */}
           <AnimatePresence mode="wait" initial={false}>
 
-            {/* ── Options ── */}
-            {step === "options" && (
+            {/* ── Initial: Google + Email inline ── */}
+            {step === "initial" && (
               <motion.div
-                key="options"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.18 }}
+                key="initial"
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.2 }}
                 className="flex flex-col gap-3"
               >
-                {/* Google */}
+                {/* Google button */}
                 <button
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-white hover:bg-slate-100 text-slate-900 border border-transparent"
-                  style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-white hover:bg-slate-100 text-slate-900"
+                  style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.35)" }}
                 >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                  ) : (
-                    <GoogleIcon className="h-4 w-4 shrink-0" />
-                  )}
+                  {isLoading
+                    ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                    : <GoogleIcon className="h-4 w-4 shrink-0" />}
                   {isLoading ? "Connecting…" : "Continue with Google"}
                 </button>
 
                 {/* Divider */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 py-1">
                   <div className="flex-1 h-px bg-slate-800" />
-                  <span className="text-xs text-slate-600">or</span>
+                  <span className="text-xs text-slate-600 whitespace-nowrap">or sign in with email</span>
                   <div className="flex-1 h-px bg-slate-800" />
                 </div>
 
-                {/* Email option */}
-                <button
-                  onClick={() => { setError(null); setStep("email"); }}
-                  className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.98] bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800"
-                >
-                  <Mail className="h-4 w-4 shrink-0 text-slate-400" />
-                  Continue with Email
-                </button>
+                {/* Email + Send Code form */}
+                <form onSubmit={handleSendCode} className="flex flex-col gap-2.5">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    disabled={isLoading}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading || !email.trim()}
+                    className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30"
+                  >
+                    {isLoading
+                      ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Sending code…</span>
+                      : "Send Code →"}
+                  </button>
+                </form>
 
-                {error && (
-                  <p className="text-red-400 text-xs text-center">{error}</p>
-                )}
+                {error && <p className="text-red-400 text-xs text-center -mt-0.5">{error}</p>}
               </motion.div>
             )}
 
-            {/* ── Email entry ── */}
-            {step === "email" && (
-              <motion.form
-                key="email"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.18 }}
-                onSubmit={handleSendOtp}
-                className="flex flex-col gap-3"
-              >
-                <input
-                  type="email"
-                  autoFocus
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  disabled={isLoading}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors disabled:opacity-50"
-                />
-                {error && (
-                  <p className="text-red-400 text-xs">{error}</p>
-                )}
-                <button
-                  type="submit"
-                  disabled={isLoading || !email.trim()}
-                  className="w-full py-3 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 hover:bg-slate-600 text-white"
-                >
-                  {isLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Sending code…
-                    </span>
-                  ) : "Send verification code"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setError(null); setStep("options"); }}
-                  className="flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors"
-                >
-                  <ArrowLeft className="h-3 w-3" /> Back
-                </button>
-              </motion.form>
-            )}
-
-            {/* ── OTP verify ── */}
+            {/* ── Verify: OTP + countdown ── */}
             {step === "verify" && (
               <motion.form
                 key="verify"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.18 }}
+                variants={slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.2 }}
                 onSubmit={handleVerifyOtp}
                 className="flex flex-col gap-4"
               >
-                <OtpInput
-                  value={otp}
-                  onChange={setOtp}
-                  disabled={isLoading}
-                />
-                {error && (
-                  <p className="text-red-400 text-xs text-center">{error}</p>
-                )}
+                <OtpInput value={otp} onChange={setOtp} disabled={isLoading} />
+
+                {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+
                 <button
                   type="submit"
                   disabled={isLoading || !otpComplete}
-                  className="w-full py-3 rounded-xl text-sm font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-slate-700 hover:bg-slate-600 text-white"
+                  className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30"
                 >
-                  {isLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Verifying…
-                    </span>
-                  ) : "Verify code"}
+                  {isLoading
+                    ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Verifying…</span>
+                    : "Verify Code"}
                 </button>
-                <div className="flex items-center justify-between text-xs">
+
+                {/* Countdown + resend row */}
+                <div className="flex items-center justify-between text-xs pt-0.5">
                   <button
                     type="button"
-                    onClick={() => { setError(null); setOtp(""); setStep("email"); }}
+                    onClick={() => { setError(null); setOtp(""); setStep("initial"); countdown.reset(); }}
                     className="flex items-center gap-1.5 text-slate-600 hover:text-slate-400 transition-colors"
                   >
                     <ArrowLeft className="h-3 w-3" /> Change email
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => { setOtp(""); handleSendOtp({ preventDefault: () => {} } as React.FormEvent); }}
-                    disabled={isLoading}
-                    className="text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-40"
-                  >
-                    Resend code
-                  </button>
+
+                  {countdown.seconds > 0 ? (
+                    <span className="flex items-center gap-1.5 text-slate-600 select-none">
+                      <Timer className="h-3 w-3" />
+                      Resend in <span className="font-mono text-slate-500 font-semibold">{countdown.formatted}</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={isLoading}
+                      className="text-emerald-600 hover:text-emerald-400 transition-colors font-medium disabled:opacity-40"
+                    >
+                      Resend code
+                    </button>
+                  )}
                 </div>
               </motion.form>
             )}
@@ -371,23 +402,23 @@ export function AuthModal() {
             {step === "success" && (
               <motion.div
                 key="success"
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                className="flex flex-col items-center gap-3 py-2"
+                transition={{ duration: 0.22 }}
+                className="flex flex-col items-center gap-3 py-3"
               >
-                <div className="h-10 w-10 rounded-full bg-emerald-900/40 border border-emerald-800/40 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <div className="h-12 w-12 rounded-full bg-emerald-900/30 border border-emerald-800/40 flex items-center justify-center">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                 </div>
-                <p className="text-sm text-slate-300 font-medium">You're signed in</p>
-                <p className="text-xs text-slate-600">Redirecting you back…</p>
+                <p className="text-sm text-slate-300 font-semibold">Welcome to IndiePact</p>
+                <p className="text-xs text-slate-600">Redirecting you now…</p>
               </motion.div>
             )}
 
           </AnimatePresence>
 
-          {/* Footer trust line */}
-          {(step === "options" || step === "email") && (
+          {/* ── Footer trust line ── */}
+          {step !== "success" && (
             <div className="flex items-center justify-center gap-1.5 text-slate-700">
               <Lock className="h-3 w-3" />
               <span className="text-xs">No passwords stored · Secured by Supabase</span>
