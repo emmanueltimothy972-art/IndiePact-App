@@ -421,7 +421,7 @@ export function AuthModal() {
           {step !== "success" && (
             <div className="flex items-center justify-center gap-1.5 text-slate-700">
               <Lock className="h-3 w-3" />
-              <span className="text-xs">No passwords stored · Secured by Supabase</span>
+              <span className="text-xs">No passwords stored · End-to-end encrypted</span>
             </div>
           )}
 

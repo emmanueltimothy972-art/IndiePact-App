@@ -118,6 +118,39 @@ async function ensureUserConfirmed(
   }
 }
 
+// ─── GET /api/auth/callback ───────────────────────────────────────────────────
+//
+// Google OAuth lands here after the user approves the consent screen.
+// Supabase appends ?code=<pkce_code> to this URL.
+//
+// We can't exchange the PKCE code on the server — the verifier lives in the
+// user's browser (written by signInWithOAuth before the redirect). So we
+// forward the code back to the frontend's /auth/callback page where the
+// Supabase JS client (detectSessionInUrl:true + flowType:"pkce") completes
+// the exchange automatically and fires onAuthStateChange(SIGNED_IN).
+
+router.get("/auth/callback", (req, res) => {
+  const code = req.query["code"] as string | undefined;
+  const error = req.query["error"] as string | undefined;
+  const errorDescription = req.query["error_description"] as string | undefined;
+
+  const origin = `${req.protocol}://${req.get("host")}`;
+
+  if (error) {
+    req.log.warn({ error, errorDescription }, "OAuth callback: provider returned error");
+    return res.redirect(302, `${origin}/?auth_error=${encodeURIComponent(error)}`);
+  }
+
+  if (!code) {
+    req.log.warn("OAuth callback: no code in query — redirecting home");
+    return res.redirect(302, `${origin}/`);
+  }
+
+  // Hand the code to the frontend auth callback page.
+  req.log.info("OAuth callback: forwarding PKCE code to frontend");
+  return res.redirect(302, `${origin}/auth/callback?code=${encodeURIComponent(code)}`);
+});
+
 // ─── POST /api/auth/otp/send ──────────────────────────────────────────────────
 
 router.post("/auth/otp/send", async (req, res) => {
