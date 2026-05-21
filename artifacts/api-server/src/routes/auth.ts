@@ -3,31 +3,34 @@
  *
  * POST /api/auth/otp/send
  *   Sends a 6-digit verification code to the user's email.
- *   Two paths depending on configuration:
+ *   Two paths depending on whether RESEND_API_KEY is configured:
  *
  *   Path A — RESEND_API_KEY is set (recommended, production-ready):
- *     1. Ensure user exists in Supabase Auth with email confirmed.
- *     2. Call admin.generateLink() to get the OTP token WITHOUT sending any email.
- *     3. Send a branded email via Resend containing ONLY the 6-digit code.
- *        → User never sees "Follow this link" or a magic link.
+ *     1. Ensure the Supabase Auth account exists and is email-confirmed.
+ *        (admin.createUser with email_confirm:true for new users, no email sent)
+ *     2. Call admin.generateLink() to obtain the OTP token WITHOUT Supabase
+ *        sending any email of its own.
+ *     3. Send a branded IndiePact email via Resend containing ONLY the
+ *        6-digit code. No magic link, no "Follow this link" button.
  *
- *   Path B — no RESEND_API_KEY (temporary fallback):
- *     1. Ensure user exists and email is confirmed.
- *     2. Call signInWithOtp() — Supabase sends its default email.
- *        The email uses the "Magic Link" template until the template is updated
- *        in Supabase Dashboard → Auth → Email Templates → Magic Link.
+ *   Path B — no RESEND_API_KEY (fallback):
+ *     1. Call signInWithOtp() with shouldCreateUser:true so both new and
+ *        returning users are handled.
+ *     2. Supabase sends its own email. Update the "Magic Link" template in
+ *        Supabase Dashboard → Auth → Email Templates to display {{ .Token }}
+ *        if you want a plain 6-digit-only email without configuring Resend.
  *
  * POST /api/auth/email-hook
  *   Supabase Auth "Send Email" Hook endpoint.
  *   When registered in Supabase Dashboard (Auth → Hooks → Send Email),
- *   Supabase POSTs here for every auth email instead of sending its own.
- *   This hook sends a branded IndiePact email via Resend with only the OTP code.
+ *   Supabase POSTs here for every outbound auth email instead of sending
+ *   its own. The hook delivers a branded Resend email with only the OTP code.
  *
  *   Registration steps (after RESEND_API_KEY is set):
  *     1. Supabase Dashboard → Authentication → Hooks → Add Hook
  *     2. Hook type: "Send Email"
  *     3. URL: https://<your-api-domain>/api/auth/email-hook
- *     4. Copy the generated HMAC secret → set as SUPABASE_WEBHOOK_SECRET env var
+ *     4. Copy the HMAC secret → set as SUPABASE_WEBHOOK_SECRET env var
  */
 
 import { Router } from "express";
@@ -46,27 +49,21 @@ const router = Router();
 const SendOtpSchema = z.object({ email: z.string().email() });
 
 // ─── Helper: ensure user exists and email is confirmed ────────────────────────
+//
+// Path A needs this because generateLink() will not create a new user — it
+// only generates a token for an existing confirmed account. We create the
+// account first (with email_confirm:true) so new sign-ups work seamlessly
+// without Supabase ever sending its own "Confirm signup" email.
+//
+// For Path B, signInWithOtp({ shouldCreateUser:true }) handles creation
+// natively so we skip this step.
 
-/**
- * Guarantees the Supabase Auth account exists with email_confirmed_at set.
- *
- * Why this matters:
- *   When signInWithOtp() is called on an unconfirmed account — even with OTP
- *   mode enabled in the Supabase dashboard — Supabase sends the "Confirm signup"
- *   email ("Follow this link to confirm your user") instead of the OTP email.
- *   Pre-confirming every account before triggering any email eliminates this.
- *
- * Strategy:
- *   1. admin.createUser({ email_confirm: true }) — instant for new users.
- *      No email is sent by this call.
- *   2. If user already exists, page through listUsers to find them and call
- *      updateUserById({ email_confirm: true }) if they are unconfirmed.
- */
 async function ensureUserConfirmed(
   admin: SupabaseClient,
   email: string,
   log: Logger,
 ): Promise<void> {
+  // Try creating a new pre-confirmed user first (instant, no email sent).
   const { error: createErr } = await admin.auth.admin.createUser({
     email,
     email_confirm: true,
@@ -77,6 +74,7 @@ async function ensureUserConfirmed(
     return;
   }
 
+  // User already exists — confirm them if they are still unconfirmed.
   log.info({ email, errMsg: createErr.message }, "createUser failed — finding existing user");
 
   const PER_PAGE = 50;
@@ -137,15 +135,15 @@ router.post("/auth/otp/send", async (req, res) => {
   }
 
   try {
-    const admin = requireSupabase();
-
-    // Step 1 — Guarantee account exists and is email-confirmed.
-    await ensureUserConfirmed(admin, email, req.log as Logger);
-
     if (isEmailServiceReady()) {
       // ── Path A: Resend is configured ─────────────────────────────────────
-      // generateLink() returns the OTP token WITHOUT sending any email.
-      // We send our own branded email containing ONLY the 6-digit code.
+      // 1. Guarantee a confirmed account exists (creates new users silently).
+      // 2. generateLink() extracts the 6-digit OTP token WITHOUT triggering
+      //    any Supabase-sent email.
+      // 3. We send our own branded email containing ONLY the 6-digit code.
+      const admin = requireSupabase();
+      await ensureUserConfirmed(admin, email, req.log as Logger);
+
       const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
         type: "magiclink",
         email,
@@ -159,14 +157,15 @@ router.post("/auth/otp/send", async (req, res) => {
       const otp = linkData.properties.email_otp;
       await sendOtpEmail(email, otp);
       req.log.info({ email }, "OTP email sent via Resend (Path A)");
+
     } else {
-      // ── Path B: Fallback — Supabase sends its own email ──────────────────
-      // Note: Supabase's default email uses the "Magic Link" template and
-      // will say "Follow this link to login". To display a clean 6-digit-only
-      // code without Resend, update the Magic Link template in:
-      // Supabase Dashboard → Authentication → Email Templates → Magic Link
-      // and change the button/link text to show {{ .Token }} instead.
-      req.log.info({ email }, "RESEND_API_KEY not set — falling back to Supabase email (Path B)");
+      // ── Path B: Supabase email fallback ───────────────────────────────────
+      // signInWithOtp handles both new signups (shouldCreateUser:true) and
+      // returning users in one call. Supabase sends its configured email
+      // template — update the Magic Link template to show {{ .Token }} for
+      // a clean 6-digit-only code email, or configure Resend (Path A) for
+      // fully branded delivery.
+      req.log.info({ email }, "RESEND_API_KEY not set — using Supabase email fallback (Path B)");
 
       const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
         auth: { persistSession: false, autoRefreshToken: false },
@@ -174,7 +173,7 @@ router.post("/auth/otp/send", async (req, res) => {
 
       const { error: otpErr } = await anonClient.auth.signInWithOtp({
         email,
-        options: { shouldCreateUser: false },
+        options: { shouldCreateUser: true },
       });
 
       if (otpErr) {
@@ -182,10 +181,11 @@ router.post("/auth/otp/send", async (req, res) => {
         return res.status(500).json({ error: "Could not send the verification code. Please try again." });
       }
 
-      req.log.info({ email }, "OTP dispatched via Supabase fallback (Path B)");
+      req.log.info({ email }, "OTP dispatched via Supabase (Path B)");
     }
 
     return res.json({ success: true });
+
   } catch (err) {
     req.log.error({ err, email }, "OTP send unexpected error");
     return res.status(500).json({ error: "Something went wrong. Please try again." });
@@ -199,8 +199,7 @@ router.post("/auth/otp/send", async (req, res) => {
  *
  * When registered in the Supabase Dashboard this endpoint receives every
  * outbound auth email from Supabase and replaces it with a branded
- * IndiePact email sent via Resend. The email contains ONLY the 6-digit OTP
- * code — no magic link, no redirect button.
+ * IndiePact email sent via Resend containing ONLY the 6-digit OTP code.
  *
  * Hook payload from Supabase:
  * {
@@ -213,7 +212,7 @@ router.post("/auth/otp/send", async (req, res) => {
  *   }
  * }
  *
- * Returns {} on success. Returning a non-2xx causes Supabase to mark the
+ * Returns {} on success. A non-2xx response causes Supabase to mark the
  * email as failed (it does NOT fall back to its own mailer once a hook
  * is registered).
  *
