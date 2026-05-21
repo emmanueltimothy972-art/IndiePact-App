@@ -195,28 +195,18 @@ router.get("/report/:scanId", async (req, res) => {
 async function incrementScanUsage(userId: string): Promise<void> {
   try {
     const db = requireSupabase();
-    const { data: existing } = await db
-      .from("subscriptions")
+    const { data: profile } = await db
+      .from("profiles")
       .select("scans_used")
-      .eq("user_id", userId)
+      .eq("id", userId)
       .single();
 
-    if (existing) {
-      await db
-        .from("subscriptions")
-        .update({
-          scans_used: (Number(existing["scans_used"]) || 0) + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
-    } else {
-      await db.from("subscriptions").insert({
-        user_id: userId,
-        plan: "free",
-        scans_used: 1,
-        period_start: new Date().toISOString(),
-      });
-    }
+    const currentUsed = Number(profile?.["scans_used"] ?? 0);
+
+    await db
+      .from("profiles")
+      .update({ scans_used: currentUsed + 1 })
+      .eq("id", userId);
   } catch {
     // Non-critical — usage tracking failure never blocks scan response
   }

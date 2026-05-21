@@ -22,6 +22,34 @@ router.post("/analyze", analyzeRateLimiter, async (req, res) => {
 
   const { contractText, userId } = parse.data;
 
+  // ── Subscription gate ────────────────────────────────────────────────────────
+  // Fetch the user's profile and block FREE users who have hit their scan limit.
+  try {
+    const { data: profile, error: profileError } = await requireSupabase()
+      .from("profiles")
+      .select("subscription_tier, monthly_scan_limit, scans_used")
+      .eq("id", userId)
+      .single();
+
+    if (profileError) {
+      req.log.warn({ userId, profileError }, "Could not fetch profile for gate check — allowing request");
+    } else if (profile) {
+      const tier = (profile["subscription_tier"] as string | null) ?? "FREE";
+      const limit = Number(profile["monthly_scan_limit"] ?? 2);
+      const used = Number(profile["scans_used"] ?? 0);
+
+      if (tier !== "PREMIUM" && used >= limit) {
+        return res.status(403).json({
+          error: "You have reached your free scan limit. Please upgrade to Premium to continue.",
+          scansUsed: used,
+          scansLimit: limit,
+        });
+      }
+    }
+  } catch (err) {
+    req.log.warn({ err }, "Profile gate check threw — allowing request");
+  }
+
   // ── Deduplication check ──────────────────────────────────────────────────────
   // Hash the normalized contract text and look for an existing scan for this user.
   // If found, return the stored result instantly — no OpenAI call required.
