@@ -197,6 +197,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
     if (DEV_AUTH_BYPASS) return { error: null };
 
+    // ── CUSTOM DOMAIN NOTE ───────────────────────────────────────────────────
+    // redirectTo is constructed dynamically from window.location.origin so it
+    // works in both Replit preview and production with zero code changes.
+    //
+    // When moving to a custom domain (e.g. indiepact.pro):
+    //  • Ensure window.location.origin is https://indiepact.pro in production
+    //  • The full redirect URL becomes: https://indiepact.pro/api/auth/callback
+    //  • Register that URL in:
+    //      - Supabase Dashboard → Auth → URL Configuration → Redirect URLs
+    //      - Google Cloud Console → OAuth Client → Authorized redirect URIs
+    //  • Update the OAuth Consent Screen app name to "IndiePact" so the Google
+    //    sign-in prompt shows your brand instead of the Supabase project URL.
+    // ────────────────────────────────────────────────────────────────────────
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

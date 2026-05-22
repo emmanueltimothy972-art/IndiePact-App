@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth, consumeReturnTo } from "@/contexts/AuthContext";
-import { ShieldCheck, Loader2, Lock, ArrowLeft, Mail, CheckCircle2, Timer } from "lucide-react";
+import { Lock, ArrowLeft, Mail, CheckCircle2, Timer } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -15,6 +15,39 @@ function GoogleIcon({ className }: { className?: string }) {
       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
     </svg>
+  );
+}
+
+// ─── IndiePact brand mark ─────────────────────────────────────────────────────
+
+function BrandMark({ step }: { step: Step }) {
+  if (step === "success") {
+    return (
+      <div className="h-12 w-12 rounded-2xl bg-emerald-900/25 border border-emerald-700/30 flex items-center justify-center">
+        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+      </div>
+    );
+  }
+  if (step === "verify") {
+    return (
+      <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#0f1f18] to-[#0a1510] border border-emerald-900/40 flex items-center justify-center">
+        <Mail className="h-5 w-5 text-emerald-400" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#0f1f18] to-[#0a1510] border border-emerald-900/40 flex items-center justify-center"
+      style={{ boxShadow: "0 0 0 1px rgba(16,185,129,0.06), 0 4px 16px rgba(0,0,0,0.5)" }}
+    >
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+        <rect x="4.5" y="2.5" width="13" height="17" rx="2" stroke="#10b981" strokeWidth="1.4" strokeOpacity="0.75" />
+        <line x1="7.5" y1="7.5" x2="14.5" y2="7.5" stroke="#10b981" strokeWidth="1.1" strokeLinecap="round" strokeOpacity="0.45" />
+        <line x1="7.5" y1="10.5" x2="14.5" y2="10.5" stroke="#10b981" strokeWidth="1.1" strokeLinecap="round" strokeOpacity="0.45" />
+        <line x1="7.5" y1="13.5" x2="11.5" y2="13.5" stroke="#10b981" strokeWidth="1.1" strokeLinecap="round" strokeOpacity="0.45" />
+        <path d="M11.5 16.5l1.5 1.5 3-3" stroke="#10b981" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
   );
 }
 
@@ -111,6 +144,22 @@ function useCountdown(startAt: number) {
   return { seconds, formatted, start, reset };
 }
 
+// ─── Thin spinner ─────────────────────────────────────────────────────────────
+
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
+      <path d="M8 2a6 6 0 0 1 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type Step = "initial" | "verify" | "success";
@@ -136,42 +185,53 @@ export function AuthModal() {
   const [step, setStep] = useState<Step>("initial");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  // Isolated loading states — Google and email flows never share state.
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isEmailLoading, setIsEmailLoading] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
   const countdown = useCountdown(60);
+
+  const anyLoading = isGoogleLoading || isEmailLoading;
 
   const reset = () => {
     setStep("initial");
     setEmail("");
     setOtp("");
     setError(null);
-    setIsLoading(false);
+    setIsGoogleLoading(false);
+    setIsEmailLoading(false);
     countdown.reset();
   };
 
   const handleClose = () => {
+    if (anyLoading) return; // prevent close mid-flight
     closeAuthModal();
     setTimeout(reset, 300);
   };
 
-  // ── Google OAuth ────────────────────────────────────────────────────────────
+  // ── Google OAuth ──────────────────────────────────────────────────────────
+  // isGoogleLoading stays true until the browser navigates away to Google.
+  // If the OAuth call errors synchronously, we reset it and show the error.
 
   const handleGoogleSignIn = async () => {
+    if (isGoogleLoading || isEmailLoading) return;
     setError(null);
-    setIsLoading(true);
+    setIsGoogleLoading(true);
     const { error } = await signInWithGoogle();
     if (error) {
       setError("Couldn't connect to Google. Please try again.");
-      setIsLoading(false);
+      setIsGoogleLoading(false);
     }
+    // On success the browser redirects to Google; no reset needed.
   };
 
-  // ── Email OTP — send / resend ───────────────────────────────────────────────
+  // ── Email OTP — send / resend ─────────────────────────────────────────────
 
-  const sendOtp = useCallback(async (targetEmail: string) => {
+  const sendOtp = useCallback(async (targetEmail: string): Promise<boolean> => {
     setError(null);
-    setIsLoading(true);
+    setIsEmailLoading(true);
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
       const res = await fetch(`${window.location.origin}${base}/api/auth/otp/send`, {
@@ -189,14 +249,14 @@ export function AuthModal() {
       setError("Network error. Please check your connection.");
       return false;
     } finally {
-      setIsLoading(false);
+      setIsEmailLoading(false);
     }
   }, []);
 
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed) return;
+    if (!trimmed || isEmailLoading || isGoogleLoading) return;
     const ok = await sendOtp(trimmed);
     if (ok) {
       setOtp("");
@@ -206,7 +266,7 @@ export function AuthModal() {
   };
 
   const handleResend = async () => {
-    if (countdown.seconds > 0 || isLoading) return;
+    if (countdown.seconds > 0 || isEmailLoading) return;
     const ok = await sendOtp(email.trim().toLowerCase());
     if (ok) {
       setOtp("");
@@ -214,13 +274,13 @@ export function AuthModal() {
     }
   };
 
-  // ── Email OTP — verify ──────────────────────────────────────────────────────
+  // ── Email OTP — verify ────────────────────────────────────────────────────
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.replace(/\D/g, "").length < 6) return;
+    if (otp.replace(/\D/g, "").length < 6 || isEmailLoading) return;
     setError(null);
-    setIsLoading(true);
+    setIsEmailLoading(true);
     try {
       const { error } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
@@ -229,20 +289,20 @@ export function AuthModal() {
       });
       if (error) {
         setError("Incorrect or expired code. Please check and try again.");
-        setIsLoading(false);
+        setIsEmailLoading(false);
         return;
       }
       setStep("success");
       setTimeout(navigateToReturnTo, 900);
     } catch {
       setError("Something went wrong. Please try again.");
-      setIsLoading(false);
+      setIsEmailLoading(false);
     }
   };
 
   const otpComplete = otp.replace(/\D/g, "").length === 6;
 
-  // ── Headlines ───────────────────────────────────────────────────────────────
+  // ── Headlines ─────────────────────────────────────────────────────────────
 
   const headline =
     step === "success" ? "You're signed in!" :
@@ -270,13 +330,7 @@ export function AuthModal() {
 
           {/* ── Header ── */}
           <div className="flex flex-col items-center text-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-900/30 border border-emerald-500/20 flex items-center justify-center">
-              {step === "success"
-                ? <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                : step === "verify"
-                ? <Mail className="h-5 w-5 text-emerald-400" />
-                : <ShieldCheck className="h-5 w-5 text-emerald-500" />}
-            </div>
+            <BrandMark step={step} />
             <div>
               <h2 className="text-[17px] font-bold text-white tracking-tight">{headline}</h2>
               <p className="text-slate-500 text-sm mt-1 leading-relaxed">{subline}</p>
@@ -294,20 +348,20 @@ export function AuthModal() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.18 }}
                 className="flex flex-col gap-3"
               >
-                {/* Google button */}
+                {/* Google button — only reacts to isGoogleLoading */}
                 <button
                   onClick={handleGoogleSignIn}
-                  disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-white hover:bg-slate-100 text-slate-900"
+                  disabled={isGoogleLoading || isEmailLoading}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed bg-white hover:bg-slate-100 text-slate-900 disabled:opacity-60"
                   style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.35)" }}
                 >
-                  {isLoading
-                    ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                  {isGoogleLoading
+                    ? <Spinner className="h-4 w-4 text-slate-500" />
                     : <GoogleIcon className="h-4 w-4 shrink-0" />}
-                  {isLoading ? "Connecting…" : "Continue with Google"}
+                  {isGoogleLoading ? "Connecting…" : "Continue with Google"}
                 </button>
 
                 {/* Divider */}
@@ -317,7 +371,7 @@ export function AuthModal() {
                   <div className="flex-1 h-px bg-slate-800" />
                 </div>
 
-                {/* Email + Send Code form */}
+                {/* Email + Send Code — only reacts to isEmailLoading */}
                 <form onSubmit={handleSendCode} className="flex flex-col gap-2.5">
                   <input
                     type="email"
@@ -325,21 +379,25 @@ export function AuthModal() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isEmailLoading}
                     className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors disabled:opacity-50"
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || !email.trim()}
+                    disabled={isEmailLoading || isGoogleLoading || !email.trim()}
                     className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30"
                   >
-                    {isLoading
-                      ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Sending code…</span>
+                    {isEmailLoading
+                      ? <span className="flex items-center justify-center gap-2"><Spinner className="h-4 w-4" /> Sending code…</span>
                       : "Send Code →"}
                   </button>
                 </form>
 
-                {error && <p className="text-red-400 text-xs text-center -mt-0.5">{error}</p>}
+                {error && (
+                  <p className="text-red-400 text-xs text-center -mt-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                    {error}
+                  </p>
+                )}
               </motion.div>
             )}
 
@@ -351,21 +409,25 @@ export function AuthModal() {
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.18 }}
                 onSubmit={handleVerifyOtp}
                 className="flex flex-col gap-4"
               >
-                <OtpInput value={otp} onChange={setOtp} disabled={isLoading} />
+                <OtpInput value={otp} onChange={setOtp} disabled={isEmailLoading} />
 
-                {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+                {error && (
+                  <p className="text-red-400 text-xs text-center animate-in fade-in slide-in-from-top-1 duration-200">
+                    {error}
+                  </p>
+                )}
 
                 <button
                   type="submit"
-                  disabled={isLoading || !otpComplete}
+                  disabled={isEmailLoading || !otpComplete}
                   className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30"
                 >
-                  {isLoading
-                    ? <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Verifying…</span>
+                  {isEmailLoading
+                    ? <span className="flex items-center justify-center gap-2"><Spinner className="h-4 w-4" /> Verifying…</span>
                     : "Verify Code"}
                 </button>
 
@@ -388,7 +450,7 @@ export function AuthModal() {
                     <button
                       type="button"
                       onClick={handleResend}
-                      disabled={isLoading}
+                      disabled={isEmailLoading}
                       className="text-emerald-600 hover:text-emerald-400 transition-colors font-medium disabled:opacity-40"
                     >
                       Resend code
@@ -402,12 +464,12 @@ export function AuthModal() {
             {step === "success" && (
               <motion.div
                 key="success"
-                initial={{ opacity: 0, scale: 0.92 }}
+                initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.22 }}
+                transition={{ duration: 0.2 }}
                 className="flex flex-col items-center gap-3 py-3"
               >
-                <div className="h-12 w-12 rounded-full bg-emerald-900/30 border border-emerald-800/40 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-full bg-emerald-900/25 border border-emerald-800/40 flex items-center justify-center">
                   <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                 </div>
                 <p className="text-sm text-slate-300 font-semibold">Welcome to IndiePact</p>
