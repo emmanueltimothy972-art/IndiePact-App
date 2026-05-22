@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { runNegotiatorChat, runProsecutorChat } from "../lib/openai.js";
+import { getUserPlan, hasBackendFeature } from "../lib/userPlan.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
@@ -9,7 +11,7 @@ const ChatMessageSchema = z.object({
   content: z.string(),
 });
 
-// ─── Negotiator Chat (rehearsal partner) ──────────────────────────────────────
+// ─── Negotiator Chat (rehearsal partner) ─────────────────────────────────────
 
 const ChatBodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -17,10 +19,26 @@ const ChatBodySchema = z.object({
   history: z.array(ChatMessageSchema).max(20).default([]),
 });
 
-router.post("/chat", async (req, res) => {
+router.post("/chat", requireAuth, async (req, res) => {
   const parse = ChatBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
+  }
+
+  const userId = req.userId!;
+
+  // ── Plan gate: requires Pro or above ─────────────────────────────────────
+  try {
+    const { plan } = await getUserPlan(userId);
+    if (!hasBackendFeature(plan, "NEGOTIATION")) {
+      return res.status(403).json({
+        error: "Negotiation War Room requires a Pro plan or above.",
+        requiredPlan: "pro",
+        currentPlan: plan,
+      });
+    }
+  } catch (err) {
+    req.log.warn({ err }, "Could not verify plan for chat — allowing request");
   }
 
   const { message, scenario, history } = parse.data;
@@ -41,7 +59,7 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-// ─── The Prosecutor (structured JSON, with rebuttal email) ────────────────────
+// ─── The Prosecutor (structured JSON, with rebuttal email) ───────────────────
 
 const ProsecutorBodySchema = z.object({
   message: z.string().min(1).max(3000),
@@ -53,15 +71,30 @@ const ProsecutorBodySchema = z.object({
   }).optional(),
 });
 
-router.post("/prosecutor", async (req, res) => {
+router.post("/prosecutor", requireAuth, async (req, res) => {
   const parse = ProsecutorBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
   }
 
+  const userId = req.userId!;
+
+  // ── Plan gate: requires Pro or above ─────────────────────────────────────
+  try {
+    const { plan } = await getUserPlan(userId);
+    if (!hasBackendFeature(plan, "NEGOTIATION")) {
+      return res.status(403).json({
+        error: "The Prosecutor requires a Pro plan or above.",
+        requiredPlan: "pro",
+        currentPlan: plan,
+      });
+    }
+  } catch (err) {
+    req.log.warn({ err }, "Could not verify plan for prosecutor — allowing request");
+  }
+
   const { message, history, caseContext } = parse.data;
 
-  // Build history including only the content strings (not structured objects) for the AI
   const messages = [
     ...history,
     { role: "user" as const, content: message },
@@ -74,7 +107,6 @@ router.post("/prosecutor", async (req, res) => {
   };
 
   try {
-    // Returns structured ProsecutorResponse: { diagnosis, exposure, counterMove, rebuttalEmail, tacticalDirective }
     const reply = await runProsecutorChat(messages, context);
     return res.json({ reply });
   } catch (err) {

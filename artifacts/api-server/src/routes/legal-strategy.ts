@@ -2,14 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { runLegalStrategyAnalysis } from "../lib/openai.js";
+import { getUserPlan, hasBackendFeature } from "../lib/userPlan.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
 const LegalStrategyBodySchema = z.object({
-  // Accept any non-empty string — cached scans may have temp IDs, active scans use __active__
   scanId: z.string().min(1, "scanId is required"),
-  userId: z.string().min(1, "userId is required"),
-  // Optional: caller can pass the full result JSON instead of a DB scanId
+  userId: z.string().optional(),
   contractData: z.string().optional(),
 });
 
@@ -49,19 +49,34 @@ function buildEmptyStrategyResponse() {
   };
 }
 
-router.post("/legal-strategy", async (req, res) => {
+router.post("/legal-strategy", requireAuth, async (req, res) => {
   const parse = LegalStrategyBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
   }
 
-  const { scanId, userId, contractData } = parse.data;
+  const { scanId, contractData } = parse.data;
+  const userId = req.userId!;
+
+  // ── Plan gate: requires Business or above ─────────────────────────────────
+  try {
+    const { plan } = await getUserPlan(userId);
+    if (!hasBackendFeature(plan, "LEGAL_STRATEGY")) {
+      return res.status(403).json({
+        error: "AI Legal Strategy requires a Business plan or above.",
+        requiredPlan: "business",
+        currentPlan: plan,
+      });
+    }
+  } catch (err) {
+    req.log.warn({ err }, "Could not verify plan for legal strategy — allowing request");
+  }
 
   let risks: RiskItem[] = [];
   let protectionScore = 0;
   let moneyImpactSummary = "";
 
-  // ── Path A: caller passed contractData directly (active/cached scan, no DB needed) ──
+  // ── Path A: caller passed contractData directly ───────────────────────────
   if (contractData) {
     try {
       const parsed = JSON.parse(contractData) as {
@@ -76,7 +91,7 @@ router.post("/legal-strategy", async (req, res) => {
       return res.status(400).json({ error: "Invalid contractData payload" });
     }
   }
-  // ── Path B: look up by scanId in DB ──────────────────────────────────────────────
+  // ── Path B: look up by scanId in DB ──────────────────────────────────────
   else if (scanId !== "__active__") {
     const { data: scan, error: fetchError } = await requireSupabase()
       .from("scans")
@@ -100,7 +115,6 @@ router.post("/legal-strategy", async (req, res) => {
     moneyImpactSummary = result?.moneyImpactSummary ?? "";
   }
 
-  // ── No risks found — return a positive assessment ─────────────────────────────────
   if (risks.length === 0) {
     return res.json(buildEmptyStrategyResponse());
   }

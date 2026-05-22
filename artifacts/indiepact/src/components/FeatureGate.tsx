@@ -6,11 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
-import {
-  canAccessNegotiation,
-  canAccessLegalStrategy,
-  isPaidPlan,
-} from "@/lib/constants";
+import { hasFeature } from "@/lib/permissions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,9 +23,9 @@ interface FeatureGateProps {
 
 function planMeetsTier(plan: string, tier: RequiresTier): boolean {
   if (tier === "auth") return true;
-  if (tier === "starter") return isPaidPlan(plan);
-  if (tier === "pro") return canAccessNegotiation(plan);
-  if (tier === "business") return canAccessLegalStrategy(plan);
+  if (tier === "starter") return hasFeature(plan, "UPLOADS");
+  if (tier === "pro") return hasFeature(plan, "NEGOTIATION");
+  if (tier === "business") return hasFeature(plan, "LEGAL_STRATEGY");
   return false;
 }
 

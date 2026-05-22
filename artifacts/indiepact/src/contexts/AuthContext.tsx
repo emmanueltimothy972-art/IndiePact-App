@@ -3,6 +3,7 @@ import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { DEMO_USER_ID, PLAN_LIMITS } from "@/lib/constants";
 import { DEV_AUTH_BYPASS, DEV_MOCK_USER } from "@/lib/devMode";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 // ─── Dev tier override (localStorage) ────────────────────────────────────────
 
@@ -158,6 +159,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (DEV_AUTH_BYPASS) return;
 
+    // Wire the API client to always include the current session's Bearer token.
+    setAuthTokenGetter(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token ?? null;
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -177,7 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => authSub.unsubscribe();
+    return () => {
+      authSub.unsubscribe();
+      setAuthTokenGetter(null);
+    };
   }, []);
 
   // ── Auth actions ──────────────────────────────────────────────────────────

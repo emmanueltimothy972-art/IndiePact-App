@@ -1,67 +1,51 @@
+import { hasFeature } from "./permissions";
+
+export { hasFeature } from "./permissions";
+export type { Feature } from "./permissions";
+
 export const DEMO_USER_ID = "d41ce8b9-22a5-4a5b-bd0c-0e8fe3ae7adf";
 
 // ─── Tier order ───────────────────────────────────────────────────────────────
 // free < starter < pro < business < agency < enterprise
 // pay_per_scan is treated as business-level for feature access.
 
-// ─── Feature permission sets ─────────────────────────────────────────────────
+// ─── Feature permission sets (kept for reference / legacy use) ────────────────
 
 /** Any paid plan — unlocks PDF uploads, exports, scan history, improved AI summaries */
 export const PAID_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
 
-/** Starter and above — PDF/DOCX uploads */
-export const UPLOAD_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
-
-/** Starter and above — export to PDF */
-export const EXPORT_PLANS = new Set(["starter", "pro", "business", "agency", "enterprise", "pay_per_scan"]);
-
-/** Pro and above — AI Attorney (clause-by-clause risk intelligence) */
-export const AI_ATTORNEY_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
-
-/** Pro and above — Clause Armory (protective clause library + live scan matching) */
-export const CLAUSE_ARMORY_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
-
-/** Pro and above — Negotiation War Room, Payment Lock, revenue stress analysis */
-export const NEGOTIATION_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
-
-/** Pro and above — Payment Lock / EscrowLock */
-export const PAYMENT_LOCK_PLANS = new Set(["pro", "business", "agency", "enterprise", "pay_per_scan"]);
-
-/** Business and above — AI Legal Strategy */
-export const LEGAL_STRATEGY_PLANS = new Set(["business", "agency", "enterprise", "pay_per_scan"]);
-
-// ─── Permission helpers ───────────────────────────────────────────────────────
+// ─── Permission helpers (delegate to hasFeature) ─────────────────────────────
 
 export function isPaidPlan(plan: string): boolean {
-  return PAID_PLANS.has(plan);
+  return PAID_PLANS.has(plan.toLowerCase());
 }
 
 export function canUploadFiles(plan: string): boolean {
-  return UPLOAD_PLANS.has(plan);
+  return hasFeature(plan, "UPLOADS");
 }
 
 export function canExport(plan: string): boolean {
-  return EXPORT_PLANS.has(plan);
+  return hasFeature(plan, "EXPORTS");
 }
 
 export function canAccessAIAttorney(plan: string): boolean {
-  return AI_ATTORNEY_PLANS.has(plan);
+  return hasFeature(plan, "AI_ATTORNEY");
 }
 
 export function canAccessClauseArmory(plan: string): boolean {
-  return CLAUSE_ARMORY_PLANS.has(plan);
+  return hasFeature(plan, "CLAUSE_ARMORY");
 }
 
 export function canAccessNegotiation(plan: string): boolean {
-  return NEGOTIATION_PLANS.has(plan);
+  return hasFeature(plan, "NEGOTIATION");
 }
 
 export function canAccessPaymentLock(plan: string): boolean {
-  return PAYMENT_LOCK_PLANS.has(plan);
+  return hasFeature(plan, "PAYMENT_LOCK");
 }
 
 export function canAccessLegalStrategy(plan: string): boolean {
-  return LEGAL_STRATEGY_PLANS.has(plan);
+  return hasFeature(plan, "LEGAL_STRATEGY");
 }
 
 // ─── Plan limits (scans per month) ───────────────────────────────────────────

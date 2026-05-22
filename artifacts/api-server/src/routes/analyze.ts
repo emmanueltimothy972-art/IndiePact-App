@@ -4,55 +4,47 @@ import { extractRiskyClauses, truncateForAI } from "../lib/prefilter.js";
 import { analyzeContractClauses, buildFallbackResult } from "../lib/openai.js";
 import { hashContractText } from "../lib/contract-hash.js";
 import { requireSupabase } from "../lib/supabase.js";
+import { getUserPlan } from "../lib/userPlan.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 import { analyzeRateLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
 const AnalyzeBodySchema = z.object({
   contractText: z.string().min(50, "Contract text must be at least 50 characters"),
-  userId: z.string().min(1, "userId is required"),
+  userId: z.string().optional(),
   contractName: z.string().optional(),
 });
 
-router.post("/analyze", analyzeRateLimiter, async (req, res) => {
+router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
   const parse = AnalyzeBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
   }
 
-  const { contractText, userId } = parse.data;
+  const { contractText } = parse.data;
+  const userId = req.userId!;
 
-  // ── Subscription gate ────────────────────────────────────────────────────────
-  // Fetch the user's profile and block FREE users who have hit their scan limit.
+  // ── Subscription gate ─────────────────────────────────────────────────────
+  // Read from the subscriptions table (single source of truth).
   try {
-    const { data: profile, error: profileError } = await requireSupabase()
-      .from("profiles")
-      .select("subscription_tier, monthly_scan_limit, scans_used")
-      .eq("id", userId)
-      .single();
+    const { plan, scansUsed, scansLimit, periodExpired } = await getUserPlan(userId);
 
-    if (profileError) {
-      req.log.warn({ userId, profileError }, "Could not fetch profile for gate check — allowing request");
-    } else if (profile) {
-      const tier = (profile["subscription_tier"] as string | null) ?? "FREE";
-      const limit = Number(profile["monthly_scan_limit"] ?? 2);
-      const used = Number(profile["scans_used"] ?? 0);
+    req.log.info({ userId, plan, scansUsed, scansLimit, periodExpired }, "Subscription gate check");
 
-      if (tier !== "PREMIUM" && used >= limit) {
-        return res.status(403).json({
-          error: "You have reached your free scan limit. Please upgrade to Premium to continue.",
-          scansUsed: used,
-          scansLimit: limit,
-        });
-      }
+    if (scansUsed >= scansLimit) {
+      return res.status(403).json({
+        error: "You have reached your scan limit for this billing period. Please upgrade to continue.",
+        plan,
+        scansUsed,
+        scansLimit,
+      });
     }
   } catch (err) {
-    req.log.warn({ err }, "Profile gate check threw — allowing request");
+    req.log.warn({ err }, "Could not check subscription gate — allowing request");
   }
 
-  // ── Deduplication check ──────────────────────────────────────────────────────
-  // Hash the normalized contract text and look for an existing scan for this user.
-  // If found, return the stored result instantly — no OpenAI call required.
+  // ── Deduplication check ───────────────────────────────────────────────────
   const contractHash = hashContractText(contractText);
 
   try {
@@ -73,7 +65,7 @@ router.post("/analyze", analyzeRateLimiter, async (req, res) => {
     // Cache miss or DB unavailable — continue to AI analysis below
   }
 
-  // ── AI Analysis ──────────────────────────────────────────────────────────────
+  // ── AI Analysis ───────────────────────────────────────────────────────────
   try {
     const { extractedClauses, foundCategories } = extractRiskyClauses(contractText);
 
@@ -97,7 +89,6 @@ router.post("/analyze", analyzeRateLimiter, async (req, res) => {
 
     const result = await analyzeContractClauses(clauseList, foundCategories);
 
-    // Attach hash to result so the save route can store it without re-computing
     return res.json({ ...result, _contractHash: contractHash, _cached: false });
   } catch (err) {
     req.log.error({ err }, "AI analysis failed, using fallback");

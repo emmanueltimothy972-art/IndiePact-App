@@ -8,6 +8,7 @@ import { ScanProvider } from "@/contexts/ScanContext";
 import { AuthModal } from "@/components/AuthModal";
 import { Layout } from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 
 const Home = lazy(() => import("@/pages/Home"));
@@ -49,18 +50,42 @@ function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
+        {/* Public routes */}
         <Route path="/" component={Home} />
         <Route path="/pricing" component={Pricing} />
         <Route path="/auth/callback" component={AuthCallback} />
-        <Route path="/dashboard" component={Dashboard} />
+
+        {/* Semi-public: guests can paste text before signing in */}
         <Route path="/scan" component={DocumentLab} />
-        <Route path="/history" component={IntelligenceVault} />
-        <Route path="/scan/:scanId" component={ScanDetail} />
-        <Route path="/bar" component={TheBar} />
-        <Route path="/armory" component={ClauseArmory} />
-        <Route path="/negotiator" component={ShadowNegotiator} />
-        <Route path="/escrow" component={EscrowLock} />
-        <Route path="/legal-strategy" component={LegalStrategy} />
+
+        {/* Auth-required routes — ProtectedRoute prevents flash during loading */}
+        <Route path="/dashboard">
+          {() => <ProtectedRoute><Dashboard /></ProtectedRoute>}
+        </Route>
+        <Route path="/history">
+          {() => <ProtectedRoute><IntelligenceVault /></ProtectedRoute>}
+        </Route>
+        <Route path="/scan/:scanId">
+          {() => <ProtectedRoute><ScanDetail /></ProtectedRoute>}
+        </Route>
+
+        {/* Premium routes — ProtectedRoute handles auth; FeatureGate inside handles plan */}
+        <Route path="/bar">
+          {() => <ProtectedRoute><TheBar /></ProtectedRoute>}
+        </Route>
+        <Route path="/armory">
+          {() => <ProtectedRoute><ClauseArmory /></ProtectedRoute>}
+        </Route>
+        <Route path="/negotiator">
+          {() => <ProtectedRoute><ShadowNegotiator /></ProtectedRoute>}
+        </Route>
+        <Route path="/escrow">
+          {() => <ProtectedRoute><EscrowLock /></ProtectedRoute>}
+        </Route>
+        <Route path="/legal-strategy">
+          {() => <ProtectedRoute><LegalStrategy /></ProtectedRoute>}
+        </Route>
+
         <Route component={NotFound} />
       </Switch>
     </Suspense>
