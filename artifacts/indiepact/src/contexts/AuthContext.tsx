@@ -93,6 +93,8 @@ interface AuthContextType {
   userPlan: string;
   scansUsed: number;
   scansLimit: number;
+  remainingScans: number;
+  canScan: boolean;
   refreshSubscription: () => Promise<void>;
 
   // Dev-mode tier simulator (no-op in production)
@@ -226,6 +228,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = user?.id ?? DEMO_USER_ID;
   const isGuest = !user;
 
+  const remainingScans = Math.max(0, subscription.scansLimit - subscription.scansUsed);
+  const canScan = remainingScans > 0;
+
   return (
     <AuthContext.Provider value={{
       user, session, isLoading, userId, isGuest,
@@ -234,6 +239,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userPlan: subscription.userPlan,
       scansUsed: subscription.scansUsed,
       scansLimit: subscription.scansLimit,
+      remainingScans,
+      canScan,
       refreshSubscription,
       devTier,
       setDevTier,

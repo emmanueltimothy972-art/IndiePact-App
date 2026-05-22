@@ -4,7 +4,7 @@ import { extractRiskyClauses, truncateForAI } from "../lib/prefilter.js";
 import { analyzeContractClauses, buildFallbackResult } from "../lib/openai.js";
 import { hashContractText } from "../lib/contract-hash.js";
 import { requireSupabase } from "../lib/supabase.js";
-import { getUserPlan } from "../lib/userPlan.js";
+import { checkScanGate, incrementScanUsage } from "../lib/scanTracking.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { analyzeRateLimiter } from "../middleware/rateLimiter.js";
 
@@ -25,26 +25,34 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
   const { contractText } = parse.data;
   const userId = req.userId!;
 
-  // ── Subscription gate ─────────────────────────────────────────────────────
-  // Read from the subscriptions table (single source of truth).
+  // ── Scan gate ────────────────────────────────────────────────────────────
+  // Read from profiles (authoritative scan counter) with cross-check against
+  // subscriptions.period_start for automatic monthly reset.
   try {
-    const { plan, scansUsed, scansLimit, periodExpired } = await getUserPlan(userId);
+    const gate = await checkScanGate(userId);
 
-    req.log.info({ userId, plan, scansUsed, scansLimit, periodExpired }, "Subscription gate check");
+    req.log.info(
+      { userId, plan: gate.plan, scansUsed: gate.scansUsed, remaining: gate.remaining },
+      "Scan gate check",
+    );
 
-    if (scansUsed >= scansLimit) {
+    if (!gate.allowed) {
       return res.status(403).json({
-        error: "You have reached your scan limit for this billing period. Please upgrade to continue.",
-        plan,
-        scansUsed,
-        scansLimit,
+        error: gate.reason,
+        plan: gate.plan,
+        scansUsed: gate.scansUsed,
+        scansLimit: gate.scansLimit,
+        remaining: gate.remaining,
+        upgradeUrl: "/pricing",
       });
     }
   } catch (err) {
-    req.log.warn({ err }, "Could not check subscription gate — allowing request");
+    req.log.warn({ err }, "Scan gate check failed — allowing request");
   }
 
   // ── Deduplication check ───────────────────────────────────────────────────
+  // Return cached result instantly when the user re-submits the same contract.
+  // Cache hits do NOT count as a new scan — no increment.
   const contractHash = hashContractText(contractText);
 
   try {
@@ -62,7 +70,7 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
       return res.json({ ...cachedScan.result, _cached: true });
     }
   } catch {
-    // Cache miss or DB unavailable — continue to AI analysis below
+    // Cache miss or DB unavailable — continue to AI analysis
   }
 
   // ── AI Analysis ───────────────────────────────────────────────────────────
@@ -70,6 +78,8 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
     const { extractedClauses, foundCategories } = extractRiskyClauses(contractText);
 
     if (extractedClauses.length === 0) {
+      // No risky clauses found — return a safe result without counting as a scan,
+      // since no AI call was made.
       return res.json({
         moneyImpactSummary: "No significant risk indicators found in this contract.",
         revenueAtRiskMin: 0,
@@ -85,12 +95,20 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
     const truncatedClauses = truncateForAI(extractedClauses);
     const clauseList = truncatedClauses.split("\n\n").filter(Boolean);
 
-    req.log.info({ userId, clauseCount: clauseList.length }, "Analyzing contract — no cache hit");
+    req.log.info({ userId, clauseCount: clauseList.length }, "Running AI analysis");
 
     const result = await analyzeContractClauses(clauseList, foundCategories);
 
+    // ── Increment usage after confirmed AI success ────────────────────────
+    // Fire-and-forget: a tracking failure must never fail the scan response.
+    void incrementScanUsage(userId).catch((err) =>
+      req.log.warn({ err, userId }, "Scan usage increment failed — non-fatal"),
+    );
+
     return res.json({ ...result, _contractHash: contractHash, _cached: false });
   } catch (err) {
+    // AI call failed — fall back to a heuristic result.
+    // Do NOT increment usage: the user received no real AI response.
     req.log.error({ err }, "AI analysis failed, using fallback");
 
     const { extractedClauses, foundCategories } = extractRiskyClauses(contractText);
