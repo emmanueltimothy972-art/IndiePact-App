@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   FileText, History, LayoutDashboard, ShieldCheck,
   FileOutput, Loader2, Menu, Shield, MessageSquare, Lock,
-  LogIn, LogOut, Brain, FlaskConical,
+  LogIn, LogOut, Brain, FlaskConical, Flame,
 } from "lucide-react";
 import { DEV_AUTH_BYPASS } from "@/lib/devMode";
 import { Button } from "./ui/button";
@@ -48,15 +48,25 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const userInitial = user?.email ? user.email[0].toUpperCase() : null;
 
+  const todayBriefDone = (() => {
+    try {
+      const raw = localStorage.getItem("ip_brief_today_result");
+      if (!raw) return false;
+      const saved = JSON.parse(raw) as { savedDay?: number };
+      return saved.savedDay === Math.floor(Date.now() / 86_400_000);
+    } catch { return false; }
+  })();
+
   const NAV_ITEMS = [
-    { href: "/dashboard",  icon: <LayoutDashboard size={17} />, label: "Dashboard",         sub: "Your overview" },
-    { href: "/scan",       icon: <FileText size={17} />,         label: "Review Contract",   sub: "Analyze a contract" },
-    { href: "/history",    icon: <History size={17} />,          label: "My Reviews",        sub: "Past contract reviews" },
-    { href: "/escrow",     icon: <Lock size={17} />,             label: "Payment Lock",      sub: "Protect your payments" },
-    { href: "/legal-strategy", icon: <Brain size={17} />,        label: "AI Legal Strategy", sub: "Negotiation planning", isNew: true },
-    { href: "/bar",        icon: <Brain size={17} />,            label: "AI Attorney",       sub: "Deep clause intelligence", isPro: true },
-    { href: "/armory",     icon: <Shield size={17} />,           label: "Clause Armory",     sub: "Battle-tested clause library" },
-    { href: "/negotiator", icon: <MessageSquare size={17} />,    label: "Negotiation Room",  sub: "AI negotiation coach" },
+    { href: "/dashboard",    icon: <LayoutDashboard size={17} />, label: "Dashboard",         sub: "Your overview" },
+    { href: "/daily-brief",  icon: <Flame size={17} />,           label: "Daily Brief",        sub: "Morning check-in", isFree: true, briefDone: todayBriefDone },
+    { href: "/scan",         icon: <FileText size={17} />,        label: "Review Contract",    sub: "Analyze a contract" },
+    { href: "/history",      icon: <History size={17} />,         label: "My Reviews",         sub: "Past contract reviews" },
+    { href: "/escrow",       icon: <Lock size={17} />,            label: "Payment Lock",       sub: "Protect your payments" },
+    { href: "/legal-strategy", icon: <Brain size={17} />,         label: "AI Legal Strategy",  sub: "Negotiation planning", isNew: true },
+    { href: "/bar",          icon: <Brain size={17} />,           label: "AI Attorney",        sub: "Deep clause intelligence", isPro: true },
+    { href: "/armory",       icon: <Shield size={17} />,          label: "Clause Armory",      sub: "Battle-tested clause library" },
+    { href: "/negotiator",   icon: <MessageSquare size={17} />,   label: "Negotiation Room",   sub: "AI negotiation coach" },
   ];
 
   const NavItems = ({ onClose }: { onClose?: () => void }) => (
@@ -91,6 +101,14 @@ export function Layout({ children }: { children: ReactNode }) {
               {item.isNew && (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   NEW
+                </span>
+              )}
+              {item.isFree && !item.briefDone && (
+                <span className="flex h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
+              )}
+              {item.isFree && item.briefDone && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  ✓
                 </span>
               )}
               {item.isPro && (
