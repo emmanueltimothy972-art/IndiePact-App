@@ -19,7 +19,10 @@ export function ScanResultView({ result }: { result: ScanResult }) {
 
   const extended = result as ScanResult & { pathToVictory?: string[] };
   const steps: string[] = extended.pathToVictory?.length ? extended.pathToVictory : DEFAULT_STEPS;
-  const riskMin = result.revenueAtRiskMin ?? 0;
+  // Guard against undefined/NaN from malformed or legacy scan data
+  const risks = result.risks ?? [];
+  const riskMin = Number(result.revenueAtRiskMin) || 0;
+  const riskMax = Number(result.revenueAtRiskMax) || 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -91,7 +94,7 @@ export function ScanResultView({ result }: { result: ScanResult }) {
             </p>
           </div>
           <div className="text-4xl md:text-5xl font-bold font-mono text-destructive tracking-tight">
-            ${result.revenueAtRiskMin.toLocaleString()} – ${result.revenueAtRiskMax.toLocaleString()}
+            ${riskMin.toLocaleString()} – ${riskMax.toLocaleString()}
           </div>
         </div>
       </div>
@@ -112,12 +115,12 @@ export function ScanResultView({ result }: { result: ScanResult }) {
             </div>
           </div>
           <span className="bg-muted text-muted-foreground px-3 py-1 rounded-full text-sm font-medium font-mono">
-            {result.risks.length} finding{result.risks.length !== 1 ? "s" : ""}
+            {risks.length} finding{risks.length !== 1 ? "s" : ""}
           </span>
         </div>
 
         {/* Summary table header */}
-        {result.risks.length > 0 && (
+        {risks.length > 0 && (
           <div className="rounded-xl border border-border overflow-hidden mb-2">
             <table className="w-full text-xs font-mono">
               <thead className="bg-[#050505] border-b border-border">
@@ -130,7 +133,7 @@ export function ScanResultView({ result }: { result: ScanResult }) {
                 </tr>
               </thead>
               <tbody>
-                {result.risks.map((risk, idx) => (
+                {risks.map((risk, idx) => (
                   <tr key={idx} className={`border-b border-border/50 last:border-0 ${idx % 2 === 0 ? "bg-card/40" : "bg-card/20"}`}>
                     <td className="px-4 py-2 text-muted-foreground">{String(idx + 1).padStart(2, "0")}</td>
                     <td className="px-4 py-2 text-foreground max-w-xs truncate" title={risk.title}>{risk.title}</td>
@@ -155,7 +158,7 @@ export function ScanResultView({ result }: { result: ScanResult }) {
         )}
 
         <div className="grid grid-cols-1 gap-6">
-          {result.risks.map((risk, idx) => (
+          {risks.map((risk, idx) => (
             <RiskCard key={idx} risk={risk} />
           ))}
         </div>

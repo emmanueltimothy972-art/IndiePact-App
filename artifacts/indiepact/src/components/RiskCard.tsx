@@ -9,14 +9,27 @@ import { Link } from "wouter";
 
 export function RiskCard({ risk }: { risk: Risk }) {
   const [copiedTab, setCopiedTab] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("rewritten");
   const { userPlan } = useAuth();
   const isPro = isPaidPlan(userPlan);
 
   const handleCopy = (text: string, tab: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch(() => {});
     setCopiedTab(tab);
     setTimeout(() => setCopiedTab(null), 2000);
   };
+
+  // Returns the correct string for the currently active tab so the copy button
+  // never has to read from the DOM (which picks up whitespace, quotes, etc.)
+  function getActiveTabText(): string {
+    switch (activeTab) {
+      case "rewritten":  return risk.fixes?.rewrittenClause ?? "";
+      case "direct":     return risk.fixes?.direct ?? "";
+      case "diplomatic": return risk.fixes?.diplomatic ?? "";
+      case "legal":      return risk.fixes?.legal ?? "";
+      default:           return "";
+    }
+  }
 
   const getSeverityIcon = () => {
     switch (risk.severity) {
@@ -74,7 +87,7 @@ export function RiskCard({ risk }: { risk: Risk }) {
 
       <div className="p-5 bg-card">
         <h4 className="text-sm font-semibold mb-3">Actionable Rebuttals</h4>
-        <Tabs defaultValue="rewritten" className="w-full">
+        <Tabs defaultValue="rewritten" className="w-full" onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start border-b border-border rounded-none bg-transparent p-0 h-auto space-x-6 overflow-x-auto flex-nowrap hide-scrollbar">
             <TabsTrigger value="rewritten" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-0 py-2 font-medium">
               Rewritten Clause
@@ -134,10 +147,7 @@ export function RiskCard({ risk }: { risk: Risk }) {
                 size="sm"
                 variant="outline"
                 className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8"
-                onClick={() => {
-                  const activeTab = document.querySelector('[role="tabpanel"]:not([hidden])')?.textContent || "";
-                  handleCopy(activeTab, "current");
-                }}
+                onClick={() => handleCopy(getActiveTabText(), "current")}
               >
                 {copiedTab === "current"
                   ? <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-400" />

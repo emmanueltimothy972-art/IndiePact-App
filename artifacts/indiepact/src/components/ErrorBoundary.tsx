@@ -50,13 +50,8 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="space-y-2">
               <h1 className="text-white font-bold text-xl">Something went wrong</h1>
               <p className="text-slate-500 text-sm leading-relaxed">
-                IndiePact encountered an unexpected error. Your data is safe.
+                IndiePact encountered an unexpected error. Your session is safe — please return to the home page and try again.
               </p>
-              {this.state.error && (
-                <p className="text-slate-700 text-xs font-mono mt-3 p-3 rounded-lg bg-slate-900/50 border border-slate-800 text-left break-words">
-                  {this.state.error.message}
-                </p>
-              )}
             </div>
 
             <button

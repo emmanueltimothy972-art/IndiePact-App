@@ -99,7 +99,8 @@ router.post("/scans", async (req, res) => {
     return res.status(500).json({ error: "Failed to save scan" });
   }
 
-  void incrementScanUsage(userId);
+  // NOTE: scan usage is incremented once in analyze.ts after confirmed AI success.
+  // Do NOT increment here — doing so would double-count every scan.
 
   return res.status(201).json(mapScanRow(data, result));
 });
@@ -192,26 +193,6 @@ router.get("/report/:scanId", async (req, res) => {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-async function incrementScanUsage(userId: string): Promise<void> {
-  try {
-    const db = requireSupabase();
-    const { data: profile } = await db
-      .from("profiles")
-      .select("scans_used")
-      .eq("id", userId)
-      .single();
-
-    const currentUsed = Number(profile?.["scans_used"] ?? 0);
-
-    await db
-      .from("profiles")
-      .update({ scans_used: currentUsed + 1 })
-      .eq("id", userId);
-  } catch {
-    // Non-critical — usage tracking failure never blocks scan response
-  }
-}
-
 type DbRow = Record<string, unknown>;
 
 function mapScanRow(row: DbRow, liveResult?: Record<string, unknown>) {
@@ -223,9 +204,9 @@ function mapScanRow(row: DbRow, liveResult?: Record<string, unknown>) {
   const protectionScore =
     Number(row["protection_score"]) || Number(resultSource["protectionScore"]) || 0;
   const revenueAtRiskMin =
-    Number(row["revenue_at_risk_min"]) ?? Number(resultSource["revenueAtRiskMin"]) ?? 0;
+    Number(row["revenue_at_risk_min"]) || Number(resultSource["revenueAtRiskMin"]) || 0;
   const revenueAtRiskMax =
-    Number(row["revenue_at_risk_max"]) ?? Number(resultSource["revenueAtRiskMax"]) ?? 0;
+    Number(row["revenue_at_risk_max"]) || Number(resultSource["revenueAtRiskMax"]) || 0;
   const riskCount = Number(row["risk_count"]) || risks.length;
 
   const result = {

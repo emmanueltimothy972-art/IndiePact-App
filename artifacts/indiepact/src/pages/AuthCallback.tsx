@@ -49,7 +49,15 @@ export default function AuthCallback() {
   useEffect(() => {
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
 
+    // These are declared outside the Promise so the cleanup function returned
+    // synchronously from useEffect can always cancel them, even if the
+    // component unmounts before getSession() resolves.
+    let authSub: { unsubscribe: () => void } | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let settled = false;
+
     function navigateTo(appRelativePath: string) {
+      settled = true;
       window.location.replace(`${window.location.origin}${base}${appRelativePath}`);
     }
 
@@ -62,6 +70,7 @@ export default function AuthCallback() {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (settled) return;
       if (session) {
         navigateTo(getDestination());
         return;
@@ -69,24 +78,30 @@ export default function AuthCallback() {
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session) {
+          if (timeoutId) clearTimeout(timeoutId);
           subscription.unsubscribe();
           navigateTo(getDestination());
         } else if (event === "SIGNED_OUT") {
+          if (timeoutId) clearTimeout(timeoutId);
           subscription.unsubscribe();
           navigateTo("/");
         }
       });
 
-      const timeout = setTimeout(() => {
+      authSub = subscription;
+
+      timeoutId = setTimeout(() => {
         subscription.unsubscribe();
         navigateTo("/");
       }, 8_000);
-
-      return () => {
-        subscription.unsubscribe();
-        clearTimeout(timeout);
-      };
     });
+
+    // Proper useEffect cleanup — always runs when component unmounts
+    return () => {
+      settled = true;
+      authSub?.unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   return (

@@ -222,6 +222,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (DEV_AUTH_BYPASS) return;
+    // Clear any pending OTP session so a subsequent user on the same device
+    // doesn't see the previous user's OTP verify screen.
+    try { sessionStorage.removeItem("ip_auth_pending"); } catch {}
     await supabase.auth.signOut();
     setSubscription({ userPlan: "free", scansUsed: 0, scansLimit: 2 });
   }, []);
