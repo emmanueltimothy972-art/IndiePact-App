@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,9 +17,11 @@ import { Link } from "wouter";
 import { PLAN_DISPLAY_NAMES, isPaidPlan } from "@/lib/constants";
 import { useScanContext } from "@/contexts/ScanContext";
 import { SavedScan } from "@workspace/api-client-react";
+import { supabase } from "@/lib/supabase";
 import {
   FileText, Zap, UploadCloud, LogIn, AlertTriangle, X,
   CheckCircle2, DollarSign, MessageSquare, Shield, TrendingUp,
+  Loader2, FileCheck, Info,
 } from "lucide-react";
 
 const PENDING_TEXT_KEY = "indiepact_pending_contract_text";
@@ -34,6 +36,15 @@ const WHAT_WE_CHECK = [
   { icon: <FileText className="h-4 w-4" />, label: "Non-compete restrictions" },
 ];
 
+type UploadStage = null | "uploading" | "extracting" | "ready" | "error";
+
+const UPLOAD_STAGE_MESSAGES: Record<string, string> = {
+  uploading: "Uploading contract…",
+  extracting: "Extracting contract text…",
+  ready: "Contract ready for review",
+  error: "",
+};
+
 export default function DocumentLab() {
   const [contractName, setContractName] = useState("");
   const [contractText, setContractText] = useState("");
@@ -41,6 +52,10 @@ export default function DocumentLab() {
   const [showProModal, setShowProModal] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploadStage, setUploadStage] = useState<UploadStage>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNotes, setUploadNotes] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const pendingResult = useRef<ScanResult | null>(null);
   const traceComplete = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +65,6 @@ export default function DocumentLab() {
   const [contractRestored, setContractRestored] = useState(false);
   const restoredRef = useRef(false);
 
-  // After auth resolves, check for a contract the user entered before signing in.
   useEffect(() => {
     if (restoredRef.current || isLoading || isGuest) return;
     restoredRef.current = true;
@@ -66,7 +80,6 @@ export default function DocumentLab() {
     } catch {}
   }, [isLoading, isGuest]);
 
-  // Scroll results into view the moment they appear.
   useEffect(() => {
     if (!scanResult) return;
     resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -97,7 +110,6 @@ export default function DocumentLab() {
 
   const handleAnalyze = () => {
     if (isGuest) {
-      // Preserve any text the user already entered so it survives the auth redirect.
       try {
         if (contractText.trim().length >= 10) {
           sessionStorage.setItem(PENDING_TEXT_KEY, contractText);
@@ -108,7 +120,7 @@ export default function DocumentLab() {
       return;
     }
     setContractRestored(false);
-    if (isAtLimit) return; // button is disabled, but guard anyway
+    if (isAtLimit) return;
     if (!contractText || contractText.length < 50) {
       toast({
         title: "Not enough text",
@@ -126,11 +138,7 @@ export default function DocumentLab() {
       {
         onSuccess: (result) => {
           pendingResult.current = result;
-
-          // Commit to global store immediately so other pages see it (include contractText)
           setActiveScan(finalName, result, contractText);
-
-          // Optimistically add to local cache with a temp ID
           const tempId = `temp_${Date.now()}`;
           const nowIso = new Date().toISOString();
           const optimisticScan: SavedScan = {
@@ -146,12 +154,10 @@ export default function DocumentLab() {
             riskCount: result.risks?.length ?? 0,
           };
           addToCache(optimisticScan);
-
           saveScan(
             { data: { userId, contractName: finalName, contractText, result } },
             {
               onSuccess: (saved) => {
-                // Swap temp ID for real DB ID when save succeeds
                 if (saved && (saved as SavedScan).id) updateCacheId(tempId, (saved as SavedScan).id);
                 void refreshSubscription();
               },
@@ -163,8 +169,6 @@ export default function DocumentLab() {
           setShowTrace(false);
           pendingResult.current = null;
           traceComplete.current = false;
-
-          // Detect rate-limit (429) and surface a specific, actionable message
           const status = (err as { status?: number })?.status;
           const data = (err as { data?: { retryAfter?: number; message?: string } })?.data;
           if (status === 429) {
@@ -176,7 +180,6 @@ export default function DocumentLab() {
             });
             return;
           }
-
           toast({
             title: "Review Failed",
             description: "Something went wrong. Please try again.",
@@ -187,24 +190,116 @@ export default function DocumentLab() {
     );
   };
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // ── Server-side document processing ────────────────────────────────────────
+
+  const processFile = useCallback(async (file: File) => {
     if (!file) return;
+
+    // Size guard — 20 MB
+    if (file.size > 20 * 1024 * 1024) {
+      setUploadStage("error");
+      setUploadError(
+        "This file exceeds 20MB. For very large contracts, we recommend splitting sections or pasting the key clauses directly."
+      );
+      return;
+    }
+
     setUploadedFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (text && text.length > 10) {
-        setContractText(text);
-        if (!contractName) setContractName(file.name.replace(/\.[^.]+$/, ""));
-        toast({ title: "File loaded", description: `${file.name} ready for review.` });
-      } else {
-        toast({ title: "Could not read file", description: "Please paste the contract text directly or try a plain-text file.", variant: "destructive" });
+    setUploadError(null);
+    setUploadNotes([]);
+    setUploadStage("uploading");
+
+    try {
+      const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+
+      // Retrieve session token for the Authorization header
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? null;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Brief pause so the "Uploading…" stage is visible on fast connections
+      await new Promise((r) => setTimeout(r, 400));
+      setUploadStage("extracting");
+
+      const response = await fetch(`${base}/api/process-document`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      const data = (await response.json()) as {
+        extractedText?: string;
+        charCount?: number;
+        wordCount?: number;
+        format?: string;
+        processingNotes?: string[];
+        fileName?: string;
+        error?: string;
+        requiresOcr?: boolean;
+      };
+
+      if (!response.ok) {
+        setUploadStage("error");
+        setUploadError(
+          data.error ??
+            "We couldn't process this document. Please try again or paste the contract text directly."
+        );
+        return;
       }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  }, [contractName, toast]);
+
+      if (!data.extractedText) {
+        setUploadStage("error");
+        setUploadError("We couldn't extract text from this file. Please paste the contract text directly.");
+        return;
+      }
+
+      setContractText(data.extractedText);
+      if (!contractName) setContractName(file.name.replace(/\.[^.]+$/, ""));
+      setUploadNotes(data.processingNotes ?? []);
+      setUploadStage("ready");
+    } catch {
+      setUploadStage("error");
+      setUploadError(
+        "Something went wrong while processing this file. Please check your connection and try again, or paste the contract text directly."
+      );
+    }
+  }, [contractName]);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      e.target.value = "";
+      await processFile(file);
+    },
+    [processFile]
+  );
+
+  // ── Drag-and-drop ──────────────────────────────────────────────────────────
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      if (isGuest) { openAuthModal("/scan", "upload PDF contracts"); return; }
+      if (!isPaidPlan(userPlan)) { setShowProModal(true); return; }
+      const file = e.dataTransfer.files?.[0];
+      if (file) await processFile(file);
+    },
+    [isGuest, userPlan, openAuthModal, processFile]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
 
   const handleUploadClick = () => {
     if (isGuest) { openAuthModal("/scan", "upload PDF contracts"); return; }
@@ -217,10 +312,15 @@ export default function DocumentLab() {
     setContractText("");
     setContractName("");
     setUploadedFileName(null);
+    setUploadStage(null);
+    setUploadError(null);
+    setUploadNotes([]);
     setShowTrace(false);
     pendingResult.current = null;
     traceComplete.current = false;
   };
+
+  const isUploadActive = uploadStage === "uploading" || uploadStage === "extracting";
 
   return (
     <PageTransition className="space-y-6 max-w-4xl mx-auto">
@@ -279,23 +379,18 @@ export default function DocumentLab() {
                       You can upgrade to a monthly plan — or buy a single forensic review right now for $9.99.
                     </p>
                   </div>
-
-                  {/* $9.99 Pay-Per-Scan — primary option */}
                   <Link
                     href="/pricing"
                     className="bg-emerald-700 hover:bg-emerald-600 text-white font-semibold px-8 py-3 rounded-xl text-sm flex items-center gap-2 transition-colors"
                   >
                     <CheckCircle2 className="h-4 w-4" /> Buy One Scan — $9.99
                   </Link>
-
-                  {/* Compare monthly plans — secondary */}
                   <Link
                     href="/pricing"
                     className="text-amber-400 hover:text-amber-300 font-semibold text-xs transition-colors flex items-center gap-1"
                   >
                     <Zap className="h-3.5 w-3.5" /> Compare monthly plans →
                   </Link>
-
                   <p className="text-xs text-slate-600">Monthly limit resets 30 days from {new Date().toLocaleDateString()}</p>
                 </div>
               )}
@@ -322,7 +417,6 @@ export default function DocumentLab() {
                         Example: A freelancer checks if a client can legally withhold payment or own their future work.
                       </p>
                     </div>
-
                     <div className="shrink-0">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">We check for</p>
                       <div className="grid grid-cols-2 gap-2">
@@ -338,10 +432,9 @@ export default function DocumentLab() {
                 </div>
               )}
 
-              {/* Input form — only shown when not at limit */}
+              {/* Input form */}
               {!isAtLimit && (
                 <div className="space-y-5">
-
                   {/* Restored-contract banner */}
                   {contractRestored && (
                     <motion.div
@@ -382,11 +475,12 @@ export default function DocumentLab() {
 
                   <div className="space-y-1.5">
                     <Label className="text-sm font-medium text-slate-300">Your contract</Label>
-                    {/* Hidden file input for paid upload */}
+
+                    {/* Hidden file input */}
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.pdf,.doc,.docx,.rtf"
+                      accept=".txt,.pdf,.docx,.rtf,image/jpeg,image/png,image/webp"
                       className="hidden"
                       onChange={handleFileChange}
                     />
@@ -406,6 +500,7 @@ export default function DocumentLab() {
                         </TabsTrigger>
                       </TabsList>
 
+                      {/* ── Paste tab ────────────────────────────────────────── */}
                       <TabsContent value="paste">
                         <Textarea
                           id="contractText"
@@ -421,50 +516,208 @@ export default function DocumentLab() {
                         )}
                       </TabsContent>
 
+                      {/* ── Upload tab ───────────────────────────────────────── */}
                       <TabsContent value="upload">
                         {isPaidPlan(userPlan) && !isGuest ? (
                           <div
-                            onClick={handleUploadClick}
-                            className="border-2 border-dashed border-emerald-900/50 rounded-2xl p-16 flex flex-col items-center justify-center text-center cursor-pointer bg-[#0c0c0c] hover:border-emerald-700/60 hover:bg-[#0d110e] transition-all min-h-[380px] group"
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onClick={isUploadActive ? undefined : handleUploadClick}
+                            className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center min-h-[380px] transition-all duration-200 ${
+                              isUploadActive
+                                ? "cursor-default border-emerald-800/60 bg-[#080d0a]"
+                                : dragOver
+                                ? "cursor-copy border-emerald-600/70 bg-emerald-950/20"
+                                : uploadStage === "ready"
+                                ? "cursor-pointer border-emerald-800/50 bg-[#0a0f0b] hover:border-emerald-700/60"
+                                : uploadStage === "error"
+                                ? "cursor-pointer border-slate-700 bg-[#0c0c0c] hover:border-slate-600"
+                                : "cursor-pointer border-emerald-900/50 bg-[#0c0c0c] hover:border-emerald-700/60 hover:bg-[#0d110e] group"
+                            }`}
                           >
-                            <motion.div
-                              animate={{ y: [0, -4, 0] }}
-                              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                              className="h-16 w-16 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 flex items-center justify-center mb-5 group-hover:border-emerald-700/70"
-                            >
-                              <UploadCloud className="h-8 w-8 text-emerald-400" />
-                            </motion.div>
-                            {uploadedFileName ? (
-                              <>
-                                <h3 className="text-lg font-semibold text-emerald-300 mb-2">
-                                  {uploadedFileName}
-                                </h3>
-                                <p className="text-slate-500 text-sm mb-6">File loaded — scroll down and click Review This Contract.</p>
-                              </>
-                            ) : (
-                              <>
-                                <h3 className="text-lg font-semibold text-slate-200 mb-2">
-                                  Drag & drop your contract
-                                </h3>
-                                <p className="text-slate-500 text-sm mb-2 max-w-xs leading-relaxed">
-                                  PDF, Word (.docx), plain text, or RTF up to 10MB.
-                                </p>
-                                <p className="text-slate-600 text-xs mb-6">
-                                  Our AI reads any format and extracts the text automatically.
-                                </p>
-                              </>
-                            )}
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
-                              className="rounded-xl bg-emerald-950/50 border border-emerald-800/50 text-emerald-300 hover:bg-emerald-950 hover:text-emerald-200"
-                            >
-                              <UploadCloud className="h-3.5 w-3.5 mr-2" />
-                              {uploadedFileName ? "Replace File" : "Choose File"}
-                            </Button>
+                            <AnimatePresence mode="wait">
+
+                              {/* ── Active processing ── */}
+                              {isUploadActive && (
+                                <motion.div
+                                  key="processing"
+                                  initial={{ opacity: 0, scale: 0.96 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.96 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="flex flex-col items-center gap-5"
+                                >
+                                  <div className="relative">
+                                    <div className="h-14 w-14 rounded-full bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center">
+                                      <Loader2 className="h-6 w-6 text-emerald-400 animate-spin" />
+                                    </div>
+                                    <div className="absolute inset-0 rounded-full border border-emerald-700/20 animate-ping opacity-20" />
+                                  </div>
+                                  <div>
+                                    <p className="text-slate-200 font-semibold text-base mb-1">
+                                      {UPLOAD_STAGE_MESSAGES[uploadStage ?? "uploading"]}
+                                    </p>
+                                    <p className="text-slate-600 text-xs">
+                                      {uploadStage === "uploading"
+                                        ? "Sending to secure processing pipeline…"
+                                        : "Parsing document structure and clause layout…"}
+                                    </p>
+                                  </div>
+                                  {/* Stage strip */}
+                                  <div className="flex items-center gap-3 mt-1">
+                                    {["uploading", "extracting"].map((stage) => (
+                                      <div key={stage} className="flex items-center gap-1.5">
+                                        <div className={`h-1.5 w-1.5 rounded-full ${
+                                          uploadStage === stage ? "bg-emerald-400" : "bg-slate-700"
+                                        }`} />
+                                        <span className={`text-[10px] font-mono ${
+                                          uploadStage === stage ? "text-emerald-400" : "text-slate-700"
+                                        }`}>
+                                          {stage === "uploading" ? "Upload" : "Extract"}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </motion.div>
+                              )}
+
+                              {/* ── Ready state ── */}
+                              {uploadStage === "ready" && (
+                                <motion.div
+                                  key="ready"
+                                  initial={{ opacity: 0, scale: 0.96 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.25 }}
+                                  className="flex flex-col items-center gap-4"
+                                >
+                                  <div className="h-14 w-14 rounded-full bg-emerald-950/40 border border-emerald-700/50 flex items-center justify-center">
+                                    <FileCheck className="h-6 w-6 text-emerald-400" />
+                                  </div>
+                                  <div>
+                                    <p className="text-emerald-300 font-semibold text-base mb-1">
+                                      {uploadedFileName}
+                                    </p>
+                                    <p className="text-slate-500 text-sm mb-1">
+                                      Contract text extracted — scroll down and click <strong className="text-slate-400">Review This Contract</strong>.
+                                    </p>
+                                  </div>
+                                  {uploadNotes.length > 0 && (
+                                    <div className="flex flex-col gap-1 w-full max-w-xs">
+                                      {uploadNotes.map((note, i) => (
+                                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                                          <Info className="h-3 w-3 mt-0.5 shrink-0 text-slate-700" />
+                                          <span>{note}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
+                                    className="rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200 text-xs mt-1"
+                                  >
+                                    Replace File
+                                  </Button>
+                                </motion.div>
+                              )}
+
+                              {/* ── Error state ── */}
+                              {uploadStage === "error" && (
+                                <motion.div
+                                  key="error"
+                                  initial={{ opacity: 0, scale: 0.96 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="flex flex-col items-center gap-4 max-w-sm"
+                                >
+                                  <div className="h-12 w-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                                    <AlertTriangle className="h-5 w-5 text-slate-400" />
+                                  </div>
+                                  <div>
+                                    <p className="text-slate-300 font-semibold text-sm mb-2 text-center">
+                                      Unable to process document
+                                    </p>
+                                    <p className="text-slate-500 text-xs leading-relaxed text-center">
+                                      {uploadError}
+                                    </p>
+                                  </div>
+                                  <div className="flex gap-2 flex-wrap justify-center">
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setUploadStage(null);
+                                        setUploadError(null);
+                                        handleUploadClick();
+                                      }}
+                                      className="rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 text-xs"
+                                    >
+                                      Try Another File
+                                    </Button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setUploadStage(null);
+                                        setUploadError(null);
+                                      }}
+                                      className="text-xs text-slate-600 hover:text-slate-400 transition-colors px-3"
+                                    >
+                                      Dismiss
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              )}
+
+                              {/* ── Idle state ── */}
+                              {!uploadStage && (
+                                <motion.div
+                                  key="idle"
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="flex flex-col items-center"
+                                >
+                                  <motion.div
+                                    animate={dragOver ? { scale: 1.1, y: -4 } : { y: [0, -4, 0] }}
+                                    transition={dragOver
+                                      ? { duration: 0.15 }
+                                      : { duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                                    className="h-16 w-16 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 flex items-center justify-center mb-5 group-hover:border-emerald-700/70"
+                                  >
+                                    <UploadCloud className={`h-8 w-8 ${dragOver ? "text-emerald-300" : "text-emerald-400"}`} />
+                                  </motion.div>
+                                  <h3 className="text-lg font-semibold text-slate-200 mb-2">
+                                    {dragOver ? "Drop to process" : "Drag & drop your contract"}
+                                  </h3>
+                                  <p className="text-slate-500 text-sm mb-1.5 max-w-xs leading-relaxed">
+                                    PDF, Word (.docx), plain text, or image files up to 20MB.
+                                  </p>
+                                  <p className="text-slate-600 text-xs mb-6 max-w-xs leading-relaxed">
+                                    IndiePact automatically extracts text, handles multi-page documents,
+                                    and intelligently prioritizes critical clauses for analysis.
+                                  </p>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
+                                    className="rounded-xl bg-emerald-950/50 border border-emerald-800/50 text-emerald-300 hover:bg-emerald-950 hover:text-emerald-200"
+                                  >
+                                    <UploadCloud className="h-3.5 w-3.5 mr-2" />
+                                    Choose File
+                                  </Button>
+                                </motion.div>
+                              )}
+
+                            </AnimatePresence>
                           </div>
                         ) : (
+                          /* Locked upload zone — not on paid plan */
                           <div
                             onClick={handleUploadClick}
                             className="border-2 border-dashed border-slate-700 rounded-2xl p-16 flex flex-col items-center justify-center text-center cursor-pointer bg-[#0c0c0c] hover:border-slate-600 transition-all min-h-[380px] group"
@@ -480,10 +733,10 @@ export default function DocumentLab() {
                               Drag & drop your contract
                             </h3>
                             <p className="text-slate-500 text-sm mb-2 max-w-xs leading-relaxed">
-                              PDF, Word (.docx), or image files up to 10MB.
+                              PDF, Word (.docx), plain text, or image files.
                             </p>
                             <p className="text-slate-600 text-xs mb-6">
-                              Our AI reads any format and extracts the text automatically.
+                              Available on the Starter plan and above.
                             </p>
                             <Button
                               variant="secondary"
@@ -494,7 +747,7 @@ export default function DocumentLab() {
                               {isGuest ? (
                                 <><LogIn className="h-3.5 w-3.5 mr-2" /> Sign In to Upload</>
                               ) : (
-                                "Choose File — Paid Feature"
+                                "Unlock File Upload — Starter+"
                               )}
                             </Button>
                           </div>
@@ -515,7 +768,7 @@ export default function DocumentLab() {
                     <Button
                       size="lg"
                       onClick={handleAnalyze}
-                      disabled={isAnalyzing || (!isGuest && !contractText.trim())}
+                      disabled={isAnalyzing || isUploadActive || (!isGuest && !contractText.trim())}
                       className="px-8 bg-emerald-700 hover:bg-emerald-600 text-white font-semibold transition-all rounded-xl"
                     >
                       {isGuest ? (
@@ -547,7 +800,7 @@ export default function DocumentLab() {
               File upload requires the Starter plan
             </DialogTitle>
             <DialogDescription className="text-base pt-2 leading-relaxed">
-              Upgrade to Starter ($19/mo) or above to upload PDF, Word, and image files. Our AI extracts the text automatically — no copying and pasting needed.
+              Upgrade to Starter ($19/mo) or above to upload PDF, Word, and image files. IndiePact extracts the text automatically — no copying and pasting needed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">

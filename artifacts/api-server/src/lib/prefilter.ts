@@ -101,38 +101,110 @@ export interface ExtractedClause {
   sentences: string[];
 }
 
-export function extractRiskyClauses(contractText: string): {
-  extractedClauses: string[];
-  foundCategories: string[];
-} {
-  const sentences = contractText
+// ─── Sentence tokeniser ────────────────────────────────────────────────────────
+
+function tokeniseSentences(text: string): string[] {
+  return text
     .replace(/\n+/g, " ")
     .split(/(?<=[.!?])\s+/)
-    .filter((s) => s.trim().length > 20);
+    .map((s) => s.trim())
+    .filter((s) => s.length > 20);
+}
 
-  const extractedClauses: Set<string> = new Set();
-  const foundCategories: Set<string> = new Set();
+// ─── Core extraction (single pass over sentence list) ─────────────────────────
+
+function extractFromSentences(sentences: string[]): {
+  clauses: Set<string>;
+  categories: Set<string>;
+} {
+  const clauses = new Set<string>();
+  const categories = new Set<string>();
 
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase();
     for (const [category, keywords] of Object.entries(RISK_KEYWORDS)) {
       for (const keyword of keywords) {
         if (lower.includes(keyword.toLowerCase())) {
-          extractedClauses.add(sentence.trim());
-          foundCategories.add(category);
+          clauses.add(sentence.trim());
+          categories.add(category);
           break;
         }
       }
     }
   }
 
+  return { clauses, categories };
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * For large documents (> 20 000 chars), split into overlapping 5 000-char
+ * chunks so we never miss risky clauses near chunk boundaries.
+ * For normal documents, use a single pass — same behaviour as before.
+ */
+export function extractRiskyClauses(contractText: string): {
+  extractedClauses: string[];
+  foundCategories: string[];
+} {
+  const CHUNK_SIZE = 5_000;
+  const OVERLAP = 500;
+  const LARGE_DOC_THRESHOLD = 20_000;
+
+  let allClauses = new Set<string>();
+  let allCategories = new Set<string>();
+
+  if (contractText.length <= LARGE_DOC_THRESHOLD) {
+    // Fast path — process in one go
+    const sentences = tokeniseSentences(contractText);
+    const { clauses, categories } = extractFromSentences(sentences);
+    allClauses = clauses;
+    allCategories = categories;
+  } else {
+    // Chunked path — ensures full-document coverage
+    let offset = 0;
+    while (offset < contractText.length) {
+      const chunk = contractText.slice(offset, offset + CHUNK_SIZE);
+      const sentences = tokeniseSentences(chunk);
+      const { clauses, categories } = extractFromSentences(sentences);
+      clauses.forEach((c) => allClauses.add(c));
+      categories.forEach((c) => allCategories.add(c));
+      offset += CHUNK_SIZE - OVERLAP;
+    }
+  }
+
   return {
-    extractedClauses: Array.from(extractedClauses).slice(0, 30),
-    foundCategories: Array.from(foundCategories),
+    // Allow up to 40 clauses (up from 30) to improve large-doc coverage
+    extractedClauses: Array.from(allClauses).slice(0, 40),
+    foundCategories: Array.from(allCategories),
   };
 }
 
+/**
+ * Smart truncation: prioritise clauses that mention the highest-signal
+ * risk categories and trim to a safe AI context window.
+ */
 export function truncateForAI(clauses: string[]): string {
-  const joined = clauses.join("\n\n");
-  return joined.length > 8000 ? joined.slice(0, 8000) + "..." : joined;
+  const HIGH_SIGNAL = ["liability", "ipOwnership", "paymentDelay", "termination"];
+
+  // Sort: high-signal categories first
+  const scored = clauses.map((c) => {
+    const lower = c.toLowerCase();
+    let score = 0;
+    for (const [cat, keywords] of Object.entries(RISK_KEYWORDS)) {
+      if (HIGH_SIGNAL.includes(cat)) {
+        for (const kw of keywords) {
+          if (lower.includes(kw)) { score += 2; break; }
+        }
+      }
+    }
+    return { c, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const sorted = scored.map((s) => s.c);
+
+  const joined = sorted.join("\n\n");
+  // Increased limit to 12 000 chars (gpt-4o-mini handles it comfortably)
+  return joined.length > 12_000 ? joined.slice(0, 12_000) + "\n\n[…further sections omitted — priority clauses preserved above]" : joined;
 }

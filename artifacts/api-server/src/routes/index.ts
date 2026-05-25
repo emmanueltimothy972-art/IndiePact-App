@@ -9,6 +9,7 @@ import extractRouter from "./extract.js";
 import legalStrategyRouter from "./legal-strategy.js";
 import subscriptionRouter from "./subscription.js";
 import authRouter from "./auth.js";
+import processDocumentRouter from "./process-document.js";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(clausesRouter);
 router.use(extractRouter);
 router.use(legalStrategyRouter);
 router.use(subscriptionRouter);
+router.use(processDocumentRouter);
 
 export default router;
