@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth, consumeReturnTo } from "@/contexts/AuthContext";
-import { Lock, ArrowLeft, Mail, CheckCircle2, Timer } from "lucide-react";
+import { Lock, ArrowLeft, Mail, CheckCircle2, Timer, ClipboardPaste } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -51,78 +51,96 @@ function BrandMark({ step }: { step: Step }) {
   );
 }
 
-// ─── 6-digit OTP input ────────────────────────────────────────────────────────
+// ─── Single-field OTP input ───────────────────────────────────────────────────
+// Replaces the 6-box approach. Accepts typing, paste, auto-submits at 6 digits.
 
-function OtpInput({ value, onChange, disabled }: {
+function OtpSingleInput({
+  value,
+  onChange,
+  disabled,
+  onComplete,
+}: {
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
+  onComplete?: (v: string) => void;
 }) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-  const digits = value.padEnd(6, "").split("").slice(0, 6);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      const next = digits.map((d, j) => (j === i ? "" : d)).join("");
-      onChange(next);
-      if (i > 0) refs.current[i - 1]?.focus();
-    } else if (e.key === "ArrowLeft" && i > 0) {
-      refs.current[i - 1]?.focus();
-    } else if (e.key === "ArrowRight" && i < 5) {
-      refs.current[i + 1]?.focus();
-    }
+  useEffect(() => {
+    // Auto-focus when the verify step mounts
+    const t = setTimeout(() => inputRef.current?.focus(), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  const processValue = useCallback(
+    (raw: string) => {
+      const clean = raw.replace(/\D/g, "").slice(0, 6);
+      onChange(clean);
+      if (clean.length === 6) {
+        onComplete?.(clean);
+      }
+    },
+    [onChange, onComplete],
+  );
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processValue(e.target.value);
   };
 
-  const handleChange = (i: number, raw: string) => {
-    const char = raw.replace(/\D/g, "").slice(-1);
-    if (!char) return;
-    const next = digits.map((d, j) => (j === i ? char : d)).join("");
-    onChange(next);
-    if (i < 5) refs.current[i + 1]?.focus();
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    onChange(pasted.padEnd(6, "").slice(0, 6));
-    refs.current[Math.min(pasted.length, 5)]?.focus();
+    processValue(e.clipboardData.getData("text"));
   };
 
   return (
-    <div className="flex gap-2.5 justify-center">
-      {digits.map((d, i) => (
-        <input
-          key={i}
-          ref={el => { refs.current[i] = el; }}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={d}
-          disabled={disabled}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKey(i, e)}
-          onPaste={handlePaste}
-          className={`h-13 w-11 rounded-xl text-center text-xl font-mono font-bold bg-slate-900 border-2 transition-all outline-none
-            ${d ? "border-emerald-600/70 text-white shadow-[0_0_12px_rgba(16,185,129,0.12)]" : "border-slate-800 text-slate-600"}
-            focus:border-emerald-600/60 focus:shadow-[0_0_14px_rgba(16,185,129,0.15)] disabled:opacity-40`}
-        />
-      ))}
+    <div className="space-y-2">
+      <label className="block text-xs text-slate-400 text-center font-medium">
+        Enter the 6-digit code sent to your email
+      </label>
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={6}
+        autoComplete="one-time-code"
+        value={value}
+        onChange={handleChange}
+        onPaste={handlePaste}
+        disabled={disabled}
+        placeholder="000000"
+        className={`w-full px-5 py-4 rounded-xl text-center text-2xl font-mono font-bold tracking-[0.4em]
+          bg-slate-900 border-2 text-white placeholder:text-slate-700
+          focus:outline-none transition-all disabled:opacity-40
+          ${value.length === 6
+            ? "border-emerald-600/70 shadow-[0_0_16px_rgba(16,185,129,0.12)]"
+            : "border-slate-800 focus:border-emerald-600/50 focus:shadow-[0_0_12px_rgba(16,185,129,0.08)]"
+          }`}
+      />
+      <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-600">
+        <ClipboardPaste className="h-3 w-3" />
+        You can paste the code directly
+      </p>
     </div>
   );
 }
 
 // ─── Countdown timer hook ─────────────────────────────────────────────────────
+// start(n) begins a countdown from n seconds. Supports dynamic start values
+// so restored sessions can resume from the correct remaining time.
 
-function useCountdown(startAt: number) {
+function useCountdown() {
   const [seconds, setSeconds] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const start = useCallback(() => {
+  const start = useCallback((startAt: number) => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    setSeconds(startAt);
+    const s = Math.max(0, Math.floor(startAt));
+    if (s === 0) return;
+    setSeconds(s);
     intervalRef.current = setInterval(() => {
-      setSeconds(prev => {
+      setSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(intervalRef.current!);
           intervalRef.current = null;
@@ -131,7 +149,7 @@ function useCountdown(startAt: number) {
         return prev - 1;
       });
     }, 1000);
-  }, [startAt]);
+  }, []);
 
   const reset = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -148,12 +166,7 @@ function useCountdown(startAt: number) {
 
 function Spinner({ className = "" }: { className?: string }) {
   return (
-    <svg
-      className={`animate-spin ${className}`}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg className={`animate-spin ${className}`} viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
       <path d="M8 2a6 6 0 0 1 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
@@ -163,6 +176,25 @@ function Spinner({ className = "" }: { className?: string }) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 type Step = "initial" | "verify" | "success";
+
+const SESSION_KEY = "ip_auth_pending";
+const RESEND_COOLDOWN = 60; // seconds — UI throttle only, NOT OTP expiry
+
+interface PendingAuth { email: string; sentAt: number }
+
+function savePending(email: string) {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ email, sentAt: Date.now() })); } catch {}
+}
+function loadPending(): PendingAuth | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PendingAuth;
+  } catch { return null; }
+}
+function clearPending() {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+}
 
 function navigateToReturnTo() {
   const returnTo = consumeReturnTo();
@@ -186,16 +218,30 @@ export function AuthModal() {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
 
-  // Isolated loading states — Google and email flows never share state.
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
-  const countdown = useCountdown(60);
+  const countdown = useCountdown();
 
   const anyLoading = isGoogleLoading || isEmailLoading;
 
-  const reset = () => {
+  // ── Restore pending OTP session on modal open (survives refresh) ───────────
+  useEffect(() => {
+    if (!showAuthModal) return;
+    const pending = loadPending();
+    if (pending) {
+      const elapsedSec = Math.floor((Date.now() - pending.sentAt) / 1000);
+      const remaining = RESEND_COOLDOWN - elapsedSec;
+      setEmail(pending.email);
+      setStep("verify");
+      setOtp("");
+      if (remaining > 0) countdown.start(remaining);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAuthModal]);
+
+  const reset = useCallback(() => {
     setStep("initial");
     setEmail("");
     setOtp("");
@@ -203,17 +249,48 @@ export function AuthModal() {
     setIsGoogleLoading(false);
     setIsEmailLoading(false);
     countdown.reset();
-  };
+    clearPending();
+  }, [countdown]);
 
   const handleClose = () => {
-    if (anyLoading) return; // prevent close mid-flight
+    if (anyLoading) return;
     closeAuthModal();
     setTimeout(reset, 300);
   };
 
+  // ── OTP verify logic (shared between form submit and auto-submit) ──────────
+
+  const submitOtp = useCallback(async (token: string) => {
+    const clean = token.replace(/\D/g, "");
+    if (clean.length < 6 || isEmailLoading) return;
+    setError(null);
+    setIsEmailLoading(true);
+    try {
+      const { error: verifyErr } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: clean,
+        type: "email",
+      });
+      if (verifyErr) {
+        setError("Incorrect or expired code. Please check and try again.");
+        setIsEmailLoading(false);
+        return;
+      }
+      clearPending();
+      setStep("success");
+      setTimeout(navigateToReturnTo, 900);
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setIsEmailLoading(false);
+    }
+  }, [email, isEmailLoading]);
+
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitOtp(otp);
+  };
+
   // ── Google OAuth ──────────────────────────────────────────────────────────
-  // isGoogleLoading stays true until the browser navigates away to Google.
-  // If the OAuth call errors synchronously, we reset it and show the error.
 
   const handleGoogleSignIn = async () => {
     if (isGoogleLoading || isEmailLoading) return;
@@ -224,7 +301,6 @@ export function AuthModal() {
       setError("Couldn't connect to Google. Please try again.");
       setIsGoogleLoading(false);
     }
-    // On success the browser redirects to Google; no reset needed.
   };
 
   // ── Email OTP — send / resend ─────────────────────────────────────────────
@@ -260,8 +336,10 @@ export function AuthModal() {
     const ok = await sendOtp(trimmed);
     if (ok) {
       setOtp("");
+      setError(null);
+      savePending(trimmed);
       setStep("verify");
-      countdown.start();
+      countdown.start(RESEND_COOLDOWN);
     }
   };
 
@@ -270,33 +348,9 @@ export function AuthModal() {
     const ok = await sendOtp(email.trim().toLowerCase());
     if (ok) {
       setOtp("");
-      countdown.start();
-    }
-  };
-
-  // ── Email OTP — verify ────────────────────────────────────────────────────
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otp.replace(/\D/g, "").length < 6 || isEmailLoading) return;
-    setError(null);
-    setIsEmailLoading(true);
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: otp.replace(/\D/g, ""),
-        type: "email",
-      });
-      if (error) {
-        setError("Incorrect or expired code. Please check and try again.");
-        setIsEmailLoading(false);
-        return;
-      }
-      setStep("success");
-      setTimeout(navigateToReturnTo, 900);
-    } catch {
-      setError("Something went wrong. Please try again.");
-      setIsEmailLoading(false);
+      setError(null);
+      savePending(email.trim().toLowerCase());
+      countdown.start(RESEND_COOLDOWN);
     }
   };
 
@@ -306,13 +360,12 @@ export function AuthModal() {
 
   const headline =
     step === "success" ? "You're signed in!" :
-    step === "verify" ? "Check your inbox" :
-    authContext ? `Sign in to ${authContext}` :
-    "Sign in to IndiePact";
+    step === "verify"  ? "Check your inbox" :
+    authContext ? `Sign in to ${authContext}` : "Sign in to IndiePact";
 
   const subline =
     step === "success" ? "Taking you there now…" :
-    step === "verify" ? `We sent a 6-digit code to ${email}` :
+    step === "verify"  ? `Code sent to ${email}` :
     "Free to start — no password, no friction.";
 
   return (
@@ -340,7 +393,7 @@ export function AuthModal() {
           {/* ── Step content ── */}
           <AnimatePresence mode="wait" initial={false}>
 
-            {/* ── Initial: Google + Email inline ── */}
+            {/* ── Initial: Google + Email ── */}
             {step === "initial" && (
               <motion.div
                 key="initial"
@@ -351,7 +404,6 @@ export function AuthModal() {
                 transition={{ duration: 0.18 }}
                 className="flex flex-col gap-3"
               >
-                {/* Google button — only reacts to isGoogleLoading */}
                 <button
                   onClick={handleGoogleSignIn}
                   disabled={isGoogleLoading || isEmailLoading}
@@ -364,14 +416,12 @@ export function AuthModal() {
                   {isGoogleLoading ? "Connecting…" : "Continue with Google"}
                 </button>
 
-                {/* Divider */}
                 <div className="flex items-center gap-3 py-1">
                   <div className="flex-1 h-px bg-slate-800" />
                   <span className="text-xs text-slate-600 whitespace-nowrap">or sign in with email</span>
                   <div className="flex-1 h-px bg-slate-800" />
                 </div>
 
-                {/* Email + Send Code — only reacts to isEmailLoading */}
                 <form onSubmit={handleSendCode} className="flex flex-col gap-2.5">
                   <input
                     type="email"
@@ -401,7 +451,7 @@ export function AuthModal() {
               </motion.div>
             )}
 
-            {/* ── Verify: OTP + countdown ── */}
+            {/* ── Verify: single OTP input + resend cooldown ── */}
             {step === "verify" && (
               <motion.form
                 key="verify"
@@ -413,7 +463,12 @@ export function AuthModal() {
                 onSubmit={handleVerifyOtp}
                 className="flex flex-col gap-4"
               >
-                <OtpInput value={otp} onChange={setOtp} disabled={isEmailLoading} />
+                <OtpSingleInput
+                  value={otp}
+                  onChange={setOtp}
+                  disabled={isEmailLoading}
+                  onComplete={(v) => void submitOtp(v)}
+                />
 
                 {error && (
                   <p className="text-red-400 text-xs text-center animate-in fade-in slide-in-from-top-1 duration-200">
@@ -431,11 +486,11 @@ export function AuthModal() {
                     : "Verify Code"}
                 </button>
 
-                {/* Countdown + resend row */}
+                {/* Resend row — timer is ONLY for resend throttle, not OTP expiry */}
                 <div className="flex items-center justify-between text-xs pt-0.5">
                   <button
                     type="button"
-                    onClick={() => { setError(null); setOtp(""); setStep("initial"); countdown.reset(); }}
+                    onClick={() => { setError(null); setOtp(""); setStep("initial"); countdown.reset(); clearPending(); }}
                     className="flex items-center gap-1.5 text-slate-600 hover:text-slate-400 transition-colors"
                   >
                     <ArrowLeft className="h-3 w-3" /> Change email
@@ -457,6 +512,10 @@ export function AuthModal() {
                     </button>
                   )}
                 </div>
+
+                <p className="text-[11px] text-slate-700 text-center leading-relaxed">
+                  Code is valid for 30 minutes. Check your spam folder if it doesn't arrive.
+                </p>
               </motion.form>
             )}
 
