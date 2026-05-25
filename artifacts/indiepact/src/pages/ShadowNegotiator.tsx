@@ -351,6 +351,8 @@ export default function ShadowNegotiator() {
     }
   }, [input, isLoading, messages, qualifyingStep, qualifyingAnswers, caseContext]);
 
+  const [replyTones, setReplyTones] = useState<Record<number, "soft" | "balanced" | "firm">>({});
+
   const resetProsecutor = () => {
     setMessages([{ role: "ai", content: QUALIFYING_QUESTIONS[0] }]);
     setQualifyingStep(1);
@@ -474,6 +476,50 @@ export default function ShadowNegotiator() {
             );
           })()}
 
+          {/* Negotiation Edge Insight + 3-Step Strategy Path */}
+          {!tableLoading && selectedRisks.length > 0 && (() => {
+            const topHigh = selectedRisks.find((r) => r.severity === "High") ?? selectedRisks[0];
+            const categories = [...new Set(selectedRisks.map((r) => r.category))];
+            const step1 = topHigh ? `Challenge "${topHigh.title || topHigh.category}" — your highest-risk clause` : "Identify the highest-risk clause and open with it";
+            const step2 = topHigh?.fixes?.rewrittenClause ? `Offer the protective rewrite for ${topHigh.category} as your counter-proposal` : "Present your protective counter-clause and rationale";
+            const step3 = selectedRisks.filter((r) => r.severity === "High").length > 2 ? "If 3+ High-risk clauses are unresolved, invoke your walk-away position" : "Secure your key concessions, then sign with the amended language";
+            return (
+              <div className="mb-5 space-y-3">
+                {/* Edge Insight */}
+                <div className="flex items-start gap-3 px-5 py-3.5 rounded-xl border border-amber-900/30 bg-amber-950/10">
+                  <Target className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-mono text-amber-500/70 uppercase tracking-widest mb-0.5">Negotiation Edge Insight</p>
+                    <p className="text-xs text-amber-200/80 leading-relaxed">
+                      Your strongest leverage: <span className="font-semibold text-amber-300">{topHigh?.title || topHigh?.category}</span>
+                      {topHigh?.fixes?.direct && (
+                        <> — {topHigh.fixes.direct.split(".")[0]}.</>
+                      )}
+                    </p>
+                    {categories.length > 1 && (
+                      <p className="text-[11px] text-amber-400/50 mt-1 font-mono">
+                        {categories.slice(0, 4).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {/* 3-Step Strategy Path */}
+                <div className="flex items-stretch gap-0 rounded-xl border border-border overflow-hidden">
+                  {[
+                    { label: "① Opening", text: step1, color: "border-r border-border bg-[#050505]" },
+                    { label: "② Middle Ground", text: step2, color: "border-r border-border bg-card/40" },
+                    { label: "③ Close", text: step3, color: "bg-card/20" },
+                  ].map((s) => (
+                    <div key={s.label} className={`flex-1 px-4 py-3 space-y-1.5 ${s.color}`}>
+                      <p className="text-[10px] font-mono font-semibold text-emerald-400/70 uppercase tracking-widest">{s.label}</p>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{s.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {tableLoading ? (
             <div className="flex items-center justify-center h-64 text-muted-foreground text-sm animate-pulse">
               Loading clause data...
@@ -552,6 +598,51 @@ export default function ShadowNegotiator() {
                       <p className="text-xs text-slate-400 leading-relaxed">{risk.fixes.legal}</p>
                     </div>
                     <CopyButton text={`${risk.fixes.direct}\n\n${risk.fixes.legal}`} />
+
+                    {/* Quick Reply Generator */}
+                    <div className="pt-2 border-t border-border/60 space-y-2">
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Quick Reply</p>
+                      <div className="flex gap-1.5">
+                        {(["soft", "balanced", "firm"] as const).map((tone) => (
+                          <button
+                            key={tone}
+                            onClick={() => setReplyTones((prev) => ({ ...prev, [idx]: prev[idx] === tone ? undefined as unknown as typeof tone : tone }))}
+                            className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-all capitalize ${
+                              replyTones[idx] === tone
+                                ? tone === "soft"
+                                  ? "border-blue-800/60 bg-blue-950/30 text-blue-300"
+                                  : tone === "balanced"
+                                  ? "border-emerald-800/50 bg-emerald-950/20 text-emerald-300"
+                                  : "border-red-900/50 bg-red-950/20 text-red-300"
+                                : "border-border bg-card/40 text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {tone}
+                          </button>
+                        ))}
+                      </div>
+                      {replyTones[idx] && (
+                        <div className="rounded-lg border border-border/60 bg-[#050505] p-3 space-y-2">
+                          <p className="text-xs text-slate-200 leading-relaxed italic">
+                            "{replyTones[idx] === "soft"
+                              ? risk.fixes.diplomatic
+                              : replyTones[idx] === "balanced"
+                              ? risk.fixes.direct
+                              : risk.fixes.legal}"
+                          </p>
+                          <CopyButton
+                            text={
+                              replyTones[idx] === "soft"
+                                ? risk.fixes.diplomatic
+                                : replyTones[idx] === "balanced"
+                                ? risk.fixes.direct
+                                : risk.fixes.legal
+                            }
+                            label={`Copy ${replyTones[idx]}`}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

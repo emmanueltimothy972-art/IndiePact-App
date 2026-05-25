@@ -115,6 +115,7 @@ export default function TheBar() {
   const [selectedRiskIdx, setSelectedRiskIdx] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSeverity, setFilterSeverity] = useState<"All" | "High" | "Medium" | "Low">("All");
+  const [clarityMode, setClarityMode] = useState(false);
 
   const { data, isLoading } = useListScans(
     { userId, limit: 20, offset: 0 },
@@ -555,15 +556,27 @@ export default function TheBar() {
               {/* ── Clause Deep-Dive ─────────────────────────────────── */}
               {selectedRisk && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 px-1">
+                  <div className="flex items-center gap-2 px-1 flex-wrap">
                     <TrendingDown className="h-4 w-4 text-slate-500" />
                     <h2 className="font-semibold text-white text-sm">
                       Clause Deep-Dive —{" "}
                       <span className="text-slate-400 font-normal">{selectedRisk.category}</span>
                     </h2>
-                    <span className="ml-auto text-[10px] text-slate-600">
+                    <span className="text-[10px] text-slate-600">
                       {clampedIdx + 1} of {filteredRisks.length}
                     </span>
+                    {/* Clarity Mode toggle */}
+                    <button
+                      onClick={() => setClarityMode((v) => !v)}
+                      className={`ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-all ${
+                        clarityMode
+                          ? "border-emerald-800/60 bg-emerald-950/30 text-emerald-400"
+                          : "border-slate-700 bg-slate-900 text-slate-500 hover:text-slate-300"
+                      }`}
+                    >
+                      <Scale className="h-3 w-3" />
+                      {clarityMode ? "Clarity ON" : "Clarity Mode"}
+                    </button>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setSelectedRiskIdx((i) => Math.max(0, i - 1))}
@@ -582,11 +595,47 @@ export default function TheBar() {
                     </div>
                   </div>
 
+                  {/* Clarity Mode: severity label banner */}
+                  {clarityMode && (
+                    <div className={`flex items-center gap-3 px-4 py-2.5 rounded-lg border text-xs font-semibold ${
+                      selectedRisk.severity === "High"
+                        ? "border-red-900/50 bg-red-950/20 text-red-300"
+                        : selectedRisk.severity === "Medium"
+                        ? "border-amber-900/40 bg-amber-950/10 text-amber-300"
+                        : "border-emerald-900/30 bg-emerald-950/10 text-emerald-300"
+                    }`}>
+                      <span className="text-[10px] font-mono uppercase tracking-widest opacity-60">Risk Level</span>
+                      <span className="font-bold tracking-widest text-sm">
+                        {selectedRisk.severity === "High" ? "⚠ DANGEROUS" : selectedRisk.severity === "Medium" ? "◉ WATCH" : "✓ SAFE"}
+                      </span>
+                      <span className="ml-auto text-[10px] font-normal opacity-70">
+                        {selectedRisk.severity === "High"
+                          ? "This clause poses immediate legal or financial risk."
+                          : selectedRisk.severity === "Medium"
+                          ? "Monitor and negotiate if possible."
+                          : "Low exposure — verify the rewritten version matches your context."}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Why it hurts */}
                   {selectedRisk.whyThisHurtsYou && (
                     <div className="rounded-xl border border-amber-900/30 bg-[#0a0a0a] px-5 py-4 text-sm text-amber-300/80 leading-relaxed">
                       <span className="font-semibold text-amber-400">Why this hurts you: </span>
                       {selectedRisk.whyThisHurtsYou}
+                    </div>
+                  )}
+
+                  {/* Clarity Mode: Negotiation Hint */}
+                  {clarityMode && selectedRisk.fixes?.direct && (
+                    <div className="flex items-start gap-3 rounded-xl border border-slate-700/50 bg-[#0c0c0c] px-5 py-3.5">
+                      <TrendingUp className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Negotiation Hint</p>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {selectedRisk.fixes.direct.split(".")[0]}.
+                        </p>
+                      </div>
                     </div>
                   )}
 

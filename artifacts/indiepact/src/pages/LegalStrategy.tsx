@@ -8,7 +8,7 @@ import { useScanContext } from "@/contexts/ScanContext";
 import {
   Brain, Zap, Scale, AlertTriangle, CheckCircle2, ChevronRight,
   ArrowRight, Loader2, MessageSquare, FileSearch, Star,
-  Shield, Clock, Target, HelpCircle,
+  Shield, Clock, Target, HelpCircle, TrendingUp, TrendingDown, XCircle,
 } from "lucide-react";
 
 interface LegalStrategyResult {
@@ -75,6 +75,100 @@ function PowerMeter({ score, label, explanation }: { score: number; label: strin
   );
 }
 
+function StrategicCommandCenter({ result }: { result: LegalStrategyResult }) {
+  const { powerBalance, priorityRisks, redFlags } = result;
+
+  const hasImmediateRisk = priorityRisks.some((r) => r.urgency === "Immediate");
+  const hasHighUrgency = priorityRisks.some((r) => r.urgency === "High");
+  const immediateCount = priorityRisks.filter((r) => r.urgency === "Immediate").length;
+
+  type Decision = "DO NOT SIGN" | "RENEGOTIATE FIRST" | "READY TO SIGN";
+  const decision: Decision =
+    powerBalance.score < 40 || hasImmediateRisk
+      ? "DO NOT SIGN"
+      : powerBalance.score < 65 || hasHighUrgency
+      ? "RENEGOTIATE FIRST"
+      : "READY TO SIGN";
+
+  const configs: Record<Decision, { border: string; badge: string; icon: React.ReactNode; sub: string }> = {
+    "DO NOT SIGN": {
+      border: "border-red-900/50 bg-red-950/10",
+      badge: "bg-red-950/40 border-red-800/50 text-red-300",
+      icon: <XCircle className="h-5 w-5 text-red-400" />,
+      sub: "Significant risk detected. Do not sign until critical clauses are renegotiated.",
+    },
+    "RENEGOTIATE FIRST": {
+      border: "border-amber-900/40 bg-amber-950/10",
+      badge: "bg-amber-950/40 border-amber-800/40 text-amber-300",
+      icon: <Zap className="h-5 w-5 text-amber-400" />,
+      sub: "Multiple issues need resolution. Negotiate priority items before proceeding.",
+    },
+    "READY TO SIGN": {
+      border: "border-emerald-900/40 bg-emerald-950/10",
+      badge: "bg-emerald-950/40 border-emerald-800/40 text-emerald-300",
+      icon: <CheckCircle2 className="h-5 w-5 text-emerald-400" />,
+      sub: "Your position is strong. Complete remaining checklist items and proceed.",
+    },
+  };
+
+  const cfg = configs[decision];
+  const topRisk = priorityRisks[0];
+  const scoreColor = powerBalance.score >= 65 ? "text-emerald-400" : powerBalance.score >= 40 ? "text-amber-400" : "text-red-400";
+
+  const bestCase =
+    powerBalance.score >= 65
+      ? `Strong negotiating position — you can push back on all flagged clauses and likely secure favorable terms.`
+      : `If all priority issues are resolved, the contract becomes workable. Focus on ${topRisk?.title ?? "key clauses"} first.`;
+
+  const worstCase =
+    priorityRisks.length > 0
+      ? `${topRisk.impact}${immediateCount > 0 ? ` (${immediateCount} clause${immediateCount > 1 ? "s" : ""} require immediate action.)` : ""}`
+      : redFlags.length > 0
+      ? `"${redFlags[0].clause}" — ${redFlags[0].realWorldImpact}`
+      : "Low exposure if remaining checklist items are completed before signing.";
+
+  return (
+    <div className={`rounded-2xl border p-6 space-y-5 ${cfg.border}`}>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          {cfg.icon}
+          <div>
+            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Decision Recommendation</p>
+            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold tracking-wider ${cfg.badge}`}>
+              {decision}
+            </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-1">Power Score</p>
+          <span className={`text-2xl font-mono font-bold ${scoreColor}`}>
+            {powerBalance.score}<span className="text-sm text-slate-600">/100</span>
+          </span>
+        </div>
+      </div>
+
+      <p className="text-sm text-slate-400 leading-relaxed border-t border-slate-800/60 pt-4">{cfg.sub}</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-xl border border-emerald-900/30 bg-[#0a0a0a] p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-500/70">Best Case</span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed">{bestCase}</p>
+        </div>
+        <div className="rounded-xl border border-red-900/20 bg-[#0a0a0a] p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <TrendingDown className="h-3.5 w-3.5 text-red-400" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-red-500/70">Worst Case</span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed">{worstCase}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StrategyResults({ result, contractName }: { result: LegalStrategyResult; contractName: string }) {
   const [checklist, setChecklist] = useState(
     result.checklist.map((item) => ({ ...item, completed: false }))
@@ -88,6 +182,9 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
 
   return (
     <div className="space-y-6">
+      {/* Strategic Command Center */}
+      <StrategicCommandCenter result={result} />
+
       {/* Contract name */}
       <div className="flex items-center gap-2 text-sm text-slate-500">
         <FileSearch className="h-4 w-4" />
