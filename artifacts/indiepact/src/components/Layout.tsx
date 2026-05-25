@@ -10,11 +10,13 @@ import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { TierSwitcher } from "@/components/TierSwitcher";
+import { LogoutConfirmModal } from "@/components/LogoutConfirmModal";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [isGenerating, setIsGenerating] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const { user, userId, isGuest, openAuthModal, signOut, isLoading, devTier } = useAuth();
   const isScanDetail = location.startsWith("/scan/") && location !== "/scan";
   const scanId = isScanDetail ? location.split("/")[2] : null;
@@ -156,7 +158,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <span className="text-xs text-slate-400 truncate">{user?.email}</span>
                 </div>
                 <button
-                  onClick={() => void signOut()}
+                  onClick={() => setShowLogoutModal(true)}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-300 hover:bg-slate-800/30 transition-colors"
                 >
                   <LogOut size={13} />
@@ -199,7 +201,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     </button>
                   ) : (
                     <button
-                      onClick={() => { setMobileMenuOpen(false); void signOut(); }}
+                      onClick={() => { setMobileMenuOpen(false); setShowLogoutModal(true); }}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-300"
                     >
                       <LogOut size={13} /> Sign Out
@@ -255,7 +257,7 @@ export function Layout({ children }: { children: ReactNode }) {
                     {userInitial}
                   </div>
                   <button
-                    onClick={() => void signOut()}
+                    onClick={() => setShowLogoutModal(true)}
                     className="hidden sm:flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
                   >
                     <LogOut className="h-3.5 w-3.5" />
@@ -270,6 +272,12 @@ export function Layout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+
+      <LogoutConfirmModal
+        open={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={signOut}
+      />
     </div>
   );
 }
