@@ -13,7 +13,7 @@ import { ForensicTrace } from "@/components/ForensicTrace";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScanResult } from "@workspace/api-client-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { PLAN_DISPLAY_NAMES, isPaidPlan } from "@/lib/constants";
 import { useScanContext } from "@/contexts/ScanContext";
 import { SavedScan } from "@workspace/api-client-react";
@@ -61,6 +61,7 @@ export default function DocumentLab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  const [, navigate] = useLocation();
   const { userId, isGuest, isLoading, openAuthModal, userPlan, scansUsed, scansLimit, refreshSubscription } = useAuth();
   const [contractRestored, setContractRestored] = useState(false);
   const restoredRef = useRef(false);
@@ -137,6 +138,40 @@ export default function DocumentLab() {
       { data: { contractText, userId, contractName: finalName } },
       {
         onSuccess: (result) => {
+          // ── Deduplication hit ─────────────────────────────────────────────
+          // The server recognised this contract text and returned a previously
+          // stored result.  No quota was consumed and no OpenAI call was made.
+          // Skip ForensicTrace, skip saveScan, skip refreshSubscription —
+          // just navigate the user straight to their existing scan.
+          type WithDedupMeta = ScanResult & {
+            _cached?: boolean;
+            _cachedScanId?: string;
+            _cachedContractName?: string;
+          };
+          const meta = result as WithDedupMeta;
+
+          if (meta._cached) {
+            setShowTrace(false);
+            pendingResult.current = null;
+            traceComplete.current = false;
+
+            toast({
+              title: "Already analyzed",
+              description: "This contract was already analyzed. Reopening previous results.",
+            });
+
+            if (meta._cachedScanId) {
+              navigate(`/scan/${meta._cachedScanId}`);
+            } else {
+              // Fallback: no ID returned — show inline without saving
+              pendingResult.current = result;
+              setActiveScan(meta._cachedContractName ?? finalName, result, contractText);
+              tryReveal();
+            }
+            return;
+          }
+
+          // ── New scan ──────────────────────────────────────────────────────
           pendingResult.current = result;
           setActiveScan(finalName, result, contractText);
           const tempId = `temp_${Date.now()}`;

@@ -58,7 +58,7 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
   try {
     const { data: cachedScan } = await requireSupabase()
       .from("scans")
-      .select("result, contract_name")
+      .select("id, result, contract_name")
       .eq("user_id", userId)
       .eq("contract_hash", contractHash)
       .order("created_at", { ascending: false })
@@ -66,8 +66,25 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
       .single();
 
     if (cachedScan?.result) {
-      req.log.info({ userId, contractHash: contractHash.slice(0, 12) }, "Cache hit — returning stored result");
-      return res.json({ ...cachedScan.result, _cached: true });
+      req.log.info(
+        { userId, contractHash: contractHash.slice(0, 12), scanId: cachedScan.id },
+        "Dedup hit — returning stored result without consuming quota",
+      );
+
+      // Touch last_opened_at — fire-and-forget, never blocks the response
+      void requireSupabase()
+        .from("scans")
+        .update({ last_opened_at: new Date().toISOString() })
+        .eq("id", cachedScan.id)
+        .then()
+        .catch(() => {});
+
+      return res.json({
+        ...(cachedScan.result as Record<string, unknown>),
+        _cached: true,
+        _cachedScanId: cachedScan.id as string,
+        _cachedContractName: cachedScan.contract_name as string,
+      });
     }
   } catch {
     // Cache miss or DB unavailable — continue to AI analysis
