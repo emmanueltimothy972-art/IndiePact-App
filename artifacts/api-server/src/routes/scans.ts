@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { hashContractText } from "../lib/contract-hash.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
@@ -33,13 +34,23 @@ const GetScanQuerySchema = z.object({ userId: z.string().min(1) });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-router.get("/scans", async (req, res) => {
+router.get("/scans", requireAuth, async (req, res) => {
   const parse = ListScansQuerySchema.safeParse(req.query);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid query", details: parse.error.message });
   }
 
   const { userId, limit, offset } = parse.data;
+
+  // Reject if the query userId doesn't match the authenticated token.
+  // Prevents any authenticated user from listing another user's scan history.
+  if (userId !== req.userId) {
+    req.log.warn(
+      { bodyUserId: userId, tokenUserId: req.userId, event: "userid_mismatch" },
+      "userId mismatch on GET /scans",
+    );
+    return res.status(403).json({ error: "Unauthorized" });
+  }
 
   // Supabase requires a real UUID for user_id — return empty for dev mock IDs
   if (!UUID_RE.test(userId)) {
@@ -64,13 +75,23 @@ router.get("/scans", async (req, res) => {
 
 // ── Save scan ───────────────────────────────────────────────────────────────
 
-router.post("/scans", async (req, res) => {
+router.post("/scans", requireAuth, async (req, res) => {
   const parse = SaveScanBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
   }
 
   const { userId, contractName, contractText, result } = parse.data;
+
+  // Reject if the body userId doesn't match the authenticated token.
+  // Prevents any client from saving scans attributed to other users.
+  if (userId !== req.userId) {
+    req.log.warn(
+      { bodyUserId: userId, tokenUserId: req.userId, event: "userid_mismatch" },
+      "userId mismatch on POST /scans — possible forgery attempt",
+    );
+    return res.status(403).json({ error: "Unauthorized" });
+  }
 
   // Strip internal meta fields the analyze route attaches (_cached, _contractHash)
   // before storing — they are not part of the ScanResult schema.
@@ -95,9 +116,47 @@ router.post("/scans", async (req, res) => {
     .single();
 
   if (error) {
-    req.log.error({ error }, "Failed to save scan");
+    // PostgreSQL unique constraint violation (error code 23505) means a
+    // concurrent request already saved this exact (user_id, contract_hash).
+    // This is the expected outcome of a race-condition duplicate INSERT.
+    // Resolution: fetch the winning row and return it — no error surfaces to the user.
+    const pgCode = (error as { code?: string }).code;
+    if (pgCode === "23505") {
+      req.log.info(
+        {
+          userId,
+          contractHash: contractHash.slice(0, 12),
+          event: "dedup_conflict_insert",
+        },
+        "ON CONFLICT (23505) — concurrent duplicate INSERT resolved gracefully",
+      );
+      const { data: existing } = await requireSupabase()
+        .from("scans")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("contract_hash", contractHash)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (existing) {
+        // Touch last_opened_at on the winner row — fire-and-forget.
+        void requireSupabase()
+          .from("scans")
+          .update({ last_opened_at: new Date().toISOString() })
+          .eq("id", existing.id)
+          .then()
+          .catch(() => {});
+
+        return res.status(200).json(mapScanRow(existing, result));
+      }
+    }
+
+    req.log.error({ error, event: "scan_save_failed" }, "Failed to save scan");
     return res.status(500).json({ error: "Failed to save scan" });
   }
+
+  req.log.info({ userId, scanId: data.id, event: "scan_saved" }, "Scan saved successfully");
 
   // NOTE: scan usage is incremented once in analyze.ts after confirmed AI success.
   // Do NOT increment here — doing so would double-count every scan.
@@ -107,7 +166,7 @@ router.post("/scans", async (req, res) => {
 
 // ── Get scan by ID ──────────────────────────────────────────────────────────
 
-router.get("/scans/:scanId", async (req, res) => {
+router.get("/scans/:scanId", requireAuth, async (req, res) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
 
@@ -117,6 +176,10 @@ router.get("/scans/:scanId", async (req, res) => {
 
   const { scanId } = paramParse.data;
   const { userId } = queryParse.data;
+
+  if (userId !== req.userId) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
 
   const { data, error } = await requireSupabase()
     .from("scans")
@@ -134,7 +197,7 @@ router.get("/scans/:scanId", async (req, res) => {
 
 // ── Delete scan ─────────────────────────────────────────────────────────────
 
-router.delete("/scans/:scanId", async (req, res) => {
+router.delete("/scans/:scanId", requireAuth, async (req, res) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
 
@@ -144,6 +207,10 @@ router.delete("/scans/:scanId", async (req, res) => {
 
   const { scanId } = paramParse.data;
   const { userId } = queryParse.data;
+
+  if (userId !== req.userId) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
 
   const { error } = await requireSupabase()
     .from("scans")
@@ -161,7 +228,7 @@ router.delete("/scans/:scanId", async (req, res) => {
 
 // ── Report ──────────────────────────────────────────────────────────────────
 
-router.get("/report/:scanId", async (req, res) => {
+router.get("/report/:scanId", requireAuth, async (req, res) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
 
@@ -171,6 +238,10 @@ router.get("/report/:scanId", async (req, res) => {
 
   const { scanId } = paramParse.data;
   const { userId } = queryParse.data;
+
+  if (userId !== req.userId) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
 
   const { data, error } = await requireSupabase()
     .from("scans")
