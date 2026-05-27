@@ -4,6 +4,16 @@ import { requireSupabase } from "../lib/supabase.js";
 
 const router = Router();
 
+// ─── Admin override ───────────────────────────────────────────────────────────
+// Permanent server-side founder access. Executes in the backend only.
+// Resolves email via Supabase admin API (service role key) — never via
+// the frontend or JWT claims, so it cannot be spoofed.
+
+const ADMIN_EMAIL = "emmanueltimothy972@gmail.com";
+const ADMIN_PLAN = "business";
+
+// ─── Plan metadata ────────────────────────────────────────────────────────────
+
 const PLAN_LIMITS: Record<string, number> = {
   free: 2,
   starter: 10,
@@ -23,9 +33,7 @@ const PLAN_PRICES_USD_CENTS: Record<string, number> = {
 };
 
 // ─── Tier ranking ─────────────────────────────────────────────────────────────
-// Used to resolve conflicts between subscriptions.plan and profiles.subscription_tier.
-// Higher index = higher tier. The column authoritative for plan resolution is
-// whichever table reports the higher rank.
+// free(0) < pay_per_scan(1) < starter(2) < pro(3) < business(4) < agency(5) < enterprise(6)
 
 const TIER_RANK: Record<string, number> = {
   free: 0,
@@ -41,6 +49,8 @@ function higherTier(a: string, b: string): string {
   return (TIER_RANK[a] ?? 0) >= (TIER_RANK[b] ?? 0) ? a : b;
 }
 
+// ─── Zod schemas ──────────────────────────────────────────────────────────────
+
 const UserQuerySchema = z.object({ userId: z.string().min(1) });
 
 const VerifyPaymentSchema = z.object({
@@ -49,86 +59,173 @@ const VerifyPaymentSchema = z.object({
   planKey: z.enum(["starter", "pro", "business", "agency", "enterprise"]),
 });
 
-// ─── getOrCreateSubscription ──────────────────────────────────────────────────
-// Single source of truth for plan resolution.
-//
-// Resolution order:
-//   1. Read subscriptions.plan  (payment gateway writes here)
-//   2. Read profiles.subscription_tier  (admin/manual writes here)
-//   3. Resolve effective plan = whichever is the higher tier
-//   4. If profiles is higher, write it back to subscriptions so they stay in sync
-//   5. Return the effective plan with scan counts from subscriptions
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getOrCreateSubscription(userId: string, log?: { info: (obj: object, msg: string) => void }) {
+type ReqLog = { info: (obj: object, msg: string) => void; warn: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void };
+
+/** Write plan to both tables atomically (best-effort, errors logged not thrown). */
+async function persistPlan(userId: string, plan: string, log: ReqLog) {
+  const db = requireSupabase();
+  const now = new Date().toISOString();
+
+  const [subRes, profileRes] = await Promise.allSettled([
+    db.from("subscriptions").upsert(
+      { user_id: userId, plan, scans_used: 0, period_start: now, updated_at: now },
+      { onConflict: "user_id" },
+    ),
+    db.from("profiles").update({
+      subscription_tier: plan,
+      subscription_plan: plan,
+      subscription_status: "active",
+      monthly_scan_limit: PLAN_LIMITS[plan] ?? 2,
+    }).eq("id", userId),
+  ]);
+
+  if (subRes.status === "rejected") {
+    log.warn({ userId, plan, err: subRes.reason, event: "persist_subscriptions_failed" }, "Failed to write subscriptions");
+  }
+  if (profileRes.status === "rejected") {
+    log.warn({ userId, plan, err: profileRes.reason, event: "persist_profiles_failed" }, "Failed to write profiles");
+  } else if (profileRes.status === "fulfilled" && (profileRes.value as { error?: unknown }).error) {
+    log.warn({ userId, plan, err: (profileRes.value as { error?: unknown }).error, event: "persist_profiles_error" }, "profiles UPDATE returned error");
+  }
+}
+
+// ─── Core resolver ────────────────────────────────────────────────────────────
+
+async function getOrCreateSubscription(userId: string, log: ReqLog) {
   const db = requireSupabase();
 
-  // ── Fetch subscriptions row ────────────────────────────────────────────────
-  const { data: subData, error: subError } = await db
-    .from("subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .single();
+  // ── Step 1: Resolve auth email via service-role admin API ─────────────────
+  // This is the only trustworthy source for the email — cannot be spoofed.
+  let userEmail: string | undefined;
+  try {
+    const { data: authUser, error: authErr } = await db.auth.admin.getUserById(userId);
+    if (authErr) {
+      log.warn({ userId, authErr, event: "auth_email_lookup_error" }, "auth.admin.getUserById returned error");
+    } else {
+      userEmail = authUser?.user?.email?.toLowerCase().trim();
+    }
+    log.info({ userId, userEmail: userEmail ?? "(unknown)", event: "auth_email_resolved" }, "Auth email resolved from admin API");
+  } catch (err) {
+    log.warn({ userId, err, event: "auth_email_lookup_failed" }, "Could not resolve auth email — continuing without override");
+  }
 
-  if (subError && subError.code !== "PGRST116") throw subError;
+  // ── Step 2: ADMIN OVERRIDE ────────────────────────────────────────────────
+  // If email matches founder account, force business plan immediately.
+  // Persists to both tables so every future fetch is consistent.
+  if (userEmail === ADMIN_EMAIL) {
+    log.info(
+      { userId, userEmail, plan: ADMIN_PLAN, event: "admin_override_applied" },
+      `Admin override: forcing plan=${ADMIN_PLAN} for ${userEmail}`,
+    );
+    await persistPlan(userId, ADMIN_PLAN, log);
+    return {
+      plan: ADMIN_PLAN,
+      scans_used: 0,
+      period_start: new Date().toISOString(),
+      _adminOverride: true,
+    };
+  }
 
-  // ── Fetch profiles row for cross-reference ────────────────────────────────
-  const { data: profileData } = await db
-    .from("profiles")
-    .select("subscription_tier, subscription_plan, subscription_status, scans_used, monthly_scan_limit")
-    .eq("id", userId)
-    .single();
+  // ── Step 3: Read both tables in parallel ──────────────────────────────────
+  const [subResult, profileResult] = await Promise.allSettled([
+    db.from("subscriptions").select("*").eq("user_id", userId).single(),
+    db.from("profiles").select("subscription_tier, subscription_plan, subscription_status, scans_used, monthly_scan_limit").eq("id", userId).single(),
+  ]);
 
-  const profileTier = ((profileData as Record<string, unknown> | null)?.["subscription_tier"] as string ?? "free").toLowerCase();
+  const subRow =
+    subResult.status === "fulfilled" && !subResult.value.error
+      ? (subResult.value.data as Record<string, unknown>)
+      : null;
 
-  // ── Create subscriptions row if missing ───────────────────────────────────
+  const profileRow =
+    profileResult.status === "fulfilled" && !profileResult.value.error
+      ? (profileResult.value.data as Record<string, unknown>)
+      : null;
+
+  log.info(
+    {
+      userId,
+      subscriptions_plan: subRow?.["plan"] ?? "(no row)",
+      profiles_subscription_tier: profileRow?.["subscription_tier"] ?? "(no row)",
+      event: "raw_db_values",
+    },
+    "Raw DB values fetched",
+  );
+
+  // ── Step 4: Create subscriptions row if missing ───────────────────────────
   let row: Record<string, unknown>;
 
-  if (!subData) {
-    const effectivePlan = profileTier !== "free" ? profileTier : "free";
+  if (!subRow) {
+    const seedPlan = ((profileRow?.["subscription_tier"] as string) ?? "free").toLowerCase();
+    const safeSeedPlan = TIER_RANK[seedPlan] !== undefined ? seedPlan : "free";
+
     const { data: newRow, error: insertErr } = await db
       .from("subscriptions")
       .insert({
         user_id: userId,
-        plan: effectivePlan,
+        plan: safeSeedPlan,
         scans_used: 0,
         period_start: new Date().toISOString(),
       })
       .select()
       .single();
+
     if (insertErr) throw insertErr;
     row = newRow as Record<string, unknown>;
+    log.info({ userId, plan: safeSeedPlan, event: "subscriptions_row_created" }, "Created missing subscriptions row");
   } else {
-    row = subData as Record<string, unknown>;
+    row = subRow;
   }
 
-  // ── Resolve effective plan ────────────────────────────────────────────────
+  // ── Step 5: Resolve effective plan ───────────────────────────────────────
   const subPlan = ((row["plan"] as string) ?? "free").toLowerCase();
+  const profileTier = ((profileRow?.["subscription_tier"] as string) ?? "free").toLowerCase().trim();
+
+  const subRank = TIER_RANK[subPlan] ?? 0;
+  const profileRank = TIER_RANK[profileTier] ?? 0;
   const effectivePlan = higherTier(subPlan, profileTier);
 
-  // ── Sync subscriptions if profiles is authoritative for a higher tier ─────
-  // This handles admin manual edits to profiles without a matching subscriptions update.
-  if (effectivePlan !== subPlan) {
-    const { error: syncErr } = await db
-      .from("subscriptions")
-      .update({
-        plan: effectivePlan,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
+  log.info(
+    {
+      userId,
+      subPlan,
+      subRank,
+      profileTier,
+      profileRank,
+      effectivePlan,
+      event: "plan_resolution",
+    },
+    `Plan resolved → ${effectivePlan}`,
+  );
 
-    if (syncErr) {
-      // Non-fatal — log and continue with the resolved plan anyway
-      log?.info({ userId, syncErr, event: "subscription_sync_failed" }, "Failed to sync subscriptions from profiles");
+  // ── Step 6: Sync tables if profiles is authoritative for a higher tier ───
+  if (effectivePlan !== subPlan) {
+    log.info(
+      { userId, subPlan, profileTier, effectivePlan, event: "sync_triggered" },
+      "profiles tier > subscriptions plan — syncing subscriptions",
+    );
+
+    // Validate the plan is in the CHECK constraint before writing
+    if (TIER_RANK[effectivePlan] !== undefined) {
+      const { error: syncErr } = await db
+        .from("subscriptions")
+        .update({ plan: effectivePlan, updated_at: new Date().toISOString() })
+        .eq("user_id", userId);
+
+      if (syncErr) {
+        log.warn({ userId, effectivePlan, syncErr, event: "sync_failed" }, "Sync write failed");
+      } else {
+        log.info({ userId, effectivePlan, event: "sync_succeeded" }, "Subscriptions plan synced from profiles");
+        row["plan"] = effectivePlan;
+      }
     } else {
-      log?.info(
-        { userId, subPlan, profileTier, effectivePlan, event: "subscription_synced_from_profile" },
-        "subscriptions.plan synced up from profiles.subscription_tier",
-      );
-      row["plan"] = effectivePlan;
+      log.warn({ userId, effectivePlan, event: "sync_skipped_invalid_plan" }, "Resolved plan not in CHECK constraint — skipping sync");
     }
   }
 
-  // ── Monthly reset ─────────────────────────────────────────────────────────
+  // ── Step 7: Monthly reset ─────────────────────────────────────────────────
   const periodStart = new Date(row["period_start"] as string);
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -136,30 +233,15 @@ async function getOrCreateSubscription(userId: string, log?: { info: (obj: objec
   if (periodStart < thirtyDaysAgo) {
     const { data: resetRow, error: resetErr } = await db
       .from("subscriptions")
-      .update({
-        scans_used: 0,
-        period_start: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update({ scans_used: 0, period_start: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .select()
       .single();
-    if (resetErr) throw resetErr;
-    row = resetRow as Record<string, unknown>;
-    row["plan"] = effectivePlan;
-  }
 
-  log?.info(
-    {
-      userId,
-      subPlan,
-      profileTier,
-      effectivePlan,
-      scansUsed: row["scans_used"],
-      event: "subscription_resolved",
-    },
-    `Plan resolved → ${effectivePlan}`,
-  );
+    if (resetErr) throw resetErr;
+    row = { ...(resetRow as Record<string, unknown>), plan: effectivePlan };
+    log.info({ userId, event: "period_reset" }, "30-day period reset applied");
+  }
 
   return { ...row, plan: effectivePlan };
 }
@@ -173,17 +255,17 @@ router.get("/subscription", async (req, res) => {
   }
 
   try {
-    const row = await getOrCreateSubscription(parse.data.userId, req.log);
+    const row = await getOrCreateSubscription(parse.data.userId, req.log as ReqLog);
     const plan = (row["plan"] as string) ?? "free";
     const scansUsed = Number(row["scans_used"]) || 0;
     const scansLimit = PLAN_LIMITS[plan] ?? 2;
 
-    return res.json({
-      plan,
-      scansUsed,
-      scansLimit,
-      periodStart: row["period_start"],
-    });
+    req.log.info(
+      { userId: parse.data.userId, plan, scansUsed, scansLimit, event: "subscription_response" },
+      "Subscription response sent to frontend",
+    );
+
+    return res.json({ plan, scansUsed, scansLimit, periodStart: row["period_start"] });
   } catch (err) {
     req.log.error({ err }, "Failed to get subscription");
     return res.status(500).json({ error: "Failed to fetch subscription" });
@@ -200,37 +282,12 @@ router.post("/subscription/verify-payment", async (req, res) => {
 
   const { userId, reference, planKey } = parse.data;
   const secretKey = process.env["PAYSTACK_SECRET_KEY"];
-
   const db = requireSupabase();
 
   if (!secretKey) {
     req.log.warn("PAYSTACK_SECRET_KEY not configured — skipping verification, trusting frontend");
-
-    await db
-      .from("subscriptions")
-      .upsert(
-        {
-          user_id: userId,
-          plan: planKey,
-          scans_used: 0,
-          period_start: new Date().toISOString(),
-          paystack_reference: reference,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-
-    // Keep profiles in sync
-    await db
-      .from("profiles")
-      .update({
-        subscription_tier: planKey,
-        subscription_plan: planKey,
-        subscription_status: "active",
-        monthly_scan_limit: PLAN_LIMITS[planKey] ?? 2,
-      })
-      .eq("id", userId);
-
+    await persistPlan(userId, planKey, req.log as ReqLog);
+    await db.from("subscriptions").update({ paystack_reference: reference }).eq("user_id", userId);
     return res.json({ success: true, plan: planKey, message: "Plan updated (unverified)" });
   }
 
@@ -246,7 +303,7 @@ router.post("/subscription/verify-payment", async (req, res) => {
 
     const verifyData = (await verifyRes.json()) as {
       status: boolean;
-      data: { status: string; amount: number; currency: string; metadata?: Record<string, unknown> };
+      data: { status: string; amount: number };
     };
 
     if (!verifyData.status || verifyData.data.status !== "success") {
@@ -260,30 +317,8 @@ router.post("/subscription/verify-payment", async (req, res) => {
       return res.status(400).json({ error: "Payment amount does not match plan price" });
     }
 
-    await db
-      .from("subscriptions")
-      .upsert(
-        {
-          user_id: userId,
-          plan: planKey,
-          scans_used: 0,
-          period_start: new Date().toISOString(),
-          paystack_reference: reference,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-
-    // Keep profiles in sync with confirmed payment
-    await db
-      .from("profiles")
-      .update({
-        subscription_tier: planKey,
-        subscription_plan: planKey,
-        subscription_status: "active",
-        monthly_scan_limit: PLAN_LIMITS[planKey] ?? 2,
-      })
-      .eq("id", userId);
+    await persistPlan(userId, planKey, req.log as ReqLog);
+    await db.from("subscriptions").update({ paystack_reference: reference }).eq("user_id", userId);
 
     req.log.info({ userId, planKey, event: "payment_verified" }, "Payment verified — plan upgraded");
     return res.json({ success: true, plan: planKey });
@@ -316,32 +351,9 @@ router.post("/paystack/webhook", async (req, res) => {
 
     if (userId && planKey && PLAN_PRICES_USD_CENTS[planKey] !== undefined) {
       try {
+        await persistPlan(userId, planKey, req.log as ReqLog);
         const db = requireSupabase();
-
-        await db
-          .from("subscriptions")
-          .upsert(
-            {
-              user_id: userId,
-              plan: planKey,
-              scans_used: 0,
-              period_start: new Date().toISOString(),
-              paystack_reference: reference,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );
-
-        // Keep profiles in sync with webhook-confirmed payment
-        await db
-          .from("profiles")
-          .update({
-            subscription_tier: planKey,
-            subscription_plan: planKey,
-            subscription_status: "active",
-            monthly_scan_limit: PLAN_LIMITS[planKey] ?? 2,
-          })
-          .eq("id", userId);
+        await db.from("subscriptions").update({ paystack_reference: reference }).eq("user_id", userId);
       } catch (err) {
         req.log.error({ err }, "Failed to update subscription from webhook");
       }

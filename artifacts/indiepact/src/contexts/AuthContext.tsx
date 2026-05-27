@@ -51,13 +51,18 @@ interface SubscriptionState {
   scansLimit: number;
 }
 
-async function fetchSubscription(uid: string): Promise<SubscriptionState> {
+async function fetchSubscription(uid: string, token?: string | null): Promise<SubscriptionState> {
   try {
     const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    const res = await fetch(`${window.location.origin}${base}/api/subscription?userId=${encodeURIComponent(uid)}`);
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(
+      `${window.location.origin}${base}/api/subscription?userId=${encodeURIComponent(uid)}`,
+      { headers },
+    );
     if (!res.ok) throw new Error("Failed to fetch subscription");
     const data = (await res.json()) as { plan?: string; scansUsed?: number; scansLimit?: number };
-    const plan = data.plan ?? "free";
+    const plan = (data.plan ?? "free").trim().toLowerCase();
     const scansUsed = data.scansUsed ?? 0;
     const scansLimit = data.scansLimit ?? PLAN_LIMITS[plan] ?? 2;
     return { userPlan: plan, scansUsed, scansLimit };
@@ -152,7 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (DEV_AUTH_BYPASS) return;
     const id = uid ?? user?.id;
     if (!id || id === DEMO_USER_ID) return;
-    const state = await fetchSubscription(id);
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    const state = await fetchSubscription(id, currentSession?.access_token);
     setSubscription(state);
   }, [user?.id]);
 
@@ -171,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
-      if (session?.user) void fetchSubscription(session.user.id).then(setSubscription);
+      if (session?.user) void fetchSubscription(session.user.id, session.access_token).then(setSubscription);
     });
 
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -180,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       if (session?.user) {
         setShowAuthModal(false);
-        void fetchSubscription(session.user.id).then(setSubscription);
+        void fetchSubscription(session.user.id, session.access_token).then(setSubscription);
       } else {
         setSubscription({ userPlan: "free", scansUsed: 0, scansLimit: 2 });
       }
