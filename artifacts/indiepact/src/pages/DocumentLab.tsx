@@ -227,14 +227,29 @@ export default function DocumentLab() {
 
   // ── Server-side document processing ────────────────────────────────────────
 
+  const SUPPORTED_EXTENSIONS = new Set([".pdf", ".docx", ".doc", ".txt", ".rtf"]);
+  const SUPPORTED_MIMES = new Set([
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "text/plain",
+    "text/rtf",
+    "application/rtf",
+    "application/x-rtf",
+    "text/richtext",
+  ]);
+
   const processFile = useCallback(async (file: File) => {
     if (!file) return;
 
-    // Size guard — 20 MB
-    if (file.size > 20 * 1024 * 1024) {
+    // Client-side format validation — gives instant feedback without a round-trip
+    const ext = file.name.includes(".")
+      ? "." + file.name.split(".").pop()!.toLowerCase()
+      : "";
+    if (!SUPPORTED_MIMES.has(file.type) && !SUPPORTED_EXTENSIONS.has(ext)) {
       setUploadStage("error");
       setUploadError(
-        "This file exceeds 20MB. For very large contracts, we recommend splitting sections or pasting the key clauses directly."
+        `"${file.name}" is not a supported format. Please upload a PDF, Word document (.docx), plain text (.txt), or RTF file.`
       );
       return;
     }
@@ -515,7 +530,7 @@ export default function DocumentLab() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.pdf,.docx,.rtf,image/jpeg,image/png,image/webp"
+                      accept=".pdf,.docx,.doc,.txt,.rtf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,application/rtf,text/rtf"
                       className="hidden"
                       onChange={handleFileChange}
                     />
@@ -731,7 +746,7 @@ export default function DocumentLab() {
                                     {dragOver ? "Drop to process" : "Drag & drop your contract"}
                                   </h3>
                                   <p className="text-slate-500 text-sm mb-1.5 max-w-xs leading-relaxed">
-                                    PDF, Word (.docx), plain text, or image files up to 20MB.
+                                    PDF, Word (.docx), plain text (.txt), or RTF — any size.
                                   </p>
                                   <p className="text-slate-600 text-xs mb-6 max-w-xs leading-relaxed">
                                     IndiePact automatically extracts text, handles multi-page documents,
