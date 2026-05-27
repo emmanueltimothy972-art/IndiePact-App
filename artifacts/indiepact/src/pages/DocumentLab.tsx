@@ -18,6 +18,7 @@ import { PLAN_DISPLAY_NAMES, isPaidPlan } from "@/lib/constants";
 import { useScanContext } from "@/contexts/ScanContext";
 import { SavedScan } from "@workspace/api-client-react";
 import { supabase } from "@/lib/supabase";
+import { uploadDocument } from "@/lib/upload-adapter";
 import {
   FileText, Zap, UploadCloud, LogIn, AlertTriangle, X,
   CheckCircle2, DollarSign, MessageSquare, Shield, TrendingUp,
@@ -261,53 +262,29 @@ export default function DocumentLab() {
 
     try {
       const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-
-      // Retrieve session token for the Authorization header
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token ?? null;
 
-      const formData = new FormData();
-      formData.append("file", file);
+      const result = await uploadDocument(file, token, base, setUploadStage);
 
-      // Brief pause so the "Uploading…" stage is visible on fast connections
-      await new Promise((r) => setTimeout(r, 400));
-      setUploadStage("extracting");
-
-      const response = await fetch(`${base}/api/process-document`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-
-      const data = (await response.json()) as {
-        extractedText?: string;
-        charCount?: number;
-        wordCount?: number;
-        format?: string;
-        processingNotes?: string[];
-        fileName?: string;
-        error?: string;
-        requiresOcr?: boolean;
-      };
-
-      if (!response.ok) {
+      if (!result.ok) {
         setUploadStage("error");
         setUploadError(
-          data.error ??
+          result.data.error ??
             "We couldn't process this document. Please try again or paste the contract text directly."
         );
         return;
       }
 
-      if (!data.extractedText) {
+      if (!result.data.extractedText) {
         setUploadStage("error");
         setUploadError("We couldn't extract text from this file. Please paste the contract text directly.");
         return;
       }
 
-      setContractText(data.extractedText);
+      setContractText(result.data.extractedText);
       if (!contractName) setContractName(file.name.replace(/\.[^.]+$/, ""));
-      setUploadNotes(data.processingNotes ?? []);
+      setUploadNotes(result.data.processingNotes ?? []);
       setUploadStage("ready");
     } catch {
       setUploadStage("error");

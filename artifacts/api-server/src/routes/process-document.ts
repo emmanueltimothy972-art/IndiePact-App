@@ -2,29 +2,38 @@
 //
 // POST /api/process-document
 //
-// Thin HTTP adapter around the 5-layer extraction-pipeline.ts.
-// All parsing, normalisation, section extraction, and cost-optimisation logic
-// lives in extraction-pipeline.ts — this file only handles:
-//   • multipart/form-data reception (multer, memory-only, no disk)
-//   • MIME + extension validation (including browser octet-stream quirk)
-//   • Mapping PipelineResult → HTTP response
-//   • Structured error states per spec
+// Dual-mode HTTP adapter around the 5-layer extraction-pipeline.ts.
 //
-// Response shape (backwards-compatible with DocumentLab.tsx):
-//   Success / partial_success → HTTP 200, { extractedText, charCount, wordCount,
-//                                             format, fileName, processingNotes }
-//   Failed                    → HTTP 4xx, { error, format?, failureReason? }
+// MODE A — Vercel Blob (production):
+//   Body: application/json { blobUrl: string, filename: string }
+//   The client uploaded directly to Vercel Blob CDN (bypassing the 4.5 MB
+//   serverless body limit). This handler fetches the file from the blob URL,
+//   runs the pipeline, then deletes the blob immediately after.
+//   The blob URL is a short-lived signed URL — it is only accessible to our
+//   server for the duration of the request.
 //
-// Vercel note:
-//   Default body limit on Vercel serverless is 4.5 MB. To support larger uploads
-//   add a vercel.json route override:
-//     { "functions": { "api/*.ts": { "maxDuration": 60, "memory": 1024 } } }
-//   and set bodyParser: false on the route handler.
-//   The multer limit here is the Node/Express ceiling; Vercel enforces its own
-//   upstream limit independently.
+// MODE B — Direct multipart (Replit dev / fallback):
+//   Body: multipart/form-data { file: <binary> }
+//   Standard multer memory upload. Works because Replit runs a persistent
+//   Express server (not serverless), so the 4.5 MB platform limit doesn't apply.
+//   Also used as a resilience fallback if blob upload fails on the client.
+//
+// MODE DETECTION:
+//   Automatic — checks req.body.blobUrl (set by express.json()) vs multer file.
+//   No explicit header or mode flag required.
+//
+// MEMORY SAFETY:
+//   Blob mode: file is never in request body — only a ~100 byte JSON reference.
+//   The buffer is fetched server-side in one chunk. For 500-page contracts
+//   (~5 MB of raw bytes) this is fine; the pipeline compresses to ~40 k chars.
+//
+// VERCEL NOTE:
+//   /api/process-document in blob mode handles only tiny JSON payloads.
+//   The recommended vercel.json settings (60s timeout, 1024 MB memory) are
+//   for pipeline processing time and PDF decompression, not upload size.
 
 import { Router } from "express";
-// multer 2 ships no bundled @types — use require + any cast.
+// multer 2 ships no @types — import as any.
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const multer = require("multer") as any;
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -32,23 +41,20 @@ import { runExtractionPipeline } from "../lib/extraction-pipeline.js";
 
 const router = Router();
 
-// ─── Multer configuration ─────────────────────────────────────────────────────
-// 50 MB ceiling — comfortably handles 500-page enterprise contracts in memory.
-// application/octet-stream is included because Chrome/Safari sometimes sends
-// this MIME type for PDF/DOCX files opened from the local filesystem.
+// ─── Multer (direct multipart mode) ──────────────────────────────────────────
 
 const MULTER_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB
 
 const ACCEPTED_MIMES = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword", // legacy .doc — accepted by multer, rejected in pipeline
+  "application/msword",
   "text/plain",
   "text/rtf",
   "application/rtf",
   "application/x-rtf",
   "text/richtext",
-  "application/octet-stream", // browser quirk — real format detected by magic bytes
+  "application/octet-stream",
 ]);
 
 const ACCEPTED_EXTENSIONS = new Set([".pdf", ".docx", ".doc", ".txt", ".rtf"]);
@@ -77,116 +83,174 @@ const upload = multer({
   },
 });
 
+// ─── Shared response builder ──────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function processBuffer(buffer: Buffer, mime: string, filename: string, req: any, res: any) {
+  req.log.info(
+    {
+      userId: req.userId,
+      mime,
+      ext: getExtension(filename),
+      sizeBytes: buffer.length,
+      sizeMb: (buffer.length / 1_048_576).toFixed(2),
+      event: "document_processing_start",
+    },
+    "Starting extraction pipeline",
+  );
+
+  const result = await runExtractionPipeline(buffer, mime, filename, req.log);
+
+  if (result.status === "failed") {
+    req.log.warn(
+      { userId: req.userId, failureReason: result.failureReason, event: "document_failed" },
+      `Document failed: ${result.failureReason}`,
+    );
+    const statusCode = result.failureReason === "unsupported_format" ? 400 : 422;
+    return res.status(statusCode).json({
+      error: result.failureMessage ?? "We couldn't process this document. Please try another file or paste the contract text directly.",
+      format: result.format,
+      failureReason: result.failureReason,
+    });
+  }
+
+  if (result.status === "partial_success" && !result.text) {
+    req.log.warn(
+      { userId: req.userId, format: result.format, confidence: result.confidenceScore, event: "insufficient_text" },
+      "Insufficient text after pipeline",
+    );
+    return res.status(422).json({
+      error: result.failureMessage ?? "This document appears to be a scanned image without extractable text. For best results, please export a text-based PDF or paste the contract text directly.",
+      format: result.format,
+      requiresOcr: true,
+      fallbackUsed: result.fallbackUsed,
+    });
+  }
+
+  req.log.info(
+    {
+      userId: req.userId,
+      event: "document_ready",
+      status: result.status,
+      charCount: result.charCount,
+      estimatedTokens: result.telemetry.estimatedTokens,
+      tokenReductionPct: result.telemetry.tokenReductionPct,
+    },
+    `Document ready — ${result.charCount} chars, ~${result.telemetry.estimatedTokens} tokens`,
+  );
+
+  return res.json({
+    extractedText: result.text,
+    charCount: result.charCount,
+    wordCount: result.wordCount,
+    format: result.format,
+    fileName: filename,
+    processingNotes: result.processingNotes,
+    extractionConfidence: result.confidenceScore,
+    extractionMethod: result.extractionMethod,
+    fallbackUsed: result.fallbackUsed,
+  });
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 router.post(
   "/process-document",
   requireAuth,
-  upload.single("file"),
-  async (req, res) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const file = (req as any).file as
-      | { buffer: Buffer; mimetype: string; originalname: string; size: number }
-      | undefined;
+  async (req, res, next) => {
+    // ── MODE A: Vercel Blob (JSON body with blobUrl) ──────────────────────────
+    const blobUrl = (req.body as Record<string, unknown>)?.blobUrl;
+    const filename = String((req.body as Record<string, unknown>)?.filename ?? "document");
 
-    if (!file) {
-      return res.status(400).json({
-        error: "No file received. Please select a document and try again.",
-      });
-    }
-
-    req.log.info(
-      {
-        userId: req.userId,
-        mime: file.mimetype,
-        ext: getExtension(file.originalname),
-        sizeBytes: file.size,
-        sizeMb: (file.size / 1_048_576).toFixed(2),
-        event: "document_upload_received",
-      },
-      "Document upload received",
-    );
-
-    // ── Run 5-layer pipeline ──────────────────────────────────────────────────
-    const result = await runExtractionPipeline(
-      file.buffer,
-      file.mimetype,
-      file.originalname,
-      req.log,
-    );
-
-    // ── Map pipeline result → HTTP response ──────────────────────────────────
-
-    // Hard failure (corrupt file, unsupported format, password-protected PDF)
-    if (result.status === "failed") {
-      req.log.warn(
-        {
-          userId: req.userId,
-          failureReason: result.failureReason,
-          format: result.format,
-          event: "document_failed",
-        },
-        `Document processing failed: ${result.failureReason}`,
+    if (typeof blobUrl === "string" && blobUrl.startsWith("https://")) {
+      const startMs = Date.now();
+      req.log.info(
+        { userId: req.userId, blobUrl, filename, event: "blob_download_start" },
+        "Downloading file from Vercel Blob",
       );
 
-      const statusCode =
-        result.failureReason === "unsupported_format" ? 400 : 422;
+      try {
+        const blobRes = await fetch(blobUrl, {
+          headers: { "User-Agent": "IndiePact/1.0 document-processor" },
+        });
 
-      return res.status(statusCode).json({
-        error: result.failureMessage ?? "We couldn't process this document. Please try another file or paste the contract text directly.",
-        format: result.format,
-        failureReason: result.failureReason,
-      });
+        if (!blobRes.ok) {
+          req.log.error(
+            { blobUrl, status: blobRes.status, event: "blob_download_failed" },
+            `Blob download failed with HTTP ${blobRes.status}`,
+          );
+          return res.status(502).json({
+            error: "We encountered an issue retrieving your document from upload storage. Please try uploading again.",
+          });
+        }
+
+        const arrayBuffer = await blobRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const mime = blobRes.headers.get("content-type") ?? "application/octet-stream";
+
+        req.log.info(
+          {
+            userId: req.userId,
+            blobUrl,
+            sizeBytes: buffer.length,
+            downloadMs: Date.now() - startMs,
+            event: "blob_download_complete",
+          },
+          `Blob downloaded in ${Date.now() - startMs}ms`,
+        );
+
+        // Process the buffer through the pipeline
+        await processBuffer(buffer, mime, filename, req, res);
+
+        // Delete blob after successful processing (fire-and-forget — never blocks response)
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+          import("@vercel/blob")
+            .then(({ del }) => del(blobUrl))
+            .then(() => req.log.info({ blobUrl, event: "blob_deleted" }, "Blob deleted after processing"))
+            .catch((err: unknown) =>
+              req.log.warn({ err, blobUrl, event: "blob_delete_failed" }, "Failed to delete blob"),
+            );
+        }
+
+        return; // res already sent by processBuffer
+      } catch (err) {
+        req.log.error({ err, blobUrl, event: "blob_mode_error" }, "Blob mode processing error");
+        return res.status(500).json({
+          error: "We encountered an issue processing this document. Please try again or paste the contract text directly.",
+        });
+      }
     }
 
-    // Partial success (scanned PDF / low-confidence extraction)
-    // → HTTP 200 with fallback text + informative processing notes
-    // The user sees "Processing complete" — never a restriction or error.
-    if (result.status === "partial_success" && !result.text) {
-      // No usable text even after fallback — tell user clearly but gently
-      req.log.warn(
-        {
-          userId: req.userId,
-          format: result.format,
-          confidenceScore: result.confidenceScore,
-          event: "document_insufficient_text",
-        },
-        "Document returned insufficient text after fallback",
-      );
-      return res.status(422).json({
-        error:
-          result.failureMessage ??
-          "This document appears to be a scanned image without extractable text. " +
-            "For best results, please export a text-based PDF, convert to Word (.docx), or paste the contract text directly.",
-        format: result.format,
-        requiresOcr: true,
-        fallbackUsed: result.fallbackUsed,
-      });
-    }
+    // ── MODE B: Direct multipart upload ──────────────────────────────────────
+    // Hand off to multer middleware, then process the file buffer.
+    upload.single("file")(req, res, async (multerErr: unknown) => {
+      if (multerErr) {
+        const message = multerErr instanceof Error ? multerErr.message : "Upload error";
+        return res.status(400).json({ error: message });
+      }
 
-    // Success or partial_success with text — always HTTP 200
-    req.log.info(
-      {
-        userId: req.userId,
-        event: "document_processed",
-        status: result.status,
-        telemetry: result.telemetry,
-      },
-      `Document ready — ${result.charCount} chars, ~${result.telemetry.estimatedTokens} tokens, ${result.telemetry.tokenReductionPct}% reduction`,
-    );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const file = (req as any).file as
+        | { buffer: Buffer; mimetype: string; originalname: string; size: number }
+        | undefined;
 
-    return res.json({
-      extractedText: result.text,
-      charCount: result.charCount,
-      wordCount: result.wordCount,
-      format: result.format,
-      fileName: file.originalname,
-      processingNotes: result.processingNotes,
-      // Internal metadata (non-breaking additions — frontend ignores unknown fields)
-      extractionConfidence: result.confidenceScore,
-      extractionMethod: result.extractionMethod,
-      fallbackUsed: result.fallbackUsed,
+      if (!file) {
+        return res.status(400).json({
+          error: "No file received. Please select a document and try again.",
+        });
+      }
+
+      try {
+        await processBuffer(file.buffer, file.mimetype, file.originalname, req, res);
+      } catch (err) {
+        req.log.error({ err, event: "direct_mode_error" }, "Direct mode processing error");
+        return res.status(500).json({
+          error: "We encountered an issue processing this document. Please try again or paste the contract text directly.",
+        });
+      }
     });
+
+    void next; // suppress unused-variable warning
   },
 );
 

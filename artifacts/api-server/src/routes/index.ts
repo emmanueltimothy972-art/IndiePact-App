@@ -10,6 +10,7 @@ import legalStrategyRouter from "./legal-strategy.js";
 import subscriptionRouter from "./subscription.js";
 import authRouter from "./auth.js";
 import processDocumentRouter from "./process-document.js";
+import uploadTokenRouter from "./upload-token.js";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(extractRouter);
 router.use(legalStrategyRouter);
 router.use(subscriptionRouter);
 router.use(processDocumentRouter);
+router.use(uploadTokenRouter);
 
 export default router;
