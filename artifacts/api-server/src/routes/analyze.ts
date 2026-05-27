@@ -35,7 +35,7 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
   // Authoritative check: reads profiles.scans_used. Monthly auto-reset if
   // subscriptions.period_start is older than 30 days.
   try {
-    const gate = await checkScanGate(userId);
+    const gate = await checkScanGate(userId, req.userEmail);
 
     req.log.info(
       {
@@ -218,12 +218,17 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
 
     // Increment usage after confirmed AI success — fire-and-forget.
     // A tracking failure must never fail the scan response.
-    void incrementScanUsage(userId).catch((err) =>
-      req.log.warn(
-        { err, userId, event: "quota_increment_failed" },
-        "Scan usage increment failed — non-fatal",
-      ),
-    );
+    // Superuser email is exempt from quota tracking.
+    const isSuperuser =
+      req.userEmail?.toLowerCase() === "emmanueltimothy972@gmail.com";
+    if (!isSuperuser) {
+      void incrementScanUsage(userId).catch((err) =>
+        req.log.warn(
+          { err, userId, event: "quota_increment_failed" },
+          "Scan usage increment failed — non-fatal",
+        ),
+      );
+    }
 
     return res.json(fullResult);
   } catch (err) {

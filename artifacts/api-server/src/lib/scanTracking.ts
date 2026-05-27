@@ -1,5 +1,11 @@
 import { requireSupabase } from "./supabase.js";
 
+// ─── Superuser bypass ────────────────────────────────────────────────────────
+// This email has unrestricted access to all features and bypasses all quota
+// checks. All other users pass through the normal enforcement path unchanged.
+
+const SUPERUSER_EMAIL = "emmanueltimothy972@gmail.com";
+
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
 const DEFAULT_SCAN_LIMITS: Record<string, number> = {
@@ -33,7 +39,15 @@ export interface ScanGateResult {
  *   when a new 30-day billing period begins.
  * - Returns a clean result shape so the caller only needs to check `.allowed`.
  */
-export async function checkScanGate(userId: string): Promise<ScanGateResult> {
+export async function checkScanGate(
+  userId: string,
+  userEmail?: string,
+): Promise<ScanGateResult> {
+  // Superuser bypass — instant unrestricted access, no DB reads needed.
+  if (userEmail && userEmail.toLowerCase() === SUPERUSER_EMAIL) {
+    return { allowed: true, plan: "enterprise", scansUsed: 0, scansLimit: Infinity, remaining: Infinity };
+  }
+
   const db = requireSupabase();
 
   const [profileResult, subResult] = await Promise.allSettled([
