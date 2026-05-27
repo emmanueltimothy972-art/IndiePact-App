@@ -86,6 +86,11 @@ interface Section {
   priority: "high" | "medium" | "low";
 }
 
+export interface RawSection {
+  heading: string;
+  body: string;
+}
+
 export interface ExtractionStats {
   originalChars: number;
   sectionCount: number;
@@ -165,34 +170,39 @@ const DEFAULT_CHAR_BUDGET = 40_000; // ≈ 10 000 tokens @ 4 chars/token
  * Extract the legally relevant sections of a normalised contract text.
  *
  * Returns:
- *  - `text`  : sections ordered by legal relevance, within the char budget.
- *  - `stats` : telemetry payload for server-side logging.
+ *  - `text`        : sections ordered by legal relevance, within the char budget.
+ *  - `stats`       : telemetry payload for server-side logging.
+ *  - `rawSections` : the individual {heading, body} pairs (used for structured tagging).
  *
- * If the document is already short enough (< budget), it is returned as-is
+ * If the document is already short enough (< budget), ALL sections are returned
  * so no legal context is ever lost for normal-sized contracts.
  */
 export function extractLegalSections(
   text: string,
   charBudget = DEFAULT_CHAR_BUDGET,
-): { text: string; stats: ExtractionStats } {
+): { text: string; stats: ExtractionStats; rawSections: RawSection[] } {
   const originalChars = text.length;
+  const sections = splitIntoSections(text);
 
-  // Fast-path: document fits in budget — no section splitting needed.
+  // Fast-path: document fits in budget — return all sections, no filtering.
   if (originalChars <= charBudget) {
+    const rawSections: RawSection[] = sections.map((s) => ({
+      heading: s.heading,
+      body: s.body,
+    }));
     return {
       text,
       stats: {
         originalChars,
-        sectionCount: 1,
-        selectedSections: 1,
+        sectionCount: sections.length,
+        selectedSections: sections.length,
         extractedChars: originalChars,
         reductionPct: 0,
         wasBudgetConstrained: false,
       },
+      rawSections,
     };
   }
-
-  const sections = splitIntoSections(text);
 
   // Sort: high-value first, then by score descending, then by document order
   // (stable sort preserves original order for equal-score sections).
@@ -228,6 +238,11 @@ export function extractLegalSections(
       ? Math.round(((originalChars - extractedText.length) / originalChars) * 100)
       : 0;
 
+  const rawSections: RawSection[] = selected.map((s) => ({
+    heading: s.heading,
+    body: s.body,
+  }));
+
   return {
     text: extractedText,
     stats: {
@@ -238,5 +253,6 @@ export function extractLegalSections(
       reductionPct,
       wasBudgetConstrained: true,
     },
+    rawSections,
   };
 }
