@@ -23,7 +23,6 @@ const ClauseArmory = lazy(() => import("@/pages/ClauseArmory"));
 const ShadowNegotiator = lazy(() => import("@/pages/ShadowNegotiator"));
 const EscrowLock = lazy(() => import("@/pages/EscrowLock"));
 const LegalStrategy = lazy(() => import("@/pages/LegalStrategy"));
-const DailyBrief = lazy(() => import("@/pages/DailyBrief"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -86,7 +85,6 @@ function Router() {
         <Route path="/legal-strategy">
           {() => <ProtectedRoute featureName="AI Legal Strategy" featureTier="Business"><LegalStrategy /></ProtectedRoute>}
         </Route>
-        <Route path="/daily-brief" component={DailyBrief} />
 
         <Route component={NotFound} />
       </Switch>

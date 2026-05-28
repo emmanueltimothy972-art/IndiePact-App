@@ -20,6 +20,9 @@ export function LogoutConfirmModal({ open, onClose, onConfirm }: LogoutConfirmMo
   async function handleLogout() {
     if (isPending) return;
     setIsPending(true);
+    // Dismiss the modal immediately — the user should never see a stuck
+    // "Signing out…" dialog. signOut continues in the background.
+    onClose();
     try {
       await onConfirm();
     } finally {
@@ -27,8 +30,9 @@ export function LogoutConfirmModal({ open, onClose, onConfirm }: LogoutConfirmMo
     }
   }
 
+  // Allow ESC and outside-click to close at any time (no isPending guard).
   function handleOpenChange(next: boolean) {
-    if (!next && !isPending) onClose();
+    if (!next) onClose();
   }
 
   return (
@@ -68,14 +72,7 @@ export function LogoutConfirmModal({ open, onClose, onConfirm }: LogoutConfirmMo
             disabled={isPending}
             className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-100 bg-slate-700 hover:bg-slate-600 border border-slate-600/60 hover:border-slate-500/60 transition-all duration-150 disabled:pointer-events-none disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            {isPending ? (
-              <>
-                <span className="h-3.5 w-3.5 rounded-full border-2 border-slate-400 border-t-transparent animate-spin" />
-                Signing out…
-              </>
-            ) : (
-              "Log Out"
-            )}
+            Log Out
           </button>
         </div>
       </DialogContent>
