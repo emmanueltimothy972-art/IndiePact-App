@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth, consumeReturnTo } from "@/contexts/AuthContext";
-import { Lock, ArrowLeft, Mail, CheckCircle2, Timer, ClipboardPaste } from "lucide-react";
+import { Lock, ArrowLeft, Mail, CheckCircle2, Timer } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -51,10 +51,11 @@ function BrandMark({ step }: { step: Step }) {
   );
 }
 
-// ─── Single-field OTP input ───────────────────────────────────────────────────
-// Replaces the 6-box approach. Accepts typing, paste, auto-submits at 6 digits.
+// ─── 6-box OTP input ──────────────────────────────────────────────────────────
+// Hidden full-width input captures keystrokes; 6 styled digit boxes render the
+// visual state. Handles typing, backspace, paste, and auto-submit at 6 digits.
 
-function OtpSingleInput({
+function OtpBoxInput({
   value,
   onChange,
   disabled,
@@ -67,9 +68,9 @@ function OtpSingleInput({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-focus when the verify step mounts
   useEffect(() => {
-    // Auto-focus when the verify step mounts
-    const t = setTimeout(() => inputRef.current?.focus(), 60);
+    const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
   }, []);
 
@@ -77,58 +78,90 @@ function OtpSingleInput({
     (raw: string) => {
       const clean = raw.replace(/\D/g, "").slice(0, 6);
       onChange(clean);
-      if (clean.length === 6) {
-        onComplete?.(clean);
-      }
+      if (clean.length === 6) onComplete?.(clean);
     },
     [onChange, onComplete],
   );
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    processValue(e.target.value);
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    processValue(e.clipboardData.getData("text"));
-  };
+  const digits = value.padEnd(6, "").slice(0, 6).split("");
+  const filledCount = value.replace(/\D/g, "").length;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <label className="block text-xs text-slate-400 text-center font-medium">
         Enter the 6-digit code sent to your email
       </label>
-      <input
-        ref={inputRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        maxLength={6}
-        autoComplete="one-time-code"
-        value={value}
-        onChange={handleChange}
-        onPaste={handlePaste}
-        disabled={disabled}
-        placeholder="000000"
-        className={`w-full px-5 py-4 rounded-xl text-center text-2xl font-mono font-bold tracking-[0.4em]
-          bg-slate-900 border-2 text-white placeholder:text-slate-700
-          focus:outline-none transition-all disabled:opacity-40
-          ${value.length === 6
-            ? "border-emerald-600/70 shadow-[0_0_16px_rgba(16,185,129,0.12)]"
-            : "border-slate-800 focus:border-emerald-600/50 focus:shadow-[0_0_12px_rgba(16,185,129,0.08)]"
-          }`}
-      />
-      <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-600">
-        <ClipboardPaste className="h-3 w-3" />
-        You can paste the code directly
+
+      {/* Invisible capture input — sits over the boxes */}
+      <div
+        className="relative"
+        onClick={() => !disabled && inputRef.current?.focus()}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={6}
+          autoComplete="one-time-code"
+          value={value}
+          onChange={(e) => processValue(e.target.value)}
+          onPaste={(e) => {
+            e.preventDefault();
+            processValue(e.clipboardData.getData("text"));
+          }}
+          disabled={disabled}
+          aria-label="6-digit verification code"
+          className="absolute inset-0 opacity-0 w-full h-full cursor-text z-10 disabled:cursor-not-allowed"
+          style={{ caretColor: "transparent" }}
+        />
+
+        {/* 6 visual digit boxes */}
+        <div className="flex gap-2 justify-center">
+          {Array.from({ length: 6 }).map((_, i) => {
+            const isFocused = filledCount === i && !disabled;
+            const isFilled = i < filledCount;
+            const isComplete = filledCount === 6;
+
+            return (
+              <div
+                key={i}
+                className={`
+                  relative h-14 w-11 rounded-xl flex items-center justify-center
+                  text-[22px] font-mono font-bold select-none
+                  border-2 transition-all duration-150
+                  ${isComplete
+                    ? "border-emerald-600/70 bg-slate-900 text-white shadow-[0_0_12px_rgba(16,185,129,0.12)]"
+                    : isFilled
+                      ? "border-slate-600 bg-slate-900 text-white"
+                      : isFocused
+                        ? "border-emerald-600/60 bg-emerald-950/20 text-emerald-400"
+                        : "border-slate-800 bg-slate-900/60 text-slate-700"
+                  }
+                `}
+              >
+                {digits[i] !== " " ? digits[i] : ""}
+                {/* Blinking caret on the active box */}
+                {isFocused && (
+                  <span
+                    className="absolute bottom-2 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-emerald-500"
+                    style={{ animation: "pulse 1s ease-in-out infinite" }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="text-[11px] text-slate-600 text-center">
+        Paste directly or type each digit — code is valid for 30 minutes
       </p>
     </div>
   );
 }
 
 // ─── Countdown timer hook ─────────────────────────────────────────────────────
-// start(n) begins a countdown from n seconds. Supports dynamic start values
-// so restored sessions can resume from the correct remaining time.
 
 function useCountdown() {
   const [seconds, setSeconds] = useState(0);
@@ -173,7 +206,7 @@ function Spinner({ className = "" }: { className?: string }) {
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Types & constants ────────────────────────────────────────────────────────
 
 type Step = "initial" | "verify" | "success";
 
@@ -199,7 +232,7 @@ function clearPending() {
 function navigateToReturnTo() {
   const returnTo = consumeReturnTo();
   const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-  const path = returnTo && returnTo.startsWith("/") ? returnTo : "/";
+  const path = returnTo && returnTo.startsWith("/") ? returnTo : "/dashboard";
   window.location.replace(`${window.location.origin}${base}${path}`);
 }
 
@@ -226,7 +259,7 @@ export function AuthModal() {
 
   const anyLoading = isGoogleLoading || isEmailLoading;
 
-  // ── Restore pending OTP session on modal open (survives refresh) ───────────
+  // ── Restore pending OTP session on modal open (survives page refresh) ──────
   useEffect(() => {
     if (!showAuthModal) return;
     const pending = loadPending();
@@ -258,7 +291,9 @@ export function AuthModal() {
     setTimeout(reset, 300);
   };
 
-  // ── OTP verify logic (shared between form submit and auto-submit) ──────────
+  // ── OTP verification ───────────────────────────────────────────────────────
+  // Uses supabase.auth.verifyOtp directly — no server round-trip.
+  // type: "magiclink" matches the OTP email template configured in Supabase.
 
   const submitOtp = useCallback(async (token: string) => {
     const clean = token.replace(/\D/g, "");
@@ -269,13 +304,15 @@ export function AuthModal() {
       const { error: verifyErr } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token: clean,
-        type: "email",
+        type: "magiclink",
       });
       if (verifyErr) {
-        setError("Incorrect or expired code. Please check and try again.");
+        setError("Incorrect or expired code — please check and try again.");
         setIsEmailLoading(false);
         return;
       }
+      // Session is now established and JWT is stored in browser storage by Supabase.
+      // Navigate without relying on URL query params.
       clearPending();
       setStep("success");
       setTimeout(navigateToReturnTo, 900);
@@ -303,26 +340,30 @@ export function AuthModal() {
     }
   };
 
-  // ── Email OTP — send / resend ─────────────────────────────────────────────
+  // ── Email OTP — send ──────────────────────────────────────────────────────
+  // Calls supabase.auth.signInWithOtp directly on the client.
+  // No redirectTo / emailRedirectTo / magic-link options injected.
+  // Supabase sends a 6-digit code when the project's OTP template is active.
 
   const sendOtp = useCallback(async (targetEmail: string): Promise<boolean> => {
     setError(null);
     setIsEmailLoading(true);
     try {
-      const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-      const res = await fetch(`${window.location.origin}${base}/api/auth/otp/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail }),
+      const { error: otpErr } = await supabase.auth.signInWithOtp({
+        email: targetEmail,
+        // Explicitly: no redirectTo, no emailRedirectTo, no shouldCreateUser override.
+        // Pure server-side OTP code delivery — no magic link URL generated.
+        options: {
+          shouldCreateUser: true,
+        },
       });
-      const data = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || !data.success) {
-        setError(data.error ?? "Failed to send code. Please try again.");
+      if (otpErr) {
+        setError(otpErr.message ?? "Failed to send code. Please try again.");
         return false;
       }
       return true;
     } catch {
-      setError("Network error. Please check your connection.");
+      setError("Network error. Please check your connection and try again.");
       return false;
     } finally {
       setIsEmailLoading(false);
@@ -342,6 +383,8 @@ export function AuthModal() {
       countdown.start(RESEND_COOLDOWN);
     }
   };
+
+  // ── Resend ────────────────────────────────────────────────────────────────
 
   const handleResend = async () => {
     if (countdown.seconds > 0 || isEmailLoading) return;
@@ -451,7 +494,7 @@ export function AuthModal() {
               </motion.div>
             )}
 
-            {/* ── Verify: single OTP input + resend cooldown ── */}
+            {/* ── Verify: 6-box OTP input ── */}
             {step === "verify" && (
               <motion.form
                 key="verify"
@@ -463,17 +506,19 @@ export function AuthModal() {
                 onSubmit={handleVerifyOtp}
                 className="flex flex-col gap-4"
               >
-                <OtpSingleInput
+                <OtpBoxInput
                   value={otp}
                   onChange={setOtp}
                   disabled={isEmailLoading}
                   onComplete={(v) => void submitOtp(v)}
                 />
 
+                {/* Error panel — appears inside the verify step, above the button */}
                 {error && (
-                  <p className="text-red-400 text-xs text-center animate-in fade-in slide-in-from-top-1 duration-200">
-                    {error}
-                  </p>
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-950/40 border border-red-900/40 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                    <p className="text-red-400 text-xs leading-snug">{error}</p>
+                  </div>
                 )}
 
                 <button
@@ -486,11 +531,17 @@ export function AuthModal() {
                     : "Verify Code"}
                 </button>
 
-                {/* Resend row — timer is ONLY for resend throttle, not OTP expiry */}
+                {/* Resend row */}
                 <div className="flex items-center justify-between text-xs pt-0.5">
                   <button
                     type="button"
-                    onClick={() => { setError(null); setOtp(""); setStep("initial"); countdown.reset(); clearPending(); }}
+                    onClick={() => {
+                      setError(null);
+                      setOtp("");
+                      setStep("initial");
+                      countdown.reset();
+                      clearPending();
+                    }}
                     className="flex items-center gap-1.5 text-slate-600 hover:text-slate-400 transition-colors"
                   >
                     <ArrowLeft className="h-3 w-3" /> Change email
@@ -512,10 +563,6 @@ export function AuthModal() {
                     </button>
                   )}
                 </div>
-
-                <p className="text-[11px] text-slate-700 text-center leading-relaxed">
-                  Code is valid for 30 minutes. Check your spam folder if it doesn't arrive.
-                </p>
               </motion.form>
             )}
 
