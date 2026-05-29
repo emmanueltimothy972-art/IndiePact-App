@@ -206,6 +206,21 @@ function Spinner({ className = "" }: { className?: string }) {
   );
 }
 
+// ─── RFC-5322 email validator ─────────────────────────────────────────────────
+// Validates local part, @ separator, domain labels, and TLD.
+// Intercepts malformed addresses before any Supabase call fires.
+
+const RFC5322_RE =
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+function validateEmail(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return "Email address is required.";
+  if (!t.includes("@")) return "Missing '@' — check your email address.";
+  if (!RFC5322_RE.test(t)) return "That doesn't look like a valid email. Please check and try again.";
+  return null;
+}
+
 // ─── Types & constants ────────────────────────────────────────────────────────
 
 type Step = "initial" | "verify" | "success";
@@ -255,6 +270,7 @@ export function AuthModal() {
   const [isEmailLoading, setIsEmailLoading] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const countdown = useCountdown();
 
   const anyLoading = isGoogleLoading || isEmailLoading;
@@ -279,6 +295,7 @@ export function AuthModal() {
     setEmail("");
     setOtp("");
     setError(null);
+    setEmailError(null);
     setIsGoogleLoading(false);
     setIsEmailLoading(false);
     countdown.reset();
@@ -373,7 +390,16 @@ export function AuthModal() {
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed || isEmailLoading || isGoogleLoading) return;
+    if (isEmailLoading || isGoogleLoading) return;
+
+    // RFC-5322 gate — block submission and show inline hint; no network call fires
+    const validationErr = validateEmail(email);
+    if (validationErr) {
+      setEmailError(validationErr);
+      return;
+    }
+    setEmailError(null);
+
     const ok = await sendOtp(trimmed);
     if (ok) {
       setOtp("");
@@ -471,10 +497,26 @@ export function AuthModal() {
                     autoComplete="email"
                     placeholder="you@example.com"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => {
+                      setEmail(e.target.value);
+                      if (emailError) setEmailError(null);
+                    }}
+                    onBlur={e => {
+                      if (e.target.value.trim()) setEmailError(validateEmail(e.target.value));
+                    }}
                     disabled={isEmailLoading}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-slate-600 transition-colors disabled:opacity-50"
+                    className={`w-full px-4 py-3 rounded-xl bg-slate-900 text-white text-sm placeholder:text-slate-600 focus:outline-none transition-colors disabled:opacity-50
+                      border ${emailError ? "border-red-800/70 focus:border-red-700/70" : "border-slate-800 focus:border-slate-600"}`}
                   />
+
+                  {/* RFC-5322 inline validation hint — no layout shift, fades in smoothly */}
+                  {emailError && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950/40 border border-red-900/40 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                      <p className="text-red-400 text-xs leading-snug">{emailError}</p>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
                     disabled={isEmailLoading || isGoogleLoading || !email.trim()}
