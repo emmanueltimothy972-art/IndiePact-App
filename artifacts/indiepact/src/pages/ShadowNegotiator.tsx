@@ -1,0 +1,763 @@
+import { PageTransition } from "@/components/PageTransition";
+import { FeatureGate } from "@/components/FeatureGate";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Swords, Search, Copy, CheckCircle2, Loader2, ShieldCheck,
+  AlertTriangle, ShieldAlert, AlertCircle, Scale, ChevronRight, RefreshCw,
+  TrendingDown, Mail, Zap, DollarSign, Target,
+} from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useScanContext } from "@/contexts/ScanContext";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+const DANGER_WORDS = [
+  "indemnify", "indemnification", "perpetuity", "sole discretion", "unlimited",
+  "irrevocable", "hold harmless", "all rights", "work for hire", "work-for-hire",
+  "without notice", "without cause", "forfeit", "no compensation",
+  "liable", "liability", "consequential damages", "at client's discretion",
+  "as needed", "net 90", "net-90", "net 60", "net-120", "royalty-free",
+  "exclusive property", "all intellectual property", "upon acceptance",
+  "until satisfied", "unlimited revisions", "best efforts",
+];
+
+function HighlightDanger({ text }: { text: string }) {
+  const escaped = DANGER_WORDS.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
+  const parts = text.split(pattern);
+  return (
+    <span>
+      {parts.map((part, i) =>
+        DANGER_WORDS.some((w) => w.toLowerCase() === part.toLowerCase()) ? (
+          <mark key={i} className="bg-red-950/70 text-red-400 border-b border-red-700 not-italic font-semibold px-0.5 rounded-sm">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  );
+}
+
+type Risk = {
+  title: string;
+  severity: "Low" | "Medium" | "High";
+  explanation: string;
+  whyThisHurtsYou: string;
+  category: string;
+  fixes: { rewrittenClause: string; direct: string; diplomatic: string; legal: string };
+};
+
+type ScanItem = {
+  id: string;
+  contractName: string;
+  result: { risks: Risk[]; protectionScore: number };
+};
+
+interface ProsecutorResponse {
+  diagnosis: string;
+  exposure: string;
+  counterMove: string;
+  rebuttalEmail: string;
+  tacticalDirective: string;
+}
+
+type ChatMessage = {
+  role: "user" | "ai";
+  content: string;
+  structured?: ProsecutorResponse;
+};
+
+const QUALIFYING_QUESTIONS = [
+  "Is this a Work-for-Hire agreement or a Service Agreement? Specify the exact agreement type.",
+  "What is the specific jurisdiction (state/country) governing this contract?",
+  "What is the total financial exposure of this deal — the full contract value?",
+];
+
+// ─── Utility components ───────────────────────────────────────────────────────
+
+function CopyButton({ text, label }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="flex items-center gap-1 text-xs text-slate-500 hover:text-emerald-400 transition-colors shrink-0 font-mono"
+    >
+      {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? "Copied" : (label ?? "Copy")}
+    </button>
+  );
+}
+
+function SeverityBadge({ severity }: { severity: string }) {
+  if (severity === "High") return (
+    <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-red-900/40 bg-red-950/20 text-red-300/80">
+      <ShieldAlert className="h-3 w-3" /> High Risk
+    </span>
+  );
+  if (severity === "Medium") return (
+    <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-amber-900/30 bg-amber-950/20 text-amber-300/80">
+      <AlertTriangle className="h-3 w-3" /> Medium Risk
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-slate-700/50 bg-slate-800/40 text-slate-400">
+      <AlertCircle className="h-3 w-3" /> Low Risk
+    </span>
+  );
+}
+
+// ─── Prosecutor structured response bubble ────────────────────────────────────
+
+function ProsecutorBubble({ data }: { data: ProsecutorResponse }) {
+  return (
+    <div className="space-y-3 font-mono text-xs w-full max-w-[90%]">
+      {/* Diagnosis */}
+      <div className="rounded-lg border border-slate-700/60 bg-slate-900/60 p-4 space-y-1.5">
+        <div className="flex items-center gap-2 mb-2">
+          <Search className="h-3 w-3 text-slate-400 shrink-0" />
+          <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Diagnosis</span>
+        </div>
+        <p className="text-slate-200 leading-relaxed">{data.diagnosis}</p>
+      </div>
+
+      {/* Exposure */}
+      <div className="rounded-lg border border-amber-900/25 bg-amber-950/10 p-4 space-y-1.5">
+        <div className="flex items-center gap-2 mb-2">
+          <DollarSign className="h-3 w-3 text-amber-400/80 shrink-0" />
+          <span className="text-[10px] text-amber-400/80 uppercase tracking-widest font-bold">Financial Exposure</span>
+        </div>
+        <p className="text-slate-300 leading-relaxed">{data.exposure}</p>
+      </div>
+
+      {/* Counter-Move */}
+      <div className="rounded-lg border border-emerald-900/25 bg-emerald-950/10 p-4 space-y-2">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Target className="h-3 w-3 text-emerald-500/80 shrink-0" />
+            <span className="text-[10px] text-emerald-500/80 uppercase tracking-widest font-bold">Counter-Move</span>
+          </div>
+          <CopyButton text={data.counterMove} />
+        </div>
+        <p className="text-slate-200 leading-relaxed">{data.counterMove}</p>
+      </div>
+
+      {/* Rebuttal Email */}
+      {data.rebuttalEmail && (
+        <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-4 space-y-2">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Mail className="h-3 w-3 text-slate-400 shrink-0" />
+              <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+                Rebuttal Email — Ready to Send
+              </span>
+            </div>
+            <CopyButton text={data.rebuttalEmail} label="Copy email" />
+          </div>
+          <div className="bg-slate-950/60 rounded-md p-3 border border-slate-700/30">
+            <pre className="text-slate-300 leading-relaxed whitespace-pre-wrap text-[11px] font-mono">
+              {data.rebuttalEmail}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* Tactical Directive */}
+      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-slate-700/60 bg-slate-800/40">
+        <Zap className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+        <div>
+          <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold block mb-1">
+            Tactical Directive — Next 24 Hours
+          </span>
+          <p className="text-slate-200 leading-relaxed font-bold">{data.tacticalDirective}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function ShadowNegotiator() {
+  const { userId } = useAuth();
+  const { activeScan, cachedScans } = useScanContext();
+  const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+  const [scans, setScans] = useState<ScanItem[]>([]);
+  const [selectedScanId, setSelectedScanId] = useState<string>("");
+  const [selectedRisks, setSelectedRisks] = useState<Risk[]>([]);
+  const [tableLoading, setTableLoading] = useState(false);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [qualifyingStep, setQualifyingStep] = useState(0);
+  const [qualifyingAnswers, setQualifyingAnswers] = useState<string[]>([]);
+  const [caseContext, setCaseContext] = useState<{
+    agreementType: string; jurisdiction: string; financialExposure: string;
+  } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setTableLoading(true);
+    fetch(`${base}/api/scans?userId=${userId}&limit=10`)
+      .then((r) => r.json())
+      .then((d) => {
+        const dbItems = (d.scans as ScanItem[]) || [];
+        // Merge DB items with localStorage-cached scans (dedup by id)
+        const dbIds = new Set(dbItems.map((s) => s.id));
+        const cachedItems: ScanItem[] = cachedScans
+          .filter((s) => !dbIds.has(s.id))
+          .map((s) => ({
+            id: s.id,
+            contractName: s.contractName,
+            result: { risks: (s.result?.risks || []) as Risk[], protectionScore: s.protectionScore },
+          }));
+        const merged = [...dbItems, ...cachedItems];
+        setScans(merged);
+        // Auto-select: prefer the activeScan match, then first item
+        if (activeScan) {
+          const match = merged.find((s) => s.contractName === activeScan.contractName);
+          if (match) {
+            setSelectedScanId(match.id);
+            setSelectedRisks(match.result?.risks || []);
+          } else if (merged.length > 0) {
+            setSelectedScanId(merged[0].id);
+            setSelectedRisks(merged[0].result?.risks || []);
+          }
+        } else if (merged.length > 0) {
+          setSelectedScanId(merged[0].id);
+          setSelectedRisks(merged[0].result?.risks || []);
+        }
+      })
+      .catch(() => {
+        // API unavailable — fall back entirely to localStorage cache
+        const cachedItems: ScanItem[] = cachedScans.map((s) => ({
+          id: s.id,
+          contractName: s.contractName,
+          result: { risks: (s.result?.risks || []) as Risk[], protectionScore: s.protectionScore },
+        }));
+        setScans(cachedItems);
+        if (activeScan) {
+          const match = cachedItems.find((s) => s.contractName === activeScan.contractName);
+          const first = match ?? cachedItems[0];
+          if (first) { setSelectedScanId(first.id); setSelectedRisks(first.result?.risks || []); }
+        } else if (cachedItems.length > 0) {
+          setSelectedScanId(cachedItems[0].id);
+          setSelectedRisks(cachedItems[0].result?.risks || []);
+        }
+      })
+      .finally(() => setTableLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!selectedScanId) return;
+    const scan = scans.find((s) => s.id === selectedScanId);
+    if (scan) setSelectedRisks(scan.result?.risks || []);
+  }, [selectedScanId, scans]);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([{ role: "ai", content: QUALIFYING_QUESTIONS[0] }]);
+      setQualifyingStep(1);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isLoading]);
+
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || isLoading) return;
+    const userMsg = input.trim();
+    setInput("");
+    const newMessages: ChatMessage[] = [...messages, { role: "user", content: userMsg }];
+    setMessages(newMessages);
+    setIsLoading(true);
+
+    // ── Qualifying intake ──────────────────────────────────────────────────
+    if (qualifyingStep < QUALIFYING_QUESTIONS.length) {
+      const newAnswers = [...qualifyingAnswers, userMsg];
+      setQualifyingAnswers(newAnswers);
+      const nextStep = qualifyingStep + 1;
+      setQualifyingStep(nextStep);
+
+      if (nextStep < QUALIFYING_QUESTIONS.length) {
+        setTimeout(() => {
+          setMessages((prev) => [...prev, { role: "ai", content: QUALIFYING_QUESTIONS[nextStep] }]);
+          setIsLoading(false);
+        }, 600);
+        return;
+      }
+
+      const ctx = {
+        agreementType: newAnswers[0] || "Not specified",
+        jurisdiction: newAnswers[1] || "Not specified",
+        financialExposure: newAnswers[2] || userMsg,
+      };
+      setCaseContext(ctx);
+
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "ai",
+            content: `Case file logged. Agreement: ${ctx.agreementType}. Jurisdiction: ${ctx.jurisdiction}. Exposure: ${ctx.financialExposure}.\n\nIntake complete. Present the clause or situation you need me to dissect. I'll tell you what it means, what it costs you, the exact counter-move, and a rebuttal email ready to send.`,
+          },
+        ]);
+        setIsLoading(false);
+      }, 800);
+      return;
+    }
+
+    // ── Prosecutor AI call — returns structured JSON ───────────────────────
+    try {
+      // Build history using plain content strings for the API
+      const history = newMessages
+        .slice(0, -1) // exclude the last user message (sent as `message`)
+        .map((m) => ({
+          role: m.role === "ai" ? "assistant" as const : "user" as const,
+          content: m.content,
+        }));
+
+      const res = await fetch(`${base}/api/prosecutor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg, history, caseContext }),
+      });
+      if (!res.ok) throw new Error("API failed");
+      const data = (await res.json()) as { reply: ProsecutorResponse };
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          content: data.reply.tacticalDirective, // plain-text fallback
+          structured: data.reply,
+        },
+      ]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: "Connection interrupted. Stand by and retry." },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [input, isLoading, messages, qualifyingStep, qualifyingAnswers, caseContext]);
+
+  const [replyTones, setReplyTones] = useState<Record<number, "soft" | "balanced" | "firm">>({});
+
+  const resetProsecutor = () => {
+    setMessages([{ role: "ai", content: QUALIFYING_QUESTIONS[0] }]);
+    setQualifyingStep(1);
+    setQualifyingAnswers([]);
+    setCaseContext(null);
+    setInput("");
+  };
+
+  return (
+    <PageTransition className="space-y-0 max-w-7xl mx-auto">
+      <FeatureGate
+        requires="pro"
+        featureName="Negotiation War Room"
+        featureDescription="The Negotiation War Room is available on the Pro plan and above. Upgrade to get clause-level negotiation scripts, danger-word detection, and multi-tactic negotiation playbooks."
+      >
+      <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6 mb-6">
+        <div className="flex items-start gap-4">
+          <div className="h-10 w-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center shrink-0">
+            <Swords className="h-5 w-5 text-slate-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold tracking-tight text-white">Negotiation War Room</h1>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 uppercase tracking-wider">Pro</span>
+            </div>
+            <p className="text-slate-500 text-sm mt-0.5">
+              Clause-level negotiation scripts, danger-word detection, and multi-tactic playbooks.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <Tabs defaultValue="table">
+        <TabsList className="border border-border bg-card rounded-lg mb-6 p-1 h-auto gap-1">
+          <TabsTrigger
+            value="table"
+            className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs font-medium px-5 py-2"
+          >
+            <Search className="h-3.5 w-3.5 mr-2" />
+            Clause Analysis
+          </TabsTrigger>
+          <TabsTrigger
+            value="prosecutor"
+            className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs font-medium px-5 py-2"
+          >
+            <Scale className="h-3.5 w-3.5 mr-2" />
+            AI Negotiation Advisor
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── FORENSIC DISCOVERY TABLE ───────────────────────────────── */}
+        <TabsContent value="table" className="mt-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Case File:</span>
+              {scans.length > 0 ? (
+                <Select value={selectedScanId} onValueChange={setSelectedScanId}>
+                  <SelectTrigger className="h-8 text-xs font-mono bg-card border-border w-[280px]">
+                    <SelectValue placeholder="Select a scan..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {scans.map((s) => (
+                      <SelectItem key={s.id} value={s.id} className="font-mono text-xs">
+                        {s.contractName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-xs text-muted-foreground font-mono">
+                  No scans found — run a scan in Document Lab first
+                </span>
+              )}
+            </div>
+            {selectedRisks.length > 0 && (
+              <span className="text-xs font-mono text-muted-foreground border border-border px-2 py-1 rounded">
+                {selectedRisks.length} FINDING{selectedRisks.length !== 1 ? "S" : ""} LOADED
+              </span>
+            )}
+          </div>
+
+          {/* Revenue Stress Test score — computed inline from selected risks */}
+          {!tableLoading && selectedRisks.length > 0 && (() => {
+            let score = 100;
+            for (const r of selectedRisks) {
+              if (r.category === "paymentDelay") score -= r.severity === "High" ? 30 : r.severity === "Medium" ? 18 : 8;
+              if (r.category === "scopeCreep")   score -= r.severity === "High" ? 22 : r.severity === "Medium" ? 12 : 5;
+              if (r.category === "liability")    score -= r.severity === "High" ? 25 : r.severity === "Medium" ? 14 : 0;
+              if (r.category === "termination")  score -= r.severity === "High" ? 20 : r.severity === "Medium" ? 10 : 0;
+            }
+            score = Math.max(0, Math.min(100, score));
+            const color = score >= 70 ? "#2d8c6e" : score >= 40 ? "#b07a2e" : "#943535";
+            const label = score >= 70 ? "LOW FRICTION" : score >= 40 ? "MODERATE RISK" : "HIGH EXPOSURE";
+            const circumference = 2 * Math.PI * 28;
+            const dashOffset = circumference - (circumference * score) / 100;
+            const highCount = selectedRisks.filter(r => r.severity === "High").length;
+            const medCount  = selectedRisks.filter(r => r.severity === "Medium").length;
+            return (
+              <div className="mb-5 flex items-center gap-5 px-5 py-3.5 rounded-xl border border-border bg-[#050505]">
+                <TrendingDown className="h-4 w-4 text-amber-400 shrink-0" />
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Revenue Stress Test</span>
+                <div className="flex items-center gap-2">
+                  <svg className="-rotate-90 shrink-0" width="36" height="36" viewBox="0 0 64 64">
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/20" />
+                    <circle cx="32" cy="32" r="28" fill="none" stroke={color} strokeWidth="6"
+                      strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{score}</span>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase tracking-widest"
+                  style={{ color, borderColor: `${color}40`, backgroundColor: `${color}10` }}>
+                  {label}
+                </span>
+                <div className="flex items-center gap-3 ml-auto text-[10px] font-mono text-muted-foreground">
+                  {highCount > 0 && <span className="text-red-400">{highCount} HIGH</span>}
+                  {medCount > 0 && <span className="text-amber-400">{medCount} MEDIUM</span>}
+                  <span>{selectedRisks.length - highCount - medCount} LOW</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Negotiation Edge Insight + 3-Step Strategy Path */}
+          {!tableLoading && selectedRisks.length > 0 && (() => {
+            const topHigh = selectedRisks.find((r) => r.severity === "High") ?? selectedRisks[0];
+            const categories = [...new Set(selectedRisks.map((r) => r.category))];
+            const step1 = topHigh ? `Challenge "${topHigh.title || topHigh.category}" — your highest-risk clause` : "Identify the highest-risk clause and open with it";
+            const step2 = topHigh?.fixes?.rewrittenClause ? `Offer the protective rewrite for ${topHigh.category} as your counter-proposal` : "Present your protective counter-clause and rationale";
+            const step3 = selectedRisks.filter((r) => r.severity === "High").length > 2 ? "If 3+ High-risk clauses are unresolved, invoke your walk-away position" : "Secure your key concessions, then sign with the amended language";
+            return (
+              <div className="mb-5 space-y-3">
+                {/* Edge Insight */}
+                <div className="flex items-start gap-3 px-5 py-3.5 rounded-xl border border-amber-900/30 bg-amber-950/10">
+                  <Target className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-mono text-amber-500/70 uppercase tracking-widest mb-0.5">Negotiation Edge Insight</p>
+                    <p className="text-xs text-amber-200/80 leading-relaxed">
+                      Your strongest leverage: <span className="font-semibold text-amber-300">{topHigh?.title || topHigh?.category}</span>
+                      {topHigh?.fixes?.direct && (
+                        <> — {topHigh.fixes.direct.split(".")[0]}.</>
+                      )}
+                    </p>
+                    {categories.length > 1 && (
+                      <p className="text-[11px] text-amber-400/50 mt-1 font-mono">
+                        {categories.slice(0, 4).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {/* 3-Step Strategy Path */}
+                <div className="flex items-stretch gap-0 rounded-xl border border-border overflow-hidden">
+                  {[
+                    { label: "① Opening", text: step1, color: "border-r border-border bg-[#050505]" },
+                    { label: "② Middle Ground", text: step2, color: "border-r border-border bg-card/40" },
+                    { label: "③ Close", text: step3, color: "bg-card/20" },
+                  ].map((s) => (
+                    <div key={s.label} className={`flex-1 px-4 py-3 space-y-1.5 ${s.color}`}>
+                      <p className="text-[10px] font-mono font-semibold text-emerald-400/70 uppercase tracking-widest">{s.label}</p>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">{s.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {tableLoading ? (
+            <div className="flex items-center justify-center h-64 text-muted-foreground text-sm animate-pulse">
+              Loading clause data...
+            </div>
+          ) : selectedRisks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 border border-dashed border-border rounded-xl text-muted-foreground font-mono text-sm gap-3">
+              <Search className="h-8 w-8 text-muted-foreground/50" />
+              <div className="text-center">
+                <p className="font-semibold">No case file loaded</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Select a scan above or run a contract review first</p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border overflow-hidden">
+              {/* Table header */}
+              <div className="grid grid-cols-3 border-b border-border bg-[#050505]/80">
+                <div className="px-5 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
+                  <AlertTriangle className="h-3 w-3" /> Flagged Clause
+                </div>
+                <div className="px-5 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500 border-r border-border flex items-center gap-2">
+                  <ShieldCheck className="h-3 w-3" /> Protective Rewrite
+                </div>
+                <div className="px-5 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <Scale className="h-3 w-3" /> Negotiation Script
+                </div>
+              </div>
+
+              {selectedRisks.map((risk, idx) => (
+                <div
+                  key={idx}
+                  className={`grid grid-cols-3 border-b border-border/60 last:border-b-0 ${idx % 2 === 0 ? "bg-card/40" : "bg-card/20"}`}
+                >
+                  {/* Column A */}
+                  <div className="px-5 py-5 border-r border-border/60 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <SeverityBadge severity={risk.severity} />
+                    </div>
+                    <p className="font-mono text-xs text-slate-300 leading-relaxed">
+                      <HighlightDanger text={risk.explanation} />
+                    </p>
+                    <p className="font-mono text-[11px] text-red-400/80 leading-relaxed italic">
+                      {risk.whyThisHurtsYou}
+                    </p>
+                    <span className="inline-block text-[10px] font-mono text-muted-foreground border border-border px-2 py-0.5 rounded">
+                      {risk.category}
+                    </span>
+                  </div>
+
+                  {/* Column B */}
+                  <div className="px-5 py-5 border-r border-border/60 space-y-3">
+                    <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">
+                      Protective Counter-Clause
+                    </span>
+                    <div className="p-3 rounded-lg border border-emerald-900/40 bg-emerald-950/20">
+                      <p className="font-mono text-xs text-emerald-300 leading-relaxed">
+                        {risk.fixes.rewrittenClause}
+                      </p>
+                    </div>
+                    <CopyButton text={risk.fixes.rewrittenClause} />
+                  </div>
+
+                  {/* Column C */}
+                  <div className="px-5 py-5 space-y-3">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      Negotiation Script
+                    </span>
+                    <div className="p-3 rounded-lg border border-slate-700/40 bg-slate-900/40">
+                      <p className="text-xs text-slate-300 leading-relaxed italic">
+                        "{risk.fixes.direct}"
+                      </p>
+                    </div>
+                    <div className="mt-2">
+                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">
+                        Legal Citation
+                      </span>
+                      <p className="text-xs text-slate-400 leading-relaxed">{risk.fixes.legal}</p>
+                    </div>
+                    <CopyButton text={`${risk.fixes.direct}\n\n${risk.fixes.legal}`} />
+
+                    {/* Quick Reply Generator */}
+                    <div className="pt-2 border-t border-border/60 space-y-2">
+                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Quick Reply</p>
+                      <div className="flex gap-1.5">
+                        {(["soft", "balanced", "firm"] as const).map((tone) => (
+                          <button
+                            key={tone}
+                            onClick={() => setReplyTones((prev) => ({ ...prev, [idx]: prev[idx] === tone ? undefined as unknown as typeof tone : tone }))}
+                            className={`flex-1 py-1 rounded text-[10px] font-semibold border transition-all capitalize ${
+                              replyTones[idx] === tone
+                                ? tone === "soft"
+                                  ? "border-blue-800/60 bg-blue-950/30 text-blue-300"
+                                  : tone === "balanced"
+                                  ? "border-emerald-800/50 bg-emerald-950/20 text-emerald-300"
+                                  : "border-red-900/50 bg-red-950/20 text-red-300"
+                                : "border-border bg-card/40 text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {tone}
+                          </button>
+                        ))}
+                      </div>
+                      {replyTones[idx] && (
+                        <div className="rounded-lg border border-border/60 bg-[#050505] p-3 space-y-2">
+                          <p className="text-xs text-slate-200 leading-relaxed italic">
+                            "{replyTones[idx] === "soft"
+                              ? risk.fixes.diplomatic
+                              : replyTones[idx] === "balanced"
+                              ? risk.fixes.direct
+                              : risk.fixes.legal}"
+                          </p>
+                          <CopyButton
+                            text={
+                              replyTones[idx] === "soft"
+                                ? risk.fixes.diplomatic
+                                : replyTones[idx] === "balanced"
+                                ? risk.fixes.direct
+                                : risk.fixes.legal
+                            }
+                            label={`Copy ${replyTones[idx]}`}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── THE PROSECUTOR ──────────────────────────────────────────── */}
+        <TabsContent value="prosecutor" className="mt-0">
+          <div className="h-[calc(100vh-18rem)] flex flex-col border border-border rounded-xl bg-card overflow-hidden relative">
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-border bg-[#050505] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs text-muted-foreground font-medium">
+                  AI Negotiation Advisor
+                </span>
+                {caseContext && (
+                  <span className="font-mono text-[10px] border border-border px-2 py-0.5 rounded text-muted-foreground">
+                    {caseContext.agreementType} · {caseContext.jurisdiction}
+                  </span>
+                )}
+              </div>
+              <button onClick={resetProsecutor} className="text-muted-foreground hover:text-foreground transition-colors">
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Qualifying progress bar */}
+            {qualifyingStep < QUALIFYING_QUESTIONS.length && (
+              <div className="px-5 py-2 border-b border-border bg-amber-950/20 shrink-0 flex items-center gap-3">
+                <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest">Case Intake</span>
+                <div className="flex gap-1.5">
+                  {QUALIFYING_QUESTIONS.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1 w-8 rounded-full transition-colors ${
+                        i < qualifyingStep ? "bg-emerald-700" : i === qualifyingStep ? "bg-amber-600/70 animate-pulse" : "bg-border"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {qualifyingStep}/{QUALIFYING_QUESTIONS.length} qualifying questions
+                </span>
+              </div>
+            )}
+
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-5">
+              {messages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "ai" && (
+                    <div className="h-7 w-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-semibold mr-3 mt-1 shrink-0">
+                      AI
+                    </div>
+                  )}
+
+                  {/* Structured prosecutor response */}
+                  {msg.role === "ai" && msg.structured ? (
+                    <ProsecutorBubble data={msg.structured} />
+                  ) : (
+                    <div className={`max-w-[78%] rounded-xl px-5 py-3.5 text-sm leading-relaxed shadow-sm font-mono ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground rounded-tr-sm"
+                        : "bg-muted text-foreground border border-border rounded-tl-sm"
+                    }`}>
+                      {msg.content.split("\n").map((line, j) => (
+                        <span key={j}>{line}{j < msg.content.split("\n").length - 1 && <br />}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="h-7 w-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-semibold mr-3 mt-1 shrink-0">AI</div>
+                  <div className="bg-muted border border-border rounded-xl rounded-tl-sm px-5 py-4 flex gap-1 items-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="p-4 bg-background border-t border-border shrink-0">
+              <form onSubmit={(e) => { e.preventDefault(); void handleSend(); }} className="flex items-center gap-3 relative">
+                <Input
+                  placeholder={
+                    qualifyingStep < QUALIFYING_QUESTIONS.length
+                      ? "Answer the intake question above..."
+                      : "State the clause or situation for investigation..."
+                  }
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  className="flex-1 bg-card border-border pr-12 h-12 font-mono text-sm"
+                  disabled={isLoading}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="absolute right-1.5 h-9 w-9 rounded-md"
+                  disabled={!input.trim() || isLoading}
+                >
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+                </Button>
+              </form>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+      </FeatureGate>
+    </PageTransition>
+  );
+}
