@@ -220,6 +220,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/api/auth/callback`,
+        // access_type:"offline" requests a refresh token so sessions survive
+        // beyond the one-hour access-token TTL.
+        // prompt:"select_account" forces the Google account picker on every
+        // sign-in, preventing stale or wrong accounts from auto-selecting.
+        queryParams: {
+          access_type: "offline",
+          prompt: "select_account",
+        },
       },
     });
 

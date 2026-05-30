@@ -131,24 +131,40 @@ async function ensureUserConfirmed(
 
 router.get("/auth/callback", (req, res) => {
   const code = req.query["code"] as string | undefined;
+  // state is part of the PKCE flow — the Supabase client wrote it to
+  // sessionStorage before the redirect and validates it on return to
+  // prevent CSRF. It must be forwarded alongside code.
+  const state = req.query["state"] as string | undefined;
   const error = req.query["error"] as string | undefined;
   const errorDescription = req.query["error_description"] as string | undefined;
 
+  // Derive the origin from the incoming request so this works identically
+  // on Replit preview, staging, and the production custom domain.
+  // The destination path is hardcoded (/auth/callback) to eliminate any
+  // open-redirect surface — no user-supplied path is ever reflected.
   const origin = `${req.protocol}://${req.get("host")}`;
+  const frontendCallback = `${origin}/auth/callback`;
 
   if (error) {
     req.log.warn({ error, errorDescription }, "OAuth callback: provider returned error");
-    return res.redirect(302, `${origin}/?auth_error=${encodeURIComponent(error)}`);
+    const params = new URLSearchParams({ error });
+    if (errorDescription) params.set("error_description", errorDescription);
+    return res.redirect(302, `${frontendCallback}?${params.toString()}`);
   }
 
   if (!code) {
-    req.log.warn("OAuth callback: no code in query — redirecting home");
-    return res.redirect(302, `${origin}/`);
+    req.log.warn("OAuth callback: no code in query params");
+    return res.redirect(302, `${frontendCallback}?error=missing_code`);
   }
 
-  // Hand the code to the frontend auth callback page.
-  req.log.info("OAuth callback: forwarding PKCE code to frontend");
-  return res.redirect(302, `${origin}/auth/callback?code=${encodeURIComponent(code)}`);
+  // Forward PKCE code + state to the frontend's /auth/callback page.
+  // The Supabase JS client (detectSessionInUrl:true + flowType:"pkce")
+  // completes the exchange automatically using the stored code_verifier
+  // and validates state, then fires onAuthStateChange(SIGNED_IN).
+  req.log.info("OAuth callback: forwarding PKCE code and state to frontend");
+  const params = new URLSearchParams({ code });
+  if (state) params.set("state", state);
+  return res.redirect(302, `${frontendCallback}?${params.toString()}`);
 });
 
 // ─── POST /api/auth/otp/send ──────────────────────────────────────────────────
