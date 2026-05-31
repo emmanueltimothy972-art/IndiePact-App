@@ -204,34 +204,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (DEV_AUTH_BYPASS) return { error: null };
 
     // ── CUSTOM DOMAIN NOTE ───────────────────────────────────────────────────
-    // redirectTo is constructed dynamically from window.location.origin so it
-    // works in both Replit preview and production with zero code changes.
+    // redirectTo is built from window.location.origin so it resolves correctly
+    // on Replit preview, staging, and any production custom domain automatically.
     //
-    // When moving to a custom domain (e.g. indiepact.pro):
-    //  • Ensure window.location.origin is https://indiepact.pro in production
-    //  • The full redirect URL becomes: https://indiepact.pro/api/auth/callback
-    //  • Register that URL in:
-    //      - Supabase Dashboard → Auth → URL Configuration → Redirect URLs
-    //      - Google Cloud Console → OAuth Client → Authorized redirect URIs
-    //  • Update the OAuth Consent Screen app name to "IndiePact" so the Google
-    //    sign-in prompt shows your brand instead of the Supabase project URL.
+    // Register this exact URI in both places before enabling Google OAuth:
+    //   1. Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs:
+    //        https://<your-domain>/auth/callback
+    //   2. Supabase Dashboard → Auth → URL Configuration → Redirect URLs:
+    //        https://<your-domain>/auth/callback
+    //   3. Google Cloud Console → Authorized JavaScript origins:
+    //        https://<your-domain>
     // ────────────────────────────────────────────────────────────────────────
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`,
-        // access_type:"offline" requests a refresh token so sessions survive
-        // beyond the one-hour access-token TTL.
-        // prompt:"select_account" forces the Google account picker on every
-        // sign-in, preventing stale or wrong accounts from auto-selecting.
-        queryParams: {
-          access_type: "offline",
-          prompt: "select_account",
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          // access_type:"offline" requests a refresh token so sessions survive
+          // beyond the one-hour access-token TTL.
+          // prompt:"consent" forces the full Google consent screen on every
+          // sign-in, ensuring a fresh refresh token is always issued.
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
         },
-      },
-    });
+      });
 
-    return { error: error as Error | null };
+      if (error) {
+        return { error: error as Error };
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err : new Error("Google sign-in failed. Please try again.") };
+    }
   }, []);
 
   const signOut = useCallback(async () => {
