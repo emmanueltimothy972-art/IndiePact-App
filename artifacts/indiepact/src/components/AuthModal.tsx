@@ -1,22 +1,9 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useAuth, consumeReturnTo } from "@/contexts/AuthContext";
-import { Lock, ArrowLeft, Mail, CheckCircle2, Timer } from "lucide-react";
+import { Lock, ArrowLeft, Mail, CheckCircle2, Timer, Info, X } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
-
-// ─── Google G icon ────────────────────────────────────────────────────────────
-
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-    </svg>
-  );
-}
 
 // ─── IndiePact brand mark ─────────────────────────────────────────────────────
 
@@ -68,7 +55,6 @@ function OtpBoxInput({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus when the verify step mounts
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
@@ -92,7 +78,6 @@ function OtpBoxInput({
         Enter the 6-digit code sent to your email
       </label>
 
-      {/* Invisible capture input — sits over the boxes */}
       <div
         className="relative"
         onClick={() => !disabled && inputRef.current?.focus()}
@@ -116,7 +101,6 @@ function OtpBoxInput({
           style={{ caretColor: "transparent" }}
         />
 
-        {/* 6 visual digit boxes */}
         <div className="flex gap-2 justify-center">
           {Array.from({ length: 6 }).map((_, i) => {
             const isFocused = filledCount === i && !disabled;
@@ -141,7 +125,6 @@ function OtpBoxInput({
                 `}
               >
                 {digits[i] !== " " ? digits[i] : ""}
-                {/* Blinking caret on the active box */}
                 {isFocused && (
                   <span
                     className="absolute bottom-2 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-emerald-500"
@@ -191,7 +174,11 @@ function useCountdown() {
 
   useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
 
-  const formatted = `0:${String(seconds).padStart(2, "0")}`;
+  // Format as M:SS so it works correctly for values >= 60 (e.g. 3:00, 2:47, 0:08)
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  const formatted = `${minutes}:${String(secs).padStart(2, "0")}`;
+
   return { seconds, formatted, start, reset };
 }
 
@@ -207,8 +194,6 @@ function Spinner({ className = "" }: { className?: string }) {
 }
 
 // ─── RFC-5322 email validator ─────────────────────────────────────────────────
-// Validates local part, @ separator, domain labels, and TLD.
-// Intercepts malformed addresses before any Supabase call fires.
 
 const RFC5322_RE =
   /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
@@ -226,7 +211,8 @@ function validateEmail(raw: string): string | null {
 type Step = "initial" | "verify" | "success";
 
 const SESSION_KEY = "ip_auth_pending";
-const RESEND_COOLDOWN = 60; // seconds — UI throttle only, NOT OTP expiry
+// 3-minute resend cooldown — reduces unnecessary resend requests and Resend API usage
+const RESEND_COOLDOWN = 180;
 
 interface PendingAuth { email: string; sentAt: number }
 
@@ -257,23 +243,48 @@ const slideVariants = {
   exit: { opacity: 0, x: -16 },
 };
 
+// ─── Passwordless info panel ──────────────────────────────────────────────────
+// Shown when the user clicks "Forgot Password?" — explains passwordless auth.
+
+function PasswordlessInfoPanel({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -4, scale: 0.97 }}
+      transition={{ duration: 0.18 }}
+      className="relative flex items-start gap-3 px-4 py-3.5 rounded-xl bg-emerald-950/30 border border-emerald-900/40"
+    >
+      <Info className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+      <p className="text-emerald-200/80 text-xs leading-relaxed flex-1">
+        IndiePact uses secure passwordless email verification codes. You never need to create, remember, or reset a traditional password to access your workspace.
+      </p>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="shrink-0 text-slate-600 hover:text-slate-400 transition-colors"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </motion.div>
+  );
+}
+
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
 export function AuthModal() {
-  const { showAuthModal, authContext, closeAuthModal, signInWithGoogle } = useAuth();
+  const { showAuthModal, authContext, closeAuthModal } = useAuth();
 
   const [step, setStep] = useState<Step>("initial");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
 
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
+  const [showForgotInfo, setShowForgotInfo] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const countdown = useCountdown();
-
-  const anyLoading = isGoogleLoading || isEmailLoading;
 
   // ── Restore pending OTP session on modal open (survives page refresh) ──────
   useEffect(() => {
@@ -296,21 +307,19 @@ export function AuthModal() {
     setOtp("");
     setError(null);
     setEmailError(null);
-    setIsGoogleLoading(false);
     setIsEmailLoading(false);
+    setShowForgotInfo(false);
     countdown.reset();
     clearPending();
   }, [countdown]);
 
   const handleClose = () => {
-    if (anyLoading) return;
+    if (isEmailLoading) return;
     closeAuthModal();
     setTimeout(reset, 300);
   };
 
   // ── OTP verification ───────────────────────────────────────────────────────
-  // Uses supabase.auth.verifyOtp directly — no server round-trip.
-  // type: "magiclink" matches the OTP email template configured in Supabase.
 
   const submitOtp = useCallback(async (token: string) => {
     const clean = token.replace(/\D/g, "");
@@ -328,8 +337,6 @@ export function AuthModal() {
         setIsEmailLoading(false);
         return;
       }
-      // Session is now established and JWT is stored in browser storage by Supabase.
-      // Navigate without relying on URL query params.
       clearPending();
       setStep("success");
       setTimeout(navigateToReturnTo, 900);
@@ -344,23 +351,7 @@ export function AuthModal() {
     void submitOtp(otp);
   };
 
-  // ── Google OAuth ──────────────────────────────────────────────────────────
-
-  const handleGoogleSignIn = async () => {
-    if (isGoogleLoading || isEmailLoading) return;
-    setError(null);
-    setIsGoogleLoading(true);
-    const { error } = await signInWithGoogle();
-    if (error) {
-      setError("Couldn't connect to Google. Please try again.");
-      setIsGoogleLoading(false);
-    }
-  };
-
   // ── Email OTP — send ──────────────────────────────────────────────────────
-  // Calls supabase.auth.signInWithOtp directly on the client.
-  // No redirectTo / emailRedirectTo / magic-link options injected.
-  // Supabase sends a 6-digit code when the project's OTP template is active.
 
   const sendOtp = useCallback(async (targetEmail: string): Promise<boolean> => {
     setError(null);
@@ -368,8 +359,6 @@ export function AuthModal() {
     try {
       const { error: otpErr } = await supabase.auth.signInWithOtp({
         email: targetEmail,
-        // Explicitly: no redirectTo, no emailRedirectTo, no shouldCreateUser override.
-        // Pure server-side OTP code delivery — no magic link URL generated.
         options: {
           shouldCreateUser: true,
         },
@@ -390,9 +379,8 @@ export function AuthModal() {
   const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = email.trim().toLowerCase();
-    if (isEmailLoading || isGoogleLoading) return;
+    if (isEmailLoading) return;
 
-    // RFC-5322 gate — block submission and show inline hint; no network call fires
     const validationErr = validateEmail(email);
     if (validationErr) {
       setEmailError(validationErr);
@@ -404,6 +392,7 @@ export function AuthModal() {
     if (ok) {
       setOtp("");
       setError(null);
+      setShowForgotInfo(false);
       savePending(trimmed);
       setStep("verify");
       countdown.start(RESEND_COOLDOWN);
@@ -445,7 +434,7 @@ export function AuthModal() {
       >
         <DialogTitle className="sr-only">Sign in to IndiePact</DialogTitle>
         <DialogDescription className="sr-only">
-          Sign in with Google or your email to continue.
+          Enter your email to receive a secure sign-in code. No password required.
         </DialogDescription>
 
         <div className="px-7 pt-8 pb-7 flex flex-col gap-6">
@@ -462,7 +451,7 @@ export function AuthModal() {
           {/* ── Step content ── */}
           <AnimatePresence mode="wait" initial={false}>
 
-            {/* ── Initial: Google + Email ── */}
+            {/* ── Initial: Email OTP only ── */}
             {step === "initial" && (
               <motion.div
                 key="initial"
@@ -473,24 +462,6 @@ export function AuthModal() {
                 transition={{ duration: 0.18 }}
                 className="flex flex-col gap-3"
               >
-                <button
-                  onClick={handleGoogleSignIn}
-                  disabled={isGoogleLoading || isEmailLoading}
-                  className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed bg-white hover:bg-slate-100 text-slate-900 disabled:opacity-60"
-                  style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.35)" }}
-                >
-                  {isGoogleLoading
-                    ? <Spinner className="h-4 w-4 text-slate-500" />
-                    : <GoogleIcon className="h-4 w-4 shrink-0" />}
-                  {isGoogleLoading ? "Connecting…" : "Continue with Google"}
-                </button>
-
-                <div className="flex items-center gap-3 py-1">
-                  <div className="flex-1 h-px bg-slate-800" />
-                  <span className="text-xs text-slate-600 whitespace-nowrap">or sign in with email</span>
-                  <div className="flex-1 h-px bg-slate-800" />
-                </div>
-
                 <form onSubmit={handleSendCode} className="flex flex-col gap-2.5">
                   <input
                     type="email"
@@ -509,7 +480,6 @@ export function AuthModal() {
                       border ${emailError ? "border-red-800/70 focus:border-red-700/70" : "border-slate-800 focus:border-slate-600"}`}
                   />
 
-                  {/* RFC-5322 inline validation hint — no layout shift, fades in smoothly */}
                   {emailError && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950/40 border border-red-900/40 animate-in fade-in slide-in-from-top-1 duration-150">
                       <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
@@ -519,7 +489,7 @@ export function AuthModal() {
 
                   <button
                     type="submit"
-                    disabled={isEmailLoading || isGoogleLoading || !email.trim()}
+                    disabled={isEmailLoading || !email.trim()}
                     className="w-full py-3.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30"
                   >
                     {isEmailLoading
@@ -527,6 +497,24 @@ export function AuthModal() {
                       : "Send Code →"}
                   </button>
                 </form>
+
+                {/* Forgot Password link */}
+                <div className="flex justify-center pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotInfo(v => !v)}
+                    className="text-xs text-slate-600 hover:text-slate-400 transition-colors underline underline-offset-2"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+
+                {/* Passwordless info panel */}
+                <AnimatePresence>
+                  {showForgotInfo && (
+                    <PasswordlessInfoPanel onDismiss={() => setShowForgotInfo(false)} />
+                  )}
+                </AnimatePresence>
 
                 {error && (
                   <p className="text-red-400 text-xs text-center -mt-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -555,7 +543,6 @@ export function AuthModal() {
                   onComplete={(v) => void submitOtp(v)}
                 />
 
-                {/* Error panel — appears inside the verify step, above the button */}
                 {error && (
                   <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-red-950/40 border border-red-900/40 animate-in fade-in slide-in-from-top-1 duration-200">
                     <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />

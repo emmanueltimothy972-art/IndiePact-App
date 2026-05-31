@@ -20,7 +20,7 @@ function writeDevTier(tier: string) {
 }
 
 // ─── Return-to intent (sessionStorage) ───────────────────────────────────────
-// Saved when the auth modal opens so both Google OAuth and OTP flows
+// Saved when the auth modal opens so the OTP flow
 // can redirect the user back to what they were doing after sign-in.
 
 export const RETURN_TO_KEY = "indiepact_return_to";
@@ -92,7 +92,6 @@ interface AuthContextType {
   openAuthModal: (returnTo?: string, context?: string) => void;
   closeAuthModal: () => void;
 
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 
   userPlan: string;
@@ -200,47 +199,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Auth actions ──────────────────────────────────────────────────────────
 
-  const signInWithGoogle = useCallback(async (): Promise<{ error: Error | null }> => {
-    if (DEV_AUTH_BYPASS) return { error: null };
-
-    // ── CUSTOM DOMAIN NOTE ───────────────────────────────────────────────────
-    // redirectTo is built from window.location.origin so it resolves correctly
-    // on Replit preview, staging, and any production custom domain automatically.
-    //
-    // Register this exact URI in both places before enabling Google OAuth:
-    //   1. Google Cloud Console → OAuth 2.0 Client → Authorized redirect URIs:
-    //        https://<your-domain>/auth/callback
-    //   2. Supabase Dashboard → Auth → URL Configuration → Redirect URLs:
-    //        https://<your-domain>/auth/callback
-    //   3. Google Cloud Console → Authorized JavaScript origins:
-    //        https://<your-domain>
-    // ────────────────────────────────────────────────────────────────────────
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          // access_type:"offline" requests a refresh token so sessions survive
-          // beyond the one-hour access-token TTL.
-          // prompt:"consent" forces the full Google consent screen on every
-          // sign-in, ensuring a fresh refresh token is always issued.
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
-        },
-      });
-
-      if (error) {
-        return { error: error as Error };
-      }
-
-      return { error: null };
-    } catch (err) {
-      return { error: err instanceof Error ? err : new Error("Google sign-in failed. Please try again.") };
-    }
-  }, []);
-
   const signOut = useCallback(async () => {
     if (DEV_AUTH_BYPASS) return;
     // Clear any pending OTP session so a subsequent user on the same device
@@ -272,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, isLoading, userId, isGuest,
       showAuthModal, authContext, openAuthModal, closeAuthModal,
-      signInWithGoogle, signOut,
+      signOut,
       userPlan: subscription.userPlan,
       scansUsed: subscription.scansUsed,
       scansLimit: subscription.scansLimit,

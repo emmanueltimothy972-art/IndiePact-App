@@ -14,16 +14,17 @@ if (isMisconfigured) {
 }
 
 /**
- * Supabase client — handles Google OAuth and session management.
+ * Supabase client — handles passwordless OTP auth and session management.
  *
  * Auth flow:
- * 1. User clicks "Continue with Google" → signInWithOAuth({ provider: 'google' })
- * 2. Supabase redirects to Google, then back to /auth/callback
- * 3. AuthCallback.tsx detects the session via onAuthStateChange → redirects to /dashboard
- * 4. AuthContext.onAuthStateChange fires globally → updates user state everywhere
+ * 1. User enters email → supabase.auth.signInWithOtp sends a 6-digit code
+ * 2. User enters code → supabase.auth.verifyOtp exchanges it for a session
+ * 3. AuthContext.onAuthStateChange fires globally → updates user state everywhere
  *
- * To enable Google OAuth: configure the Google provider in Supabase Dashboard
- * under Auth > Providers > Google, and add your Google OAuth client credentials.
+ * Session persistence:
+ * - persistSession: true   — JWT stored in localStorage across reloads
+ * - autoRefreshToken: true — refreshed silently before expiry
+ * - storageKey: 'indiepact-secure-session' — stable key for all environments
  */
 export const supabase: SupabaseClient = isMisconfigured
   ? ({
@@ -46,7 +47,7 @@ export const supabase: SupabaseClient = isMisconfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        storageKey: "indiepact_auth",
+        storageKey: "indiepact-secure-session",
         flowType: "pkce",
       },
     });

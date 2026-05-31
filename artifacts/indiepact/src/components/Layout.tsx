@@ -147,7 +147,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-emerald-400/80 hover:bg-emerald-950/30 hover:text-emerald-300 transition-all border border-emerald-900/30 hover:border-emerald-800/50"
               >
                 <LogIn size={15} />
-                Sign in with Google
+                Sign In
               </button>
             ) : (
               <div className="space-y-1.5">
@@ -197,7 +197,7 @@ export function Layout({ children }: { children: ReactNode }) {
                       onClick={() => { setMobileMenuOpen(false); openAuthModal(undefined, "save your work"); }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-emerald-400 border border-emerald-900/40"
                     >
-                      <LogIn size={15} /> Sign in with Google
+                      <LogIn size={15} /> Sign In
                     </button>
                   ) : (
                     <button

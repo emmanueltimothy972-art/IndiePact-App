@@ -270,11 +270,10 @@ export default function Home() {
   const statVals = [stat0.val, stat1.val, stat2.val, stat3.val];
 
   const handleReviewCta = () => {
-    if (isGuest) {
-      openAuthModal("/scan", "review your contract");
-    } else {
-      window.location.href = import.meta.env.BASE_URL + "scan";
-    }
+    // Navigate directly to the contract workspace — auth is deferred until
+    // the user actually clicks "Review Contract", so they can paste first.
+    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+    window.location.href = `${window.location.origin}${base}/scan`;
   };
 
   return (
