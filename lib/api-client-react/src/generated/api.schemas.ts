@@ -8,3 +8,79 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface RiskFixes {
+  rewrittenClause: string;
+  direct: string;
+  diplomatic: string;
+  legal: string;
+}
+
+export interface Risk {
+  title: string;
+  severity: "High" | "Medium" | "Low";
+  category: string;
+  explanation: string;
+  whyThisHurtsYou: string;
+  fixes: RiskFixes;
+  urgency?: string;
+  impact?: string;
+}
+
+export interface ScanResult {
+  moneyImpactSummary: string;
+  revenueAtRiskMin: number;
+  revenueAtRiskMax: number;
+  protectionScore: number;
+  risks: Risk[];
+  nextStep?: string;
+  rawExtractedClauses?: string[];
+  pathToVictory?: string[];
+  _cached?: boolean;
+  _cachedScanId?: string;
+  _cachedContractName?: string;
+  _contractHash?: string;
+}
+
+export interface SavedScan {
+  id: string;
+  userId: string;
+  contractName: string;
+  contractText: string;
+  result: ScanResult;
+  createdAt: string;
+  protectionScore: number;
+  revenueAtRiskMin: number;
+  revenueAtRiskMax: number;
+  riskCount: number;
+}
+
+export interface DashboardSummary {
+  totalScans: number;
+  totalMoneyProtected: number;
+  averageProtectionScore: number;
+  highRiskCount: number;
+  mediumRiskCount: number;
+  lowRiskCount: number;
+  recentScans: SavedScan[];
+}
+
+export interface RiskTrendPoint {
+  date: string;
+  scopeCreep: number;
+  paymentDelay: number;
+  ipOwnership: number;
+  liability: number;
+  termination: number;
+  revisionAbuse: number;
+  vagueDeliverables: number;
+}
+
+export interface RiskTrends {
+  trends: RiskTrendPoint[];
+}
+
+export interface ListScansResponse {
+  scans: SavedScan[];
+  total: number;
+}

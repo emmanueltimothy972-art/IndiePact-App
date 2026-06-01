@@ -1,22 +1,17 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
-const UserQuerySchema = z.object({ userId: z.string().min(1) });
 const RiskTrendsQuerySchema = z.object({
-  userId: z.string().min(1),
+  userId: z.string().min(1).optional(),
   days: z.coerce.number().int().positive().default(30),
 });
 
-router.get("/dashboard/summary", async (req, res) => {
-  const parse = UserQuerySchema.safeParse(req.query);
-  if (!parse.success) {
-    return res.status(400).json({ error: "userId is required" });
-  }
-
-  const { userId } = parse.data;
+router.get("/dashboard/summary", requireAuth, async (req, res) => {
+  const userId = req.userId!;
 
   const { data, error } = await requireSupabase()
     .from("scans")
@@ -65,13 +60,14 @@ router.get("/dashboard/summary", async (req, res) => {
   });
 });
 
-router.get("/dashboard/risk-trends", async (req, res) => {
+router.get("/dashboard/risk-trends", requireAuth, async (req, res) => {
   const parse = RiskTrendsQuerySchema.safeParse(req.query);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid query" });
   }
 
-  const { userId, days } = parse.data;
+  const userId = req.userId!;
+  const { days } = parse.data;
   const since = new Date();
   since.setDate(since.getDate() - days);
 

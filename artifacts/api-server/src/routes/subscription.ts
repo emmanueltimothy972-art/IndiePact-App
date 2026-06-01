@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
@@ -51,12 +52,10 @@ function higherTier(a: string, b: string): string {
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
-const UserQuerySchema = z.object({ userId: z.string().min(1) });
-
 const VerifyPaymentSchema = z.object({
-  userId: z.string().min(1),
   reference: z.string().min(1),
   planKey: z.enum(["starter", "pro", "business", "agency", "enterprise"]),
+  userId: z.string().optional(),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -248,20 +247,17 @@ async function getOrCreateSubscription(userId: string, log: ReqLog) {
 
 // ─── GET /subscription ────────────────────────────────────────────────────────
 
-router.get("/subscription", async (req, res) => {
-  const parse = UserQuerySchema.safeParse(req.query);
-  if (!parse.success) {
-    return res.status(400).json({ error: "userId is required" });
-  }
+router.get("/subscription", requireAuth, async (req, res) => {
+  const userId = req.userId!;
 
   try {
-    const row = await getOrCreateSubscription(parse.data.userId, req.log as ReqLog);
+    const row = await getOrCreateSubscription(userId, req.log as ReqLog);
     const plan = (row["plan"] as string) ?? "free";
     const scansUsed = Number(row["scans_used"]) || 0;
     const scansLimit = PLAN_LIMITS[plan] ?? 2;
 
     req.log.info(
-      { userId: parse.data.userId, plan, scansUsed, scansLimit, event: "subscription_response" },
+      { userId, plan, scansUsed, scansLimit, event: "subscription_response" },
       "Subscription response sent to frontend",
     );
 
@@ -274,13 +270,14 @@ router.get("/subscription", async (req, res) => {
 
 // ─── POST /subscription/verify-payment ────────────────────────────────────────
 
-router.post("/subscription/verify-payment", async (req, res) => {
+router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
   const parse = VerifyPaymentSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
   }
 
-  const { userId, reference, planKey } = parse.data;
+  const userId = req.userId!;
+  const { reference, planKey } = parse.data;
   const secretKey = process.env["PAYSTACK_SECRET_KEY"];
   const db = requireSupabase();
 
@@ -329,6 +326,8 @@ router.post("/subscription/verify-payment", async (req, res) => {
 });
 
 // ─── POST /paystack/webhook ───────────────────────────────────────────────────
+// NOTE: This route intentionally has no requireAuth — it is called by Paystack
+// servers, not by authenticated users. It is protected by HMAC signature verification.
 
 router.post("/paystack/webhook", async (req, res) => {
   const secret = process.env["PAYSTACK_SECRET_KEY"];

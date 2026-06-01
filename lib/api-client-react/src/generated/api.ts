@@ -5,15 +5,25 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  DashboardSummary,
+  HealthStatus,
+  ListScansResponse,
+  RiskTrends,
+  SavedScan,
+  ScanResult,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -23,6 +33,8 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+// ─── Health Check ─────────────────────────────────────────────────────────────
 
 /**
  * Returns server health status
@@ -79,7 +91,6 @@ export type HealthCheckQueryError = ErrorType<unknown>;
 /**
  * @summary Health check
  */
-
 export function useHealthCheck<
   TData = Awaited<ReturnType<typeof healthCheck>>,
   TError = ErrorType<unknown>,
@@ -97,5 +108,412 @@ export function useHealthCheck<
     queryKey: QueryKey;
   };
 
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ─── Analyze Contract ─────────────────────────────────────────────────────────
+
+export type AnalyzeContractBody = {
+  contractText: string;
+  userId?: string;
+  contractName?: string;
+};
+
+export const analyzeContract = async (
+  data: AnalyzeContractBody,
+  options?: RequestInit,
+): Promise<ScanResult> => {
+  return customFetch<ScanResult>(`/api/analyze`, {
+    ...options,
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+export function useAnalyzeContract<
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof analyzeContract>>,
+    TError,
+    { data: AnalyzeContractBody },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof analyzeContract>>,
+  TError,
+  { data: AnalyzeContractBody },
+  TContext
+> {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof analyzeContract>>,
+    { data: AnalyzeContractBody }
+  > = ({ data }) => analyzeContract(data, requestOptions);
+
+  return useMutation({ mutationFn, ...mutationOptions });
+}
+
+// ─── Save Scan ────────────────────────────────────────────────────────────────
+
+export type SaveScanBody = {
+  userId: string;
+  contractName: string;
+  contractText: string;
+  result: ScanResult;
+};
+
+export const saveScan = async (
+  data: SaveScanBody,
+  options?: RequestInit,
+): Promise<SavedScan> => {
+  return customFetch<SavedScan>(`/api/scans`, {
+    ...options,
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+export function useSaveScan<
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveScan>>,
+    TError,
+    { data: SaveScanBody },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveScan>>,
+  TError,
+  { data: SaveScanBody },
+  TContext
+> {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveScan>>,
+    { data: SaveScanBody }
+  > = ({ data }) => saveScan(data, requestOptions);
+
+  return useMutation({ mutationFn, ...mutationOptions });
+}
+
+// ─── Dashboard Summary ────────────────────────────────────────────────────────
+
+export type GetDashboardSummaryParams = {
+  userId?: string;
+};
+
+export const getDashboardSummaryUrl = (params: GetDashboardSummaryParams) => {
+  const qs = params.userId ? `?userId=${encodeURIComponent(params.userId)}` : "";
+  return `/api/dashboard/summary${qs}`;
+};
+
+export const getDashboardSummary = async (
+  params: GetDashboardSummaryParams,
+  options?: RequestInit,
+): Promise<DashboardSummary> => {
+  return customFetch<DashboardSummary>(getDashboardSummaryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDashboardSummaryQueryKey = (
+  params: GetDashboardSummaryParams,
+) => {
+  return [`/api/dashboard/summary`, params] as const;
+};
+
+export const getGetDashboardSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDashboardSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetDashboardSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDashboardSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDashboardSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDashboardSummary>>
+  > = ({ signal }) => getDashboardSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: Boolean(params.userId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDashboardSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export function useGetDashboardSummary<
+  TData = Awaited<ReturnType<typeof getDashboardSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetDashboardSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDashboardSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDashboardSummaryQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ─── Risk Trends ──────────────────────────────────────────────────────────────
+
+export type GetRiskTrendsParams = {
+  userId?: string;
+  days?: number;
+};
+
+export const getRiskTrendsUrl = (params: GetRiskTrendsParams) => {
+  const search = new URLSearchParams();
+  if (params.userId) search.set("userId", params.userId);
+  if (params.days !== undefined) search.set("days", String(params.days));
+  const qs = search.toString();
+  return `/api/dashboard/risk-trends${qs ? `?${qs}` : ""}`;
+};
+
+export const getRiskTrends = async (
+  params: GetRiskTrendsParams,
+  options?: RequestInit,
+): Promise<RiskTrends> => {
+  return customFetch<RiskTrends>(getRiskTrendsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRiskTrendsQueryKey = (params: GetRiskTrendsParams) => {
+  return [`/api/dashboard/risk-trends`, params] as const;
+};
+
+export const getGetRiskTrendsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRiskTrends>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetRiskTrendsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRiskTrends>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey =
+    queryOptions?.queryKey ?? getGetRiskTrendsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getRiskTrends>>> = ({
+    signal,
+  }) => getRiskTrends(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: Boolean(params.userId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRiskTrends>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export function useGetRiskTrends<
+  TData = Awaited<ReturnType<typeof getRiskTrends>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetRiskTrendsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getRiskTrends>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRiskTrendsQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ─── Get Scan by ID ───────────────────────────────────────────────────────────
+
+export type GetScanParams = {
+  userId?: string;
+};
+
+export const getGetScanUrl = (scanId: string, params: GetScanParams) => {
+  const qs = params.userId ? `?userId=${encodeURIComponent(params.userId)}` : "";
+  return `/api/scans/${encodeURIComponent(scanId)}${qs}`;
+};
+
+export const getScan = async (
+  scanId: string,
+  params: GetScanParams,
+  options?: RequestInit,
+): Promise<SavedScan> => {
+  return customFetch<SavedScan>(getGetScanUrl(scanId, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetScanQueryKey = (scanId: string, params: GetScanParams) => {
+  return [`/api/scans`, scanId, params] as const;
+};
+
+export const getGetScanQueryOptions = <
+  TData = Awaited<ReturnType<typeof getScan>>,
+  TError = ErrorType<unknown>,
+>(
+  scanId: string,
+  params: GetScanParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetScanQueryKey(scanId, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getScan>>> = ({
+    signal,
+  }) => getScan(scanId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: Boolean(scanId && params.userId),
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getScan>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export function useGetScan<
+  TData = Awaited<ReturnType<typeof getScan>>,
+  TError = ErrorType<unknown>,
+>(
+  scanId: string,
+  params: GetScanParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getScan>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetScanQueryOptions(scanId, params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ─── List Scans ───────────────────────────────────────────────────────────────
+
+export type ListScansParams = {
+  userId?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export const getListScansUrl = (params: ListScansParams) => {
+  const search = new URLSearchParams();
+  if (params.userId) search.set("userId", params.userId);
+  if (params.limit !== undefined) search.set("limit", String(params.limit));
+  if (params.offset !== undefined) search.set("offset", String(params.offset));
+  const qs = search.toString();
+  return `/api/scans${qs ? `?${qs}` : ""}`;
+};
+
+export const listScans = async (
+  params: ListScansParams,
+  options?: RequestInit,
+): Promise<ListScansResponse> => {
+  return customFetch<ListScansResponse>(getListScansUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListScansQueryKey = (params: ListScansParams) => {
+  return [`/api/scans`, params] as const;
+};
+
+export const getListScansQueryOptions = <
+  TData = Awaited<ReturnType<typeof listScans>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListScansParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listScans>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListScansQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listScans>>> = ({
+    signal,
+  }) => listScans(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: Boolean(params.userId), ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listScans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export function useListScans<
+  TData = Awaited<ReturnType<typeof listScans>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListScansParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listScans>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListScansQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
   return { ...query, queryKey: queryOptions.queryKey };
 }
