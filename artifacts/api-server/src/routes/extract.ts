@@ -1,24 +1,41 @@
 import { Router } from "express";
 import { z } from "zod";
 import { openai } from "../lib/openai.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireSupabase } from "../lib/supabase.js";
 
 const router = Router();
+
+const FREE_PLANS = new Set(["free"]);
 
 const ExtractBodySchema = z.object({
   imageBase64: z.string().optional(),
   mimeType: z.string().optional(),
-  tier: z.enum(["free", "pro"]).default("free"),
 });
 
-router.post("/extract-file", async (req, res) => {
+router.post("/extract-file", requireAuth, async (req, res) => {
   const parse = ExtractBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request" });
   }
 
-  const { tier } = parse.data;
+  const userId = req.userId!;
 
-  if (tier === "free") {
+  let isPaid = false;
+  try {
+    const db = requireSupabase();
+    const { data } = await db
+      .from("subscriptions")
+      .select("plan")
+      .eq("user_id", userId)
+      .single();
+    const plan = (data?.plan ?? "free").toLowerCase();
+    isPaid = !FREE_PLANS.has(plan);
+  } catch {
+    isPaid = false;
+  }
+
+  if (!isPaid) {
     return res.status(403).json({
       error: "Pro tier required",
       message: "Upgrade to Pro to access forensic-level OCR scanning.",

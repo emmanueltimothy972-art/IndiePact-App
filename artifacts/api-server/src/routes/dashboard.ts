@@ -27,8 +27,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
   const scans = (data ?? []) as Array<Record<string, unknown>>;
   const totalScans = scans.length;
 
+  // revenue_at_risk_max is the money-at-risk figure persisted per scan
   const totalMoneyProtected = scans.reduce(
-    (sum, s) => sum + (Number(s["money_risk"]) || 0),
+    (sum, s) => sum + (Number(s["revenue_at_risk_max"]) || 0),
     0
   );
 
@@ -37,15 +38,21 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
       ? scans.reduce((sum, s) => sum + (Number(s["protection_score"]) || 0), 0) / totalScans
       : 0;
 
-  const allRisks: Array<Record<string, unknown>> = [];
-  for (const scan of scans) {
-    const risks = (scan["risks_json"] as Array<Record<string, unknown>>) ?? [];
-    allRisks.push(...risks);
-  }
+  // Risks are stored in the result JSONB column
+  let highRiskCount = 0;
+  let mediumRiskCount = 0;
+  let lowRiskCount = 0;
 
-  const highRiskCount = allRisks.filter((r) => r["severity"] === "High").length;
-  const mediumRiskCount = allRisks.filter((r) => r["severity"] === "Medium").length;
-  const lowRiskCount = allRisks.filter((r) => r["severity"] === "Low").length;
+  for (const scan of scans) {
+    const result = (scan["result"] as Record<string, unknown>) ?? {};
+    const risks = (result["risks"] as Array<Record<string, unknown>>) ?? [];
+    for (const r of risks) {
+      const sev = r["severity"] as string;
+      if (sev === "High") highRiskCount++;
+      else if (sev === "Medium") mediumRiskCount++;
+      else lowRiskCount++;
+    }
+  }
 
   const recentScans = scans.slice(0, 5).map(mapScanRow);
 
@@ -94,7 +101,8 @@ router.get("/dashboard/risk-trends", requireAuth, async (req, res) => {
         liability: 0, termination: 0, revisionAbuse: 0, vagueDeliverables: 0,
       };
     }
-    const risks = (scan["risks_json"] as Array<Record<string, unknown>>) ?? [];
+    const result = (scan["result"] as Record<string, unknown>) ?? {};
+    const risks = (result["risks"] as Array<Record<string, unknown>>) ?? [];
     for (const risk of risks) {
       const cat = risk["category"] as string;
       if (cat && trendMap[date][cat] !== undefined) {
@@ -110,29 +118,32 @@ router.get("/dashboard/risk-trends", requireAuth, async (req, res) => {
 type DbRow = Record<string, unknown>;
 
 function mapScanRow(row: DbRow) {
-  const risks = (row["risks_json"] as unknown[]) ?? [];
-  const moneyRisk = Number(row["money_risk"]) || 0;
-  const protectionScore = Number(row["protection_score"]) || 0;
+  const result = (row["result"] as Record<string, unknown>) ?? {};
+  const risks = (result["risks"] as unknown[]) ?? [];
+  const protectionScore = Number(row["protection_score"]) || Number(result["protectionScore"]) || 0;
+  const revenueAtRiskMin = Number(row["revenue_at_risk_min"]) || Number(result["revenueAtRiskMin"]) || 0;
+  const revenueAtRiskMax = Number(row["revenue_at_risk_max"]) || Number(result["revenueAtRiskMax"]) || 0;
+  const riskCount = Number(row["risk_count"]) || risks.length;
 
   return {
     id: row["id"] as string,
     userId: row["user_id"] as string,
-    contractName: (row["client_name"] as string) ?? "",
+    contractName: (row["contract_name"] as string) ?? "",
     contractText: (row["contract_text"] as string) ?? "",
     result: {
-      moneyImpactSummary: `${risks.length} risk(s) detected.`,
-      revenueAtRiskMin: Math.round(moneyRisk * 0.5),
-      revenueAtRiskMax: moneyRisk,
+      moneyImpactSummary: (result["moneyImpactSummary"] as string) ?? `${riskCount} risk(s) detected.`,
+      revenueAtRiskMin,
+      revenueAtRiskMax,
       protectionScore,
       risks,
-      nextStep: "Review all flagged clauses before signing.",
-      rawExtractedClauses: (row["fixes_json"] as string[]) ?? [],
+      nextStep: (result["nextStep"] as string) ?? "Review all flagged clauses before signing.",
+      rawExtractedClauses: (result["rawExtractedClauses"] as string[]) ?? [],
     },
     createdAt: row["created_at"] as string,
     protectionScore,
-    revenueAtRiskMin: Math.round(moneyRisk * 0.5),
-    revenueAtRiskMax: moneyRisk,
-    riskCount: risks.length,
+    revenueAtRiskMin,
+    revenueAtRiskMax,
+    riskCount,
   };
 }
 

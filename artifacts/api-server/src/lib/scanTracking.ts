@@ -4,7 +4,9 @@ import { requireSupabase } from "./supabase.js";
 // This email has unrestricted access to all features and bypasses all quota
 // checks. All other users pass through the normal enforcement path unchanged.
 
-const SUPERUSER_EMAIL = "emmanueltimothy972@gmail.com";
+// Read from environment so privileged identity is configurable and auditable
+// without a code change. Empty string disables the bypass entirely.
+const SUPERUSER_EMAIL = (process.env["SUPERUSER_EMAIL"] ?? "").toLowerCase().trim();
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
