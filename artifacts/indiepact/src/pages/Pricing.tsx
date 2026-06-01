@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { initiatePaystackPayment } from "@/lib/paystack";
 import { PLAN_PRICES_CENTS } from "@/lib/constants";
+import { useBillingCheckout } from "@/hooks/useBillingCheckout";
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
@@ -142,13 +143,19 @@ function PlanCard({
   plan,
   isCurrentPlan,
   isLoading,
+  isDisabled,
   onCta,
 }: {
   plan: typeof PLANS[number];
   isCurrentPlan: boolean;
+  /** True when THIS card's checkout is in progress — shows spinner + "Redirecting…" */
   isLoading: boolean;
+  /** True when any other card's checkout is in progress — disables without spinner */
+  isDisabled: boolean;
   onCta: () => void;
 }) {
+  const blocked = isCurrentPlan || isDisabled;
+
   return (
     <div
       className={`relative flex flex-col rounded-2xl border p-6 transition-colors ${
@@ -185,17 +192,27 @@ function PlanCard({
 
       <button
         onClick={onCta}
-        disabled={isLoading || isCurrentPlan}
+        disabled={isLoading || blocked}
+        aria-busy={isLoading}
+        aria-label={isCurrentPlan ? `${plan.name} — current plan` : isLoading ? `Redirecting to ${plan.name} checkout` : plan.cta}
         className={`w-full py-2.5 rounded-xl text-sm font-semibold mb-5 transition-colors flex items-center justify-center gap-2 ${
           isCurrentPlan
             ? "bg-slate-800 text-slate-600 cursor-default"
+            : isLoading
+            ? "bg-slate-700 text-slate-300 cursor-wait"
+            : blocked
+            ? "bg-slate-800 text-slate-700 cursor-not-allowed opacity-50"
             : plan.popular
             ? "bg-slate-200 hover:bg-white text-slate-900"
             : "bg-slate-800 hover:bg-slate-700 text-white"
         }`}
       >
         {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        {isCurrentPlan ? "Current Plan" : plan.cta}
+        {isCurrentPlan
+          ? "Current Plan"
+          : isLoading
+          ? "Redirecting to checkout…"
+          : plan.cta}
       </button>
 
       <ul className="space-y-2.5 flex-1">
@@ -219,21 +236,28 @@ function PlanCard({
 export default function Pricing() {
   const { isGuest, openAuthModal, user, refreshSubscription, userPlan } = useAuth();
   const { toast } = useToast();
-  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  // ── Recurring subscription checkout (all paid tiers) ─────────────────────
+  // Single hook owns auth gating, JWT injection, backend call, and redirect.
+  const { handleBillingCheckout, loadingTier, isLoading: isAnyPlanLoading } = useBillingCheckout();
+
+  // ── Pay-per-scan (one-time, Paystack inline popup — separate flow) ────────
+  const [payPerScanLoading, setPayPerScanLoading] = useState(false);
 
   const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
 
-  const handlePlanCta = async (planKey: string) => {
-    if (planKey === "free") {
-      if (isGuest) { openAuthModal(); return; }
-      window.location.href = `${window.location.origin}${base}/dashboard`;
-      return;
-    }
+  // ─── Free plan / pay-per-scan CTA ────────────────────────────────────────
 
+  const handleFreeCta = () => {
+    if (isGuest) { openAuthModal(); return; }
+    window.location.href = `${window.location.origin}${base}/dashboard`;
+  };
+
+  const handlePayPerScan = async () => {
     if (isGuest) { openAuthModal(); return; }
 
-    if (userPlan === planKey) {
-      toast({ title: "Already on this plan", description: `You're already on the ${planKey} plan.` });
+    if (userPlan === "pay_per_scan") {
+      toast({ title: "Already active", description: "You already have a one-time scan available." });
       return;
     }
 
@@ -252,37 +276,42 @@ export default function Pricing() {
       return;
     }
 
-    setLoadingPlan(planKey);
+    if (payPerScanLoading || isAnyPlanLoading) return;
+    setPayPerScanLoading(true);
+
     try {
       await initiatePaystackPayment({
         email: user.email,
-        amountCents: PLAN_PRICES_CENTS[planKey] ?? 0,
+        amountCents: PLAN_PRICES_CENTS["pay_per_scan"] ?? 999,
         currency: "USD",
-        metadata: { userId: user.id, planKey },
+        metadata: { userId: user.id, planKey: "pay_per_scan" },
         onSuccess: async (reference) => {
-          toast({ title: "Payment received!", description: "Verifying your upgrade..." });
+          toast({ title: "Payment received!", description: "Verifying your scan credit…" });
           try {
-            const res = await fetch(`${window.location.origin}${base}/api/subscription/verify-payment`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: user.id, reference, planKey }),
-            });
+            const res = await fetch(
+              `${window.location.origin}${base}/api/subscription/verify-payment`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: user.id, reference, planKey: "pay_per_scan" }),
+              },
+            );
             if (res.ok) {
               await refreshSubscription();
-              toast({ title: "Plan upgraded!", description: `You're now on the ${planKey.charAt(0).toUpperCase() + planKey.slice(1)} plan.` });
+              toast({ title: "Scan credit added!", description: "Your one-time scan is ready." });
             } else {
               toast({
                 title: "Verification failed",
-                description: "Payment received but verification failed. Contact support with your reference: " + reference,
+                description: `Payment received but verification failed. Keep your reference: ${reference}`,
                 variant: "destructive",
               });
             }
           } catch {
             toast({ title: "Network error", description: "Could not verify payment. Contact support.", variant: "destructive" });
           }
-          setLoadingPlan(null);
+          setPayPerScanLoading(false);
         },
-        onClose: () => setLoadingPlan(null),
+        onClose: () => setPayPerScanLoading(false),
       });
     } catch (err) {
       toast({
@@ -290,11 +319,12 @@ export default function Pricing() {
         description: err instanceof Error ? err.message : "Could not launch payment. Please try again.",
         variant: "destructive",
       });
-      setLoadingPlan(null);
+      setPayPerScanLoading(false);
     }
   };
 
   const isPayPerScanCurrent = !isGuest && userPlan === "pay_per_scan";
+  const anyButtonBusy = isAnyPlanLoading || payPerScanLoading;
 
   return (
     <div className="min-h-screen bg-[#050505] text-slate-100">
@@ -364,16 +394,21 @@ export default function Pricing() {
                   <p className="text-xs text-slate-700">No recurring charges</p>
                 </div>
                 <button
-                  onClick={() => void handlePlanCta("pay_per_scan")}
-                  disabled={loadingPlan === "pay_per_scan" || isPayPerScanCurrent}
+                  onClick={() => void handlePayPerScan()}
+                  disabled={payPerScanLoading || isPayPerScanCurrent || isAnyPlanLoading}
+                  aria-busy={payPerScanLoading}
                   className={`px-7 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 ${
                     isPayPerScanCurrent
                       ? "bg-slate-800 text-slate-500 cursor-default"
+                      : payPerScanLoading
+                      ? "bg-emerald-800 text-emerald-200 cursor-wait"
+                      : isAnyPlanLoading
+                      ? "bg-slate-800 text-slate-600 cursor-not-allowed opacity-50"
                       : "bg-emerald-700 hover:bg-emerald-600 text-white"
                   }`}
                 >
-                  {loadingPlan === "pay_per_scan" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {isPayPerScanCurrent ? "Active" : "Buy One Scan — $9.99"}
+                  {payPerScanLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {isPayPerScanCurrent ? "Active" : payPerScanLoading ? "Processing…" : "Buy One Scan — $9.99"}
                 </button>
               </div>
             </div>
@@ -388,15 +423,30 @@ export default function Pricing() {
 
         {/* ── Plan grid: top row (Free, Starter, Pro) ───────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          {PLANS.slice(0, 3).map((plan) => (
-            <PlanCard
-              key={plan.key}
-              plan={plan}
-              isCurrentPlan={!isGuest && userPlan === plan.key}
-              isLoading={loadingPlan === plan.key}
-              onCta={() => void handlePlanCta(plan.key)}
-            />
-          ))}
+          {PLANS.slice(0, 3).map((plan) => {
+            if (plan.key === "free") {
+              return (
+                <PlanCard
+                  key={plan.key}
+                  plan={plan}
+                  isCurrentPlan={!isGuest && userPlan === plan.key}
+                  isLoading={false}
+                  isDisabled={anyButtonBusy}
+                  onCta={handleFreeCta}
+                />
+              );
+            }
+            return (
+              <PlanCard
+                key={plan.key}
+                plan={plan}
+                isCurrentPlan={!isGuest && userPlan === plan.key}
+                isLoading={loadingTier === plan.key}
+                isDisabled={anyButtonBusy && loadingTier !== plan.key}
+                onCta={() => void handleBillingCheckout(plan.key)}
+              />
+            );
+          })}
         </div>
 
         {/* ── Plan grid: bottom row (Business, Agency, Enterprise) ───── */}
@@ -406,8 +456,9 @@ export default function Pricing() {
               key={plan.key}
               plan={plan}
               isCurrentPlan={!isGuest && userPlan === plan.key}
-              isLoading={loadingPlan === plan.key}
-              onCta={() => void handlePlanCta(plan.key)}
+              isLoading={loadingTier === plan.key}
+              isDisabled={anyButtonBusy && loadingTier !== plan.key}
+              onCta={() => void handleBillingCheckout(plan.key)}
             />
           ))}
         </div>
