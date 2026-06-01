@@ -282,10 +282,8 @@ router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
   const db = requireSupabase();
 
   if (!secretKey) {
-    req.log.warn("PAYSTACK_SECRET_KEY not configured — skipping verification, trusting frontend");
-    await persistPlan(userId, planKey, req.log as ReqLog);
-    await db.from("subscriptions").update({ paystack_reference: reference }).eq("user_id", userId);
-    return res.json({ success: true, plan: planKey, message: "Plan updated (unverified)" });
+    req.log.error({ userId, event: "paystack_secret_missing" }, "PAYSTACK_SECRET_KEY is not configured — refusing to upgrade plan without verified payment");
+    return res.status(503).json({ error: "Payment verification is unavailable. Please try again later or contact support." });
   }
 
   try {

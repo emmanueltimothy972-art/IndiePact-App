@@ -68,14 +68,24 @@ ALTER TABLE clause_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clause_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own scans" ON scans FOR SELECT USING (true);
-CREATE POLICY "Users can insert their own scans" ON scans FOR INSERT WITH CHECK (true);
-CREATE POLICY "Users can delete their own scans" ON scans FOR DELETE USING (true);
+-- NOTE: scans.user_id is TEXT; auth.uid() returns UUID — cast to text for comparison.
+CREATE POLICY "Users can view their own scans" ON scans
+  FOR SELECT USING (user_id = (auth.uid())::text);
+CREATE POLICY "Users can insert their own scans" ON scans
+  FOR INSERT WITH CHECK (user_id = (auth.uid())::text);
+CREATE POLICY "Users can delete their own scans" ON scans
+  FOR DELETE USING (user_id = (auth.uid())::text);
+
+-- Clause cache: read-only for all authenticated users; inserts via service role only.
 CREATE POLICY "Clause cache is public read" ON clause_cache FOR SELECT USING (true);
-CREATE POLICY "Clause cache insert" ON clause_cache FOR INSERT WITH CHECK (true);
+-- Templates: read-only reference data, no direct client writes.
 CREATE POLICY "Templates are public read" ON clause_templates FOR SELECT USING (true);
-CREATE POLICY "Users can manage their own subscription" ON subscriptions
-  FOR ALL USING (true) WITH CHECK (true);
+
+-- NOTE: subscriptions.user_id is TEXT; cast auth.uid() for comparison.
+CREATE POLICY "Users can view their own subscription" ON subscriptions
+  FOR SELECT USING (user_id = (auth.uid())::text);
+-- All subscription mutations go through the API server (service-role key bypasses RLS).
+-- Direct client writes are blocked by omitting INSERT/UPDATE/DELETE policies.
 
 -- Sample clause templates
 INSERT INTO clause_templates (category, title, risky_version, safe_version) VALUES
