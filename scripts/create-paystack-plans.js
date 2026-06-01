@@ -3,164 +3,177 @@
 /**
  * scripts/create-paystack-plans.js
  *
- * Programmatically creates all IndiePact recurring subscription plans through
- * the Paystack API with explicit USD currency.
+ * Provisions all IndiePact recurring subscription plans on Paystack.
  *
- * WHY SEQUENTIAL EXECUTION (for...of, not Promise.all):
- *   - Paystack rate-limits rapid bursts from the same API key.
- *   - Sequential requests give each response time to fully propagate on
- *     Paystack's side before the next plan is attempted.
- *   - Duplicate-detection logging is cleaner when results arrive one at a time.
- *   - A single failed plan does NOT cancel the remaining ones, which is the
- *     correct behavior for a setup script that may be re-run mid-flight.
+ * CURRENCY NOTE:
+ *   Currently using NGN (kobo) as a temporary measure while Paystack
+ *   multi-currency USD enablement is pending. Migration to USD requires
+ *   only changing PLANS[].currency and PLANS[].amount — no logic changes.
+ *
+ * IDEMPOTENCY:
+ *   Fetches all existing Paystack plans before creating anything.
+ *   Plans whose name already exists are skipped and their existing
+ *   plan_code is reused in the output map. Safe to run multiple times.
+ *
+ * WHY SEQUENTIAL (for...of, not Promise.all):
+ *   Paystack rate-limits burst requests from the same key. Sequential
+ *   iteration gives each response time to propagate and makes per-plan
+ *   logging deterministic and readable. A failure on one plan does not
+ *   cancel the rest.
+ *
+ * WEBHOOK COMPATIBILITY:
+ *   Plans created here work natively with all Paystack subscription
+ *   webhook events: charge.success, invoice.payment_failed,
+ *   subscription.create, subscription.disable, subscription.not_renew,
+ *   invoice.update — no additional configuration required.
  *
  * USAGE:
  *   node scripts/create-paystack-plans.js
  *
- * REQUIRED ENV:
- *   PAYSTACK_SECRET_KEY   — your Paystack secret key (sk_test_... or sk_live_...)
- *
- * Safe to re-run: duplicate plans are detected, logged as warnings, and skipped.
+ * OUTPUT:
+ *   scripts/paystack-plan-codes.json  — machine-readable plan code map
+ *                                       ready for Supabase / billing middleware
  */
 
-// ─── 0. Guard: fail fast if the secret key is absent ─────────────────────────
+// ─── 0. Environment guard ─────────────────────────────────────────────────────
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+const SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
-if (!PAYSTACK_SECRET_KEY || PAYSTACK_SECRET_KEY.trim() === "") {
+if (!SECRET_KEY || SECRET_KEY.trim() === "") {
   console.error(
     "\n✗  PAYSTACK_SECRET_KEY is not set.\n" +
-      "   Export it before running this script:\n\n" +
-      "     export PAYSTACK_SECRET_KEY=sk_test_...\n\n" +
-      "   Never hardcode secrets into source files.\n"
+    "   Add it to Replit Secrets, then re-run the script.\n" +
+    "   Never hardcode secret keys in source files.\n"
   );
   process.exit(1);
 }
 
+const HEADERS = {
+  Authorization: `Bearer ${SECRET_KEY}`,
+  "Content-Type": "application/json",
+};
+
 // ─── 1. Plan definitions ──────────────────────────────────────────────────────
 //
-// Amounts are in the SMALLEST currency unit (USD cents).
-//   $19.00  → 1900
-//   $49.99  → 4999
-//   $99.00  → 9900
-//   $149.00 → 14900
-//   $199.00 → 19900
+// Amounts are in kobo (smallest NGN unit): ₦1 = 100 kobo.
+//
+// USD migration checklist (nothing else changes):
+//   1. Set currency: "USD"
+//   2. Set amounts to USD cents  ($19 → 1900)
+//   3. Obtain Paystack USD multi-currency approval
+//
+// usdEquivalent is metadata only — never sent to the API.
 
 const PLANS = [
   {
     name: "IndiePact Starter",
-    description:
-      "Starter subscription for independent professionals reviewing contracts regularly.",
-    amount: 1900,
+    description: "Starter subscription for independent professionals reviewing contracts regularly.",
+    currency: "NGN",
     interval: "monthly",
-    currency: "USD",
+    amount: 3_000_000,        // ₦30,000 ≈ $19/month USD target
+    usdEquivalent: "$19.00",
+    humanPrice: "₦30,000",
+    tier: "starter",
   },
   {
     name: "IndiePact Pro",
-    description:
-      "Advanced AI contract intelligence for power users and professionals.",
-    amount: 4999,
+    description: "Advanced AI contract intelligence for power users and professionals.",
+    currency: "NGN",
     interval: "monthly",
-    currency: "USD",
+    amount: 8_000_000,        // ₦80,000 ≈ $49.99/month USD target
+    usdEquivalent: "$49.99",
+    humanPrice: "₦80,000",
+    tier: "pro",
   },
   {
     name: "IndiePact Business",
-    description:
-      "Business-grade contract intelligence with advanced negotiation systems.",
-    amount: 9900,
+    description: "Business-grade contract intelligence with advanced negotiation systems.",
+    currency: "NGN",
     interval: "monthly",
-    currency: "USD",
+    amount: 16_000_000,       // ₦160,000 ≈ $99/month USD target
+    usdEquivalent: "$99.00",
+    humanPrice: "₦160,000",
+    tier: "business",
   },
   {
     name: "IndiePact Agency",
-    description:
-      "Agency collaboration infrastructure for managing multiple client contracts.",
-    amount: 14900,
+    description: "Agency collaboration infrastructure for managing multiple client contracts.",
+    currency: "NGN",
     interval: "monthly",
-    currency: "USD",
+    amount: 24_000_000,       // ₦240,000 ≈ $149/month USD target
+    usdEquivalent: "$149.00",
+    humanPrice: "₦240,000",
+    tier: "agency",
   },
   {
     name: "IndiePact Enterprise",
-    description:
-      "Enterprise-scale legal AI infrastructure with maximum platform capabilities.",
-    amount: 19900,
+    description: "Enterprise-scale legal AI infrastructure with maximum platform capabilities.",
+    currency: "NGN",
     interval: "monthly",
-    currency: "USD",
+    amount: 32_000_000,       // ₦320,000 ≈ $199/month USD target
+    usdEquivalent: "$199.00",
+    humanPrice: "₦320,000",
+    tier: "enterprise",
   },
 ];
 
-// ─── 2. Helpers ───────────────────────────────────────────────────────────────
+// ─── 2. API helpers ───────────────────────────────────────────────────────────
 
-/** Format a cent amount to a human-readable USD string. */
-function formatAmount(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+/**
+ * Fetch all existing Paystack plans (paginated, up to 200).
+ * Returns an array of { name, plan_code } objects.
+ */
+async function fetchExistingPlans() {
+  const url = "https://api.paystack.co/plan?perPage=200&page=1";
+  let response, body;
+
+  try {
+    response = await fetch(url, { headers: HEADERS });
+    body = await response.json();
+  } catch (err) {
+    throw new Error(`Failed to fetch existing plans: ${err.message}`);
+  }
+
+  if (!response.ok || body.status !== true) {
+    throw new Error(
+      `Paystack plan list failed: ${body.message ?? `HTTP ${response.status}`}`
+    );
+  }
+
+  return (body.data ?? []).map((p) => ({
+    name: p.name,
+    plan_code: p.plan_code,
+  }));
 }
 
 /**
- * Attempt to create a single Paystack plan.
- *
- * Returns an object:
- *   { status: "created" | "duplicate" | "error", planCode?, message?, raw? }
+ * Create a single Paystack plan.
+ * Returns { status: "created"|"error", planCode?, message?, raw? }
  */
 async function createPlan(plan) {
-  const url = "https://api.paystack.co/plan";
-  let response;
-  let body;
+  let response, body;
 
   try {
-    response = await fetch(url, {
+    response = await fetch("https://api.paystack.co/plan", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: HEADERS,
       body: JSON.stringify({
         name: plan.name,
         description: plan.description,
-        amount: plan.amount,
         interval: plan.interval,
+        amount: plan.amount,
         currency: plan.currency,
       }),
     });
-  } catch (networkErr) {
-    return {
-      status: "error",
-      message: `Network failure: ${networkErr.message}`,
-    };
-  }
-
-  try {
     body = await response.json();
-  } catch {
-    return {
-      status: "error",
-      message: `Paystack returned non-JSON response (HTTP ${response.status})`,
-    };
+  } catch (networkErr) {
+    return { status: "error", message: `Network failure: ${networkErr.message}` };
   }
 
-  // Paystack 200/201 with status:true → plan created
   if (response.ok && body.status === true && body.data?.plan_code) {
     return { status: "created", planCode: body.data.plan_code, raw: body };
   }
 
-  // Paystack signals a duplicate plan in several ways.
-  // Normalise to a consistent "duplicate" result so callers can skip cleanly.
-  const msg = (body.message ?? "").toLowerCase();
-  const isDuplicate =
-    response.status === 409 ||
-    msg.includes("already exist") ||
-    msg.includes("duplicate") ||
-    msg.includes("plan with this name");
-
-  if (isDuplicate) {
-    return {
-      status: "duplicate",
-      message: body.message ?? "Duplicate plan detected",
-      raw: body,
-    };
-  }
-
-  // Everything else is a genuine error.
   return {
     status: "error",
     message: body.message ?? `HTTP ${response.status}`,
@@ -168,122 +181,160 @@ async function createPlan(plan) {
   };
 }
 
-/** Print a horizontal rule. */
-function rule() {
-  console.log("─".repeat(56));
+// ─── 3. Terminal formatting ───────────────────────────────────────────────────
+
+const COL = { plan: 28, cur: 9, amount: 14, code: 20, status: 9 };
+
+function tableHeader() {
+  const top =
+    "┌" + "─".repeat(COL.plan + 2) +
+    "┬" + "─".repeat(COL.cur + 2) +
+    "┬" + "─".repeat(COL.amount + 2) +
+    "┬" + "─".repeat(COL.code + 2) +
+    "┬" + "─".repeat(COL.status + 2) + "┐";
+
+  const hdr =
+    "│ " + "Plan".padEnd(COL.plan) +
+    " │ " + "Currency".padEnd(COL.cur) +
+    " │ " + "Amount".padEnd(COL.amount) +
+    " │ " + "Plan Code".padEnd(COL.code) +
+    " │ " + "Status".padEnd(COL.status) + " │";
+
+  const div =
+    "├" + "─".repeat(COL.plan + 2) +
+    "┼" + "─".repeat(COL.cur + 2) +
+    "┼" + "─".repeat(COL.amount + 2) +
+    "┼" + "─".repeat(COL.code + 2) +
+    "┼" + "─".repeat(COL.status + 2) + "┤";
+
+  console.log(top);
+  console.log(hdr);
+  console.log(div);
 }
 
-// ─── 3. Main execution ────────────────────────────────────────────────────────
+function tableRow(r) {
+  console.log(
+    "│ " + r.name.padEnd(COL.plan) +
+    " │ " + r.currency.padEnd(COL.cur) +
+    " │ " + r.amount.padEnd(COL.amount) +
+    " │ " + r.code.padEnd(COL.code) +
+    " │ " + r.status.padEnd(COL.status) + " │"
+  );
+}
+
+function tableFooter() {
+  console.log(
+    "└" + "─".repeat(COL.plan + 2) +
+    "┴" + "─".repeat(COL.cur + 2) +
+    "┴" + "─".repeat(COL.amount + 2) +
+    "┴" + "─".repeat(COL.code + 2) +
+    "┴" + "─".repeat(COL.status + 2) + "┘"
+  );
+}
+
+// ─── 4. Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log("\n╔══════════════════════════════════════════════════════╗");
-  console.log("║   IndiePact — Paystack Recurring Plan Setup          ║");
+  console.log("║   IndiePact — Paystack Recurring Plan Provisioning   ║");
   console.log("╚══════════════════════════════════════════════════════╝\n");
+  console.log(`  Key prefix : ${SECRET_KEY.slice(0, 10)}…`);
+  console.log(`  Currency   : NGN (temporary; USD pending multi-currency approval)`);
+  console.log(`  Plans      : ${PLANS.length}\n`);
 
-  console.log(`  API key prefix : ${PAYSTACK_SECRET_KEY.slice(0, 10)}…`);
-  console.log(`  Plans to create: ${PLANS.length}`);
-  console.log(`  Execution mode : sequential (rate-limit safe)\n`);
+  // ── Step 1: fetch existing plans for idempotency check ──────────────────────
+  console.log("  ► Fetching existing Paystack plans for idempotency check…");
+  let existing = [];
+  try {
+    existing = await fetchExistingPlans();
+    console.log(`    Found ${existing.length} existing plan(s) on this account.\n`);
+  } catch (err) {
+    console.error(`\n  ✗  Could not fetch existing plans: ${err.message}`);
+    console.error("     Aborting to prevent accidental duplicates.\n");
+    process.exit(1);
+  }
 
-  rule();
+  const existingByName = new Map(existing.map((p) => [p.name.toLowerCase(), p.plan_code]));
 
-  // Accumulate results for the final summary table.
-  const results = [];
+  // ── Step 2: create or skip each plan ────────────────────────────────────────
+  const results   = [];
+  const planCodes = {};  // tier → plan_code  (for Supabase config map)
 
-  // WHY for...of and NOT Promise.all():
-  //   Each iteration awaits the previous response before sending the next
-  //   request. This prevents burst rate-limit rejections and ensures that
-  //   duplicate detection (based on plan name) is reliable.
   for (const plan of PLANS) {
-    console.log(`\n  → Creating: ${plan.name}`);
-    console.log(`    Amount  : ${formatAmount(plan.amount)}/month`);
-    console.log(`    Currency: ${plan.currency}`);
+    const existingCode = existingByName.get(plan.name.toLowerCase());
 
-    const result = await createPlan(plan);
-
-    switch (result.status) {
-      case "created":
-        console.log(`\n  ✓  Plan Created`);
-        console.log(`     Name     : ${plan.name}`);
-        console.log(`     Plan Code: ${result.planCode}`);
-        console.log(`     Amount   : ${formatAmount(plan.amount)}/month`);
-        console.log(`     Currency : ${plan.currency}`);
-        results.push({
-          name: plan.name,
-          planCode: result.planCode,
-          amount: formatAmount(plan.amount),
-          status: "✓ Created",
-        });
-        break;
-
-      case "duplicate":
-        console.warn(`\n  ⚠  Duplicate plan — already exists on Paystack.`);
-        console.warn(`     Name   : ${plan.name}`);
-        console.warn(`     Reason : ${result.message}`);
-        console.warn(`     Action : Skipping — no changes made.`);
-        results.push({
-          name: plan.name,
-          planCode: "—  (pre-existing)",
-          amount: formatAmount(plan.amount),
-          status: "⚠ Duplicate",
-        });
-        break;
-
-      case "error":
-        console.error(`\n  ✗  Failed to create plan.`);
-        console.error(`     Name   : ${plan.name}`);
-        console.error(`     Reason : ${result.message}`);
-        if (result.raw) {
-          console.error(`     API body: ${JSON.stringify(result.raw, null, 2)}`);
-        }
-        results.push({
-          name: plan.name,
-          planCode: "—",
-          amount: formatAmount(plan.amount),
-          status: "✗ Error",
-        });
-        break;
+    if (existingCode) {
+      console.log(`  ⚠  EXISTS   ${plan.name}`);
+      console.log(`     Code   : ${existingCode}`);
+      console.log(`     Action : Skipping — reusing existing plan.\n`);
+      results.push({ name: plan.name, currency: plan.currency, amount: plan.humanPrice, code: existingCode, status: "EXISTS" });
+      planCodes[plan.tier] = existingCode;
+      continue;
     }
 
-    rule();
+    console.log(`  →  Creating ${plan.name} (${plan.humanPrice}/month ≈ ${plan.usdEquivalent} USD)…`);
+    const result = await createPlan(plan);
+
+    if (result.status === "created") {
+      console.log(`  ✓  CREATED  ${plan.name}`);
+      console.log(`     Code   : ${result.planCode}\n`);
+      results.push({ name: plan.name, currency: plan.currency, amount: plan.humanPrice, code: result.planCode, status: "CREATED" });
+      planCodes[plan.tier] = result.planCode;
+    } else {
+      console.error(`  ✗  FAILED   ${plan.name}`);
+      console.error(`     Reason : ${result.message}`);
+      if (result.raw) console.error(`     API    : ${JSON.stringify(result.raw)}\n`);
+      results.push({ name: plan.name, currency: plan.currency, amount: plan.humanPrice, code: "—", status: "FAILED" });
+    }
   }
 
-  // ─── 4. Summary table ──────────────────────────────────────────────────────
+  // ── Step 3: summary table ────────────────────────────────────────────────────
+  console.log("\n  SUMMARY\n");
+  tableHeader();
+  for (const r of results) tableRow(r);
+  tableFooter();
 
-  console.log("\n\n  SUMMARY\n");
-  console.log(
-    `  ${"Plan Name".padEnd(28)} ${"Plan Code".padEnd(22)} ${"Amount".padEnd(12)} Status`
-  );
-  console.log(
-    `  ${"─".repeat(28)} ${"─".repeat(22)} ${"─".repeat(12)} ${"─".repeat(12)}`
-  );
-  for (const r of results) {
-    console.log(
-      `  ${r.name.padEnd(28)} ${r.planCode.padEnd(22)} ${r.amount.padEnd(12)} ${r.status}`
-    );
+  const created = results.filter((r) => r.status === "CREATED").length;
+  const existed = results.filter((r) => r.status === "EXISTS").length;
+  const failed  = results.filter((r) => r.status === "FAILED").length;
+  console.log(`\n  ${created} created  ·  ${existed} already existed  ·  ${failed} failed\n`);
+
+  // ── Step 4: write plan code config map ──────────────────────────────────────
+  const { writeFileSync } = await import("fs");
+  const { resolve } = await import("path");
+
+  const outputPath = resolve("scripts/paystack-plan-codes.json");
+  const output = {
+    _note: "Auto-generated by scripts/create-paystack-plans.js — do not edit manually.",
+    _currency: "NGN",
+    _migrationNote: "To migrate to USD: re-run script after Paystack enables multi-currency on this account.",
+    generatedAt: new Date().toISOString(),
+    plans: planCodes,
+  };
+
+  try {
+    writeFileSync(outputPath, JSON.stringify(output, null, 2) + "\n");
+    console.log(`  ► Plan code map saved to: scripts/paystack-plan-codes.json`);
+    console.log(`    Use this in: checkout routes, webhook handlers, Supabase sync, billing middleware.\n`);
+  } catch (err) {
+    console.error(`  ✗  Could not write plan code map: ${err.message}\n`);
   }
 
-  const created = results.filter((r) => r.status.startsWith("✓")).length;
-  const dupes   = results.filter((r) => r.status.startsWith("⚠")).length;
-  const errors  = results.filter((r) => r.status.startsWith("✗")).length;
-
-  console.log(
-    `\n  Done — ${created} created, ${dupes} already existed, ${errors} error(s).\n`
-  );
-
-  if (created > 0) {
-    console.log(
-      "  ► Copy the Plan Codes above into your Supabase config,\n" +
-        "    subscription verification flows, and frontend checkout\n" +
-        "    initialization payloads before going live.\n"
-    );
+  if (failed > 0) {
+    console.error("  Some plans failed to create. Review errors above.\n");
+    process.exit(1);
   }
 
-  if (errors > 0) {
-    process.exit(1); // Signal to CI that something needs attention
-  }
+  console.log("  ✓  Provisioning complete. Infrastructure is ready for:\n");
+  console.log("     • Recurring monthly auto-renewals");
+  console.log("     • Webhook lifecycle automation (charge.success, subscription.create, etc.)");
+  console.log("     • Supabase subscription status persistence");
+  console.log("     • Checkout initialization (pass plan_code to Paystack Initialize Transaction)");
+  console.log("     • Future upgrade / downgrade / cancellation flows");
+  console.log("     • USD migration (config-only change when multi-currency is approved)\n");
 }
 
 main().catch((err) => {
-  console.error("\n✗  Unexpected fatal error:\n", err);
+  console.error("\n✗  Fatal error:\n", err);
   process.exit(1);
 });
