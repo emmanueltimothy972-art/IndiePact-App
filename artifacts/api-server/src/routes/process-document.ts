@@ -152,6 +152,24 @@ async function processBuffer(buffer: Buffer, mime: string, filename: string, req
   });
 }
 
+// ─── Trusted blob URL validation ─────────────────────────────────────────────
+// Only allow fetching from known Vercel Blob storage hostnames.
+// This prevents SSRF: a client-supplied URL is never fetched without this check.
+
+const TRUSTED_BLOB_HOST_SUFFIX = ".blob.vercel-storage.com";
+
+function isTrustedBlobUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase();
+  return host.endsWith(TRUSTED_BLOB_HOST_SUFFIX);
+}
+
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 router.post(
@@ -162,7 +180,7 @@ router.post(
     const blobUrl = (req.body as Record<string, unknown>)?.blobUrl;
     const filename = String((req.body as Record<string, unknown>)?.filename ?? "document");
 
-    if (typeof blobUrl === "string" && blobUrl.startsWith("https://")) {
+    if (typeof blobUrl === "string" && isTrustedBlobUrl(blobUrl)) {
       const startMs = Date.now();
       req.log.info(
         { userId: req.userId, blobUrl, filename, event: "blob_download_start" },

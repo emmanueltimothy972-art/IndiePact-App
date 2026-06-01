@@ -10,7 +10,10 @@ const router = Router();
 // Resolves email via Supabase admin API (service role key) — never via
 // the frontend or JWT claims, so it cannot be spoofed.
 
-const ADMIN_EMAIL = "emmanueltimothy972@gmail.com";
+// ADMIN_EMAIL is read from the environment so it can be rotated without a code
+// change. Falls back to empty string, disabling the override in environments
+// where the variable is not set.
+const ADMIN_EMAIL = (process.env["ADMIN_EMAIL"] ?? "").toLowerCase().trim();
 const ADMIN_PLAN = "business";
 
 // ─── Plan metadata ────────────────────────────────────────────────────────────
