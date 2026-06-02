@@ -55,12 +55,43 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     CHECK (plan IN ('free','starter','pro','business','agency','enterprise')),
   scans_used INTEGER NOT NULL DEFAULT 0,
   period_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  paystack_reference TEXT,
+  -- Billing lifecycle fields (populated by webhook processor in webhook.ts)
+  subscription_status TEXT NOT NULL DEFAULT 'active',
+  subscription_code TEXT,                  -- Paystack SUB_xxx identifier
+  paystack_reference TEXT,                 -- Last successful charge reference
+  paystack_authorization_code TEXT,        -- Stored for future recurring recovery
+  last_payment_at TIMESTAMPTZ,             -- Timestamp of last successful charge
+  next_payment_date TIMESTAMPTZ,           -- Paystack's next scheduled rebill date
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_sub_code ON subscriptions(subscription_code);
+
+-- Migration: add billing columns to existing subscriptions tables
+-- Safe to run on an existing table — columns are added only if absent.
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscription_code TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS paystack_authorization_code TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_payment_at TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS next_payment_date TIMESTAMPTZ;
+
+-- Webhook events table (idempotency store)
+-- Prevents duplicate processing when Paystack retries webhook delivery.
+-- idempotency_key = "<event_type>:<reference|subscription_code>"
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_type TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_key ON webhook_events(idempotency_key);
+
+-- RLS: webhook_events is written exclusively by the API server service-role key.
+ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
+-- No client-facing policies — all access is via service role (bypasses RLS).
 
 -- RLS Policies
 ALTER TABLE scans ENABLE ROW LEVEL SECURITY;

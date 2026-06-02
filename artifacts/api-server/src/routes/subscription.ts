@@ -478,40 +478,8 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
 });
 
 // ─── POST /paystack/webhook ───────────────────────────────────────────────────
-// NOTE: This route intentionally has no requireAuth — it is called by Paystack
-// servers, not by authenticated users. It is protected by HMAC signature verification.
-
-router.post("/paystack/webhook", async (req, res) => {
-  const secret = process.env["PAYSTACK_SECRET_KEY"];
-  if (secret) {
-    const { createHmac } = await import("crypto");
-    const hash = createHmac("sha512", secret).update(JSON.stringify(req.body)).digest("hex");
-    const signature = req.headers["x-paystack-signature"] as string | undefined;
-    if (hash !== signature) {
-      return res.status(400).json({ error: "Invalid signature" });
-    }
-  }
-
-  const event = req.body as { event: string; data: Record<string, unknown> };
-
-  if (event.event === "charge.success") {
-    const metadata = (event.data["metadata"] as Record<string, unknown>) ?? {};
-    const userId = metadata["userId"] as string | undefined;
-    const planKey = metadata["planKey"] as string | undefined;
-    const reference = event.data["reference"] as string | undefined;
-
-    if (userId && planKey && PLAN_PRICES_USD_CENTS[planKey] !== undefined) {
-      try {
-        await persistPlan(userId, planKey, req.log as ReqLog);
-        const db = requireSupabase();
-        await db.from("subscriptions").update({ paystack_reference: reference }).eq("user_id", userId);
-      } catch (err) {
-        req.log.error({ err }, "Failed to update subscription from webhook");
-      }
-    }
-  }
-
-  return res.sendStatus(200);
-});
+// Moved to artifacts/api-server/src/routes/webhook.ts
+// Registered separately in routes/index.ts to ensure it receives the raw
+// request body (via app.ts express.json verify callback) for HMAC verification.
 
 export default router;

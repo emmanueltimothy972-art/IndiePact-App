@@ -8,6 +8,7 @@ import clausesRouter from "./clauses.js";
 import extractRouter from "./extract.js";
 import legalStrategyRouter from "./legal-strategy.js";
 import subscriptionRouter from "./subscription.js";
+import webhookRouter from "./webhook.js";
 import authRouter from "./auth.js";
 import processDocumentRouter from "./process-document.js";
 import uploadTokenRouter from "./upload-token.js";
@@ -24,6 +25,7 @@ router.use(clausesRouter);
 router.use(extractRouter);
 router.use(legalStrategyRouter);
 router.use(subscriptionRouter);
+router.use(webhookRouter);
 router.use(processDocumentRouter);
 router.use(uploadTokenRouter);
 
