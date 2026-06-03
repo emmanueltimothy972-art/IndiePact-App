@@ -33,16 +33,20 @@ import { logger } from "../lib/logger.js";
 const router = Router();
 
 // ─── Plan code → tier name (centralised reverse map) ─────────────────────────
-// Mirror of PLAN_CODES_NGN in subscription.ts.
-// USD MIGRATION: replace with new plan codes after multi-currency is enabled.
-// Do NOT scatter this mapping across files.
+// Mirror of PLAN_CODES_USD in subscription.ts.
+// This handler is currency-agnostic: it maps plan codes → tier names regardless
+// of whether the transaction was in USD or NGN. Currency is never inspected.
+//
+// ACTION REQUIRED: Once USD plans are created in the Paystack dashboard and
+// PLAN_CODES_USD in subscription.ts is updated, add the new USD plan codes here
+// to mirror the change. Both maps must stay in sync.
 
 const PLAN_CODE_TO_TIER: Record<string, string> = {
-  PLN_y5ll9xzjk6xxr7x: "starter",
-  PLN_egffun046ak2yxj: "pro",
-  PLN_tg9lemlwpmhqj5g: "business",
-  PLN_ztt9md695jjntfe: "agency",
-  PLN_6w86ii89f8jwql1: "enterprise",
+  PLN_y5ll9xzjk6xxr7x: "starter",   // TODO: add USD plan code alongside or replace
+  PLN_egffun046ak2yxj: "pro",        // TODO: add USD plan code alongside or replace
+  PLN_tg9lemlwpmhqj5g: "business",   // TODO: add USD plan code alongside or replace
+  PLN_ztt9md695jjntfe: "agency",     // TODO: add USD plan code alongside or replace
+  PLN_6w86ii89f8jwql1: "enterprise", // TODO: add USD plan code alongside or replace
 };
 
 const PLAN_LIMITS: Record<string, number> = {
