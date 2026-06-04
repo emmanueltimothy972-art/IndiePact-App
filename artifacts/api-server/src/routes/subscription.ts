@@ -28,30 +28,57 @@ const PLAN_LIMITS: Record<string, number> = {
   pay_per_scan: 1,
 };
 
-const PLAN_PRICES_USD_CENTS: Record<string, number> = {
-  starter: 1900,
-  pro: 4999,
-  business: 9900,
-  agency: 14900,
-  enterprise: 19900,
+// ─── Centralized plan pricing ─────────────────────────────────────────────────
+// USD prices mirror the frontend pricing page exactly.
+// Paystack processes in NGN/kobo — conversion happens server-side only.
+// To update pricing, change ONLY this object and USD_TO_NGN_RATE below.
+// Never trust prices from the frontend request body.
+
+const PLAN_PRICES: Record<string, { usd: number }> = {
+  starter:    { usd: 19  },
+  pro:        { usd: 49  },
+  business:   { usd: 99  },
+  agency:     { usd: 149 },
+  enterprise: { usd: 199 },
 };
 
-// ─── USD billing config ───────────────────────────────────────────────────────
-// Plan codes created in the Paystack dashboard for USD recurring subscriptions.
-// Amounts are billed in cents ($1.00 = 100 cents) — matches PLAN_PRICES_USD_CENTS.
-//
-// ACTION REQUIRED: Replace the placeholder plan codes below with real USD plan
-// codes once you have created USD-denominated plans in the Paystack dashboard
-// (Settings → Plans → Create Plan → Currency: USD). The NGN plan codes from
-// the original setup will NOT work correctly for USD transactions.
+// Exchange rate applied to all USD → NGN conversions.
+// Update this value periodically to reflect current market rate.
+const USD_TO_NGN_RATE = 1500;
 
-const PLAN_CODES_USD: Record<string, string> = {
-  starter:    "PLN_y5ll9xzjk6xxr7x",   // TODO: replace with USD plan code
-  pro:        "PLN_egffun046ak2yxj",    // TODO: replace with USD plan code
-  business:   "PLN_tg9lemlwpmhqj5g",   // TODO: replace with USD plan code
-  agency:     "PLN_ztt9md695jjntfe",   // TODO: replace with USD plan code
-  enterprise: "PLN_6w86ii89f8jwql1",   // TODO: replace with USD plan code
+// ─── NGN plan codes (Paystack recurring plans) ───────────────────────────────
+// Created via scripts/create-paystack-plans.js — mirrors paystack-plan-codes.json.
+// Paystack merchant account is NGN; all transactions are processed in NGN/kobo.
+
+const PLAN_CODES_NGN: Record<string, string> = {
+  starter:    "PLN_y5ll9xzjk6xxr7x",
+  pro:        "PLN_egffun046ak2yxj",
+  business:   "PLN_tg9lemlwpmhqj5g",
+  agency:     "PLN_ztt9md695jjntfe",
+  enterprise: "PLN_6w86ii89f8jwql1",
 };
+
+/**
+ * Convert a plan's USD display price to the integer kobo amount Paystack expects.
+ *
+ * Formula:  usdPrice × USD_TO_NGN_RATE × 100
+ * Example:  $149 × 1500 = ₦223,500 × 100 = 22,350,000 kobo
+ *
+ * Paystack requires amounts in the smallest currency unit (kobo for NGN).
+ * Math.round() guards against floating-point drift on edge-case rates.
+ */
+function calculatePaystackAmount(planName: string): number {
+  const usd = PLAN_PRICES[planName]?.usd;
+  if (usd === undefined) throw new Error(`[PLAN_RESOLUTION] Unknown plan: "${planName}"`);
+  return Math.round(usd * USD_TO_NGN_RATE * 100);
+}
+
+// ─── Billing test bypass ──────────────────────────────────────────────────────
+// Allows this single email to initialize checkout for ANY plan — including
+// tiers below their current plan — for testing purposes.
+// Bypasses downgrade protection in the initialize route ONLY.
+// Has zero effect on webhook processing, subscription reads, or other users.
+const BILLING_TEST_EMAIL = "emmanueltimothy972@gmail.com";
 
 // ─── Tier ranking ─────────────────────────────────────────────────────────────
 // free(0) < pay_per_scan(1) < starter(2) < pro(3) < business(4) < agency(5) < enterprise(6)
@@ -325,10 +352,13 @@ router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Payment was not successful" });
     }
 
-    const paidCents = verifyData.data.amount;
-    const expectedCents = PLAN_PRICES_USD_CENTS[planKey];
-    if (expectedCents && paidCents < expectedCents) {
-      req.log.warn({ paidCents, expectedCents, planKey }, "Payment amount mismatch");
+    // For one-time pay_per_scan, Paystack returns amount in smallest unit.
+    // Compare against the USD cent price stored in PLAN_PRICES (× 100 = cents).
+    const paidAmount = verifyData.data.amount;
+    const usdDollars = PLAN_PRICES[planKey]?.usd;
+    const expectedAmount = usdDollars !== undefined ? usdDollars * 100 : undefined;
+    if (expectedAmount && paidAmount < expectedAmount) {
+      req.log.warn({ paidAmount, expectedAmount, planKey }, "Payment amount mismatch");
       return res.status(400).json({ error: "Payment amount does not match plan price" });
     }
 
@@ -344,16 +374,18 @@ router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
 });
 
 // ─── POST /subscription/initialize ───────────────────────────────────────────
-// Starts a Paystack hosted-checkout session for a recurring subscription.
+// Starts a Paystack hosted-checkout session for a recurring NGN subscription.
 //
 // Flow:
-//   1. Validate tier from body.
-//   2. Resolve user email via Supabase admin API (never trust client-supplied email).
-//   3. Call Paystack Initialize Transaction with plan_code → recurring billing locked in.
-//   4. Return authorization_url for the frontend to redirect the user.
+//   1. Validate tier from request body (Zod).
+//   2. Resolve plan code + calculate kobo amount server-side from PLAN_PRICES.
+//   3. Resolve user email via Supabase admin API — never trust client-supplied values.
+//   4. Check for downgrade attempt (skipped for BILLING_TEST_EMAIL).
+//   5. Build Paystack payload with NGN currency and kobo amount.
+//   6. Call Paystack /transaction/initialize, return authorization_url.
 //
-// The metadata block carries userId + tierName so the webhook (charge.success)
-// can immediately persist the plan in Supabase without a round-trip lookup.
+// The metadata block carries userId + usdPrice so the webhook can persist the
+// plan and record the display price without a database round-trip.
 
 const InitializeSchema = z.object({
   tierName: z.enum(["starter", "pro", "business", "agency", "enterprise"]),
@@ -363,7 +395,8 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
   const parse = InitializeSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({
-      error: "Invalid request",
+      success: false,
+      message: "Invalid request. Please try again.",
       details: parse.error.flatten().fieldErrors,
     });
   }
@@ -371,23 +404,43 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
   const { tierName } = parse.data;
   const userId = req.userId!;
 
-  const planCode   = PLAN_CODES_USD[tierName];
-  const amountCents = PLAN_PRICES_USD_CENTS[tierName];
+  // ── 1. Plan resolution ────────────────────────────────────────────────────
+  const planCode = PLAN_CODES_NGN[tierName];
+  const usdPrice = PLAN_PRICES[tierName]?.usd;
 
-  if (!planCode || amountCents === undefined) {
+  if (!planCode || usdPrice === undefined) {
+    req.log.warn({ userId, tierName, event: "plan_resolution_failed" }, "[PLAN_RESOLUTION] Unknown tier requested");
     return res.status(422).json({
-      error: "Invalid subscription tier",
+      success: false,
+      message: "Unable to initialize billing session.",
       detail: `"${tierName}" does not map to a provisioned Paystack plan.`,
     });
   }
 
+  // ── 2. Kobo amount calculation ────────────────────────────────────────────
+  // calculatePaystackAmount: usdPrice × USD_TO_NGN_RATE × 100
+  let amountKobo: number;
+  try {
+    amountKobo = calculatePaystackAmount(tierName);
+  } catch {
+    req.log.error({ userId, tierName, event: "plan_resolution_failed" }, "[PLAN_RESOLUTION] calculatePaystackAmount threw unexpectedly");
+    return res.status(500).json({ success: false, message: "Unable to initialize billing session." });
+  }
+
+  req.log.info(
+    { userId, tierName, planCode, usdPrice, amountKobo, event: "plan_resolution" },
+    `[PLAN_RESOLUTION] tier=${tierName} usd=$${usdPrice} ngn=₦${usdPrice * USD_TO_NGN_RATE} kobo=${amountKobo}`,
+  );
+
+  // ── 3. Secret key guard ───────────────────────────────────────────────────
   const secretKey = process.env["PAYSTACK_SECRET_KEY"];
   if (!secretKey) {
     req.log.error({ event: "paystack_secret_missing" }, "PAYSTACK_SECRET_KEY not configured");
-    return res.status(503).json({ error: "Billing is temporarily unavailable. Please try again later." });
+    return res.status(503).json({ success: false, message: "Billing is temporarily unavailable. Please try again later." });
   }
 
-  // ── Resolve email server-side (cannot be spoofed via JWT claims) ────────────
+  // ── 4. Resolve email server-side ──────────────────────────────────────────
+  // Uses Supabase admin API — cannot be spoofed via JWT claims or request body.
   let email: string | undefined;
   try {
     const db = requireSupabase();
@@ -402,30 +455,74 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
   }
 
   if (!email) {
-    return res.status(400).json({ error: "Could not resolve a verified email address for this account." });
+    return res.status(400).json({ success: false, message: "Unable to initialize billing session." });
   }
 
   req.log.info(
-    { userId, email, tierName, planCode, amountCents, event: "billing_init_start" },
-    `[BILLING_INIT] Initiating USD subscription checkout for user: ${email} on tier: ${tierName} ($${(amountCents / 100).toFixed(2)})`,
+    { userId, tierName, event: "billing_init" },
+    `[BILLING_INIT] user=${email} tier=${tierName} usd=$${usdPrice} kobo=${amountKobo}`,
   );
 
+  // ── 5. Downgrade protection ───────────────────────────────────────────────
+  // Prevents users from self-downgrading via a crafted request.
+  // BILLING_TEST_EMAIL bypasses this check to allow testing any tier.
+  const isBillingTestAccount = email === BILLING_TEST_EMAIL;
+
+  if (!isBillingTestAccount) {
+    try {
+      const db = requireSupabase();
+      const { data: subRow } = await db
+        .from("subscriptions")
+        .select("plan")
+        .eq("user_id", userId)
+        .single();
+
+      const currentPlan = ((subRow as { plan?: string } | null)?.plan ?? "free").toLowerCase();
+      const currentRank = TIER_RANK[currentPlan] ?? 0;
+      const requestedRank = TIER_RANK[tierName] ?? 0;
+
+      if (requestedRank < currentRank) {
+        req.log.warn(
+          { userId, currentPlan, tierName, currentRank, requestedRank, event: "downgrade_blocked" },
+          "[BILLING_INIT] Downgrade attempt blocked — contact support to downgrade",
+        );
+        return res.status(422).json({
+          success: false,
+          message: "To downgrade your plan, please contact support.",
+        });
+      }
+    } catch {
+      // Fail open — if we can't read the current plan, allow checkout to proceed
+      // rather than blocking a legitimate user because of a DB hiccup.
+      req.log.warn({ userId, event: "downgrade_check_skipped" }, "[BILLING_INIT] Could not read current plan — skipping downgrade check");
+    }
+  } else {
+    req.log.info({ userId, email, tierName, event: "billing_test_bypass" }, "[BILLING_INIT] Billing test bypass active — downgrade check skipped");
+  }
+
+  // ── 6. Build and send Paystack payload ───────────────────────────────────
   const appUrl = (process.env["APP_URL"] ?? "").replace(/\/$/, "");
   const callbackUrl = `${appUrl}/dashboard/billing/verify`;
 
   const payload = {
     email,
-    amount: amountCents,   // USD cents — $1.00 = 100
-    currency: "USD",       // Explicit USD — overrides Paystack account default currency
-    plan: planCode,
+    amount:   amountKobo,  // integer kobo — Paystack's required unit for NGN
+    currency: "NGN",       // Paystack merchant account is NGN
+    plan:     planCode,    // recurring plan code — locks in subscription billing
     callback_url: callbackUrl,
     metadata: {
       userId,
       tierName,
-      planKey: tierName,  // kept for backward-compat with webhook handler
+      planKey:  tierName,   // backward-compat alias for webhook handler
+      usdPrice,             // display price for receipts / webhook logging
       platform: "IndiePact SaaS Platform",
     },
   };
+
+  req.log.info(
+    { userId, tierName, planCode, amountKobo, usdPrice, event: "paystack_request" },
+    `[PAYSTACK_REQUEST] POST /transaction/initialize — tier=${tierName} ngn=₦${usdPrice * USD_TO_NGN_RATE}`,
+  );
 
   let paystackRes: Response;
   let paystackBody: {
@@ -438,53 +535,35 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
     paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secretKey}`,
+        Authorization:  `Bearer ${secretKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
     });
     paystackBody = await paystackRes.json() as typeof paystackBody;
   } catch (networkErr) {
-    req.log.error({ userId, tierName, err: networkErr, event: "paystack_network_error" }, "Network failure calling Paystack initialize");
-    return res.status(500).json({ error: "Failed to reach payment processor. Please try again." });
-  }
-
-  if (!paystackRes.ok || paystackBody.status !== true || !paystackBody.data) {
-    const errorMessage = paystackBody.message ?? `HTTP ${paystackRes.status}`;
-
-    // Catch currency mismatch errors explicitly so they surface clearly in logs
-    // and return a user-friendly message instead of a generic 500.
-    // Paystack returns messages like "Currency not supported" or
-    // "Transaction currency does not match" when the account or plan currency
-    // is incompatible with the requested currency field.
-    const isCurrencyError =
-      typeof errorMessage === "string" &&
-      /currency/i.test(errorMessage);
-
-    if (isCurrencyError) {
-      req.log.error(
-        { userId, tierName, planCode, status: paystackRes.status, message: errorMessage, event: "paystack_currency_error" },
-        "[BILLING_CURRENCY_ERROR] Paystack rejected USD transaction — plan may still be denominated in NGN. Create USD plans in Paystack dashboard and update PLAN_CODES_USD.",
-      );
-      return res.status(422).json({
-        error: "Currency configuration error. Please contact support.",
-        detail: "The billing system is being updated to support USD. No charge has been made.",
-      });
-    }
-
-    req.log.error(
-      { userId, tierName, status: paystackRes.status, message: errorMessage, event: "paystack_init_rejected" },
-      "Paystack returned an error during transaction initialization",
-    );
-    return res.status(500).json({
-      error: "Payment processor rejected the request.",
-      detail: errorMessage,
-    });
+    // Log error object but never expose it to the client
+    req.log.error({ userId, tierName, event: "paystack_network_error" }, "[CHECKOUT_FAILURE] Network failure reaching Paystack");
+    return res.status(500).json({ success: false, message: "Unable to initialize billing session." });
   }
 
   req.log.info(
-    { userId, tierName, reference: paystackBody.data.reference, event: "billing_init_success" },
-    "[BILLING_SUCCESS] Paystack responded successfully. Access URL generated.",
+    { userId, tierName, httpStatus: paystackRes.status, paystackStatus: paystackBody.status, event: "paystack_response" },
+    `[PAYSTACK_RESPONSE] status=${paystackRes.status} ok=${paystackBody.status}`,
+  );
+
+  if (!paystackRes.ok || paystackBody.status !== true || !paystackBody.data) {
+    // Log the raw Paystack message server-side for debugging — never send it to the client
+    req.log.error(
+      { userId, tierName, httpStatus: paystackRes.status, paystackMessage: paystackBody.message, event: "checkout_failure" },
+      "[CHECKOUT_FAILURE] Paystack rejected initialization request",
+    );
+    return res.status(500).json({ success: false, message: "Unable to initialize billing session." });
+  }
+
+  req.log.info(
+    { userId, tierName, reference: paystackBody.data.reference, event: "checkout_success" },
+    "[CHECKOUT_SUCCESS] Paystack authorization URL generated",
   );
 
   return res.status(200).json({
