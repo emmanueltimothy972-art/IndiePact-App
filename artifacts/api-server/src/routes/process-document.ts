@@ -260,6 +260,7 @@ router.post(
 
       try {
         await processBuffer(file.buffer, file.mimetype, file.originalname, req, res);
+        return; // res already sent by processBuffer
       } catch (err) {
         req.log.error({ err, event: "direct_mode_error" }, "Direct mode processing error");
         return res.status(500).json({
@@ -269,6 +270,7 @@ router.post(
     });
 
     void next; // suppress unused-variable warning
+    return; // response is sent from within the multer callback above
   },
 );
 

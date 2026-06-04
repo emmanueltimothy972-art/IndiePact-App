@@ -49,9 +49,10 @@ const analyzeRateLimiterOptions: Partial<Options> = {
         return createHash("sha256").update(token).digest("hex").slice(0, 32);
       }
     }
-    // Unauthenticated requests (missing or malformed token) fall back to IP.
-    // All authenticated paths will have a Bearer token.
-    return ipKeyGenerator(req);
+    // Unauthenticated requests fall back to the library's IPv6-safe IP helper.
+    // All authenticated requests will have taken the token path above.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ipKeyGenerator(req as any);
   },
 
   // Emit modern RateLimit-* headers (RFC draft-7), suppress legacy X-RateLimit-*

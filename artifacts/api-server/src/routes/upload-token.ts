@@ -128,7 +128,7 @@ router.post("/upload-token", requireAuth, async (req, res) => {
             event: "blob_upload_completed",
             userId,
             blobUrl: blob.url,
-            blobSize: blob.size,
+            blobSize: (blob as unknown as Record<string, unknown>)["size"] as number | undefined,
             blobContentType: blob.contentType,
           },
           `Blob upload completed: ${blob.url}`,

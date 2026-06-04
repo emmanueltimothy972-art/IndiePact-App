@@ -141,12 +141,12 @@ router.post("/scans", requireAuth, async (req, res) => {
 
       if (existing) {
         // Touch last_opened_at on the winner row — fire-and-forget.
-        void requireSupabase()
-          .from("scans")
-          .update({ last_opened_at: new Date().toISOString() })
-          .eq("id", existing.id)
-          .then()
-          .catch(() => {});
+        void Promise.resolve(
+          requireSupabase()
+            .from("scans")
+            .update({ last_opened_at: new Date().toISOString() })
+            .eq("id", existing.id),
+        ).catch(() => {});
 
         return res.status(200).json(mapScanRow(existing, result));
       }

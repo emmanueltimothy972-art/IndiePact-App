@@ -99,12 +99,12 @@ router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
 
       // Touch last_opened_at — fire-and-forget, never blocks the response.
       // Silently ignored if the column doesn't exist yet (pre-migration).
-      void requireSupabase()
-        .from("scans")
-        .update({ last_opened_at: new Date().toISOString() })
-        .eq("id", cachedScan.id)
-        .then()
-        .catch(() => {});
+      void Promise.resolve(
+        requireSupabase()
+          .from("scans")
+          .update({ last_opened_at: new Date().toISOString() })
+          .eq("id", cachedScan.id),
+      ).catch(() => {});
 
       return res.json({
         ...(cachedScan.result as Record<string, unknown>),

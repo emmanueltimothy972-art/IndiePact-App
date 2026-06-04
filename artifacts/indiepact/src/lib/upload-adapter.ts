@@ -105,7 +105,9 @@ export async function uploadDocument(
   onStage: (stage: "uploading" | "extracting") => void,
 ): Promise<UploadResult> {
   const startMs = Date.now();
-  const authHeaders = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  const authHeaders: Record<string, string> = authToken
+    ? { Authorization: `Bearer ${authToken}` }
+    : {};
 
   // Determine upload mode
   const mode = await getUploadMode(baseUrl);

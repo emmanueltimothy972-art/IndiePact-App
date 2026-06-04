@@ -46,7 +46,13 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// CORS — restrict to the configured frontend origin in production.
+// APP_URL is set in the environment (e.g. https://indiepact.com).
+// Falls back to "*" when not set (Replit dev / local environments).
+const allowedOrigin = process.env["APP_URL"]
+  ? process.env["APP_URL"].replace(/\/$/, "")
+  : "*";
+app.use(cors({ origin: allowedOrigin }));
 app.use(
   express.json({
     verify: (_req, _res, buf) => {

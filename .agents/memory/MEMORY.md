@@ -1,0 +1,4 @@
+- [Vite build env guards](vite-build-env-guards.md) — PORT/BASE_PATH must use fallbacks, not throw, or Vercel builds crash
+- [Express-rate-limit IPv6](rate-limiter-ipv6.md) — ipKeyGenerator must be used with any-cast; raw req.ip triggers ERR_ERL_KEY_GEN_IPV6
+- [Supabase PromiseLike chain](supabase-promise-chain.md) — Supabase client returns PromiseLike not Promise; wrap in Promise.resolve() before .catch()
+- [IndiePact billing arch](indiepact-billing.md) — NGN/kobo payments, PLAN_PRICES + USD_TO_NGN_RATE=1500, BILLING_TEST_EMAIL bypass, CORS via APP_URL env var

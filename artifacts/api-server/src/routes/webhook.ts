@@ -103,19 +103,36 @@ async function resolveUserId(
   metadata: Record<string, unknown> | undefined,
   email: string | undefined,
 ): Promise<string | null> {
+  // Primary: metadata.userId is always set by our checkout initialization.
+  // This path is taken for 100% of our own transactions.
   const metaUserId = metadata?.["userId"] as string | undefined;
   if (metaUserId && metaUserId.trim()) return metaUserId.trim();
 
+  // Fallback: look up by customer email (for manually-created Paystack orders
+  // or events where metadata was not propagated).
+  // Uses paginated listUsers to handle arbitrarily large user bases.
   if (!email) return null;
 
   try {
     const db = requireSupabase();
-    const { data, error } = await db.auth.admin.listUsers();
-    if (error || !data) return null;
-    const match = data.users.find(
-      (u) => u.email?.toLowerCase() === email.toLowerCase()
-    );
-    return match?.id ?? null;
+    const normalizedEmail = email.toLowerCase();
+    let page = 1;
+    const perPage = 1000;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, error } = await db.auth.admin.listUsers({ page, perPage });
+      if (error || !data) return null;
+
+      const match = data.users.find(
+        (u) => u.email?.toLowerCase() === normalizedEmail,
+      );
+      if (match) return match.id;
+
+      // If the page returned fewer rows than requested, we've seen all users.
+      if (data.users.length < perPage) return null;
+      page++;
+    }
   } catch {
     return null;
   }

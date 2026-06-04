@@ -52,6 +52,11 @@ router.post("/extract-file", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Unsupported file type. Supported: PNG, JPG, WEBP" });
   }
 
+  if (!openai) {
+    req.log.error({ event: "openai_unavailable" }, "OpenAI client is not configured — OPENAI_API_KEY missing");
+    return res.status(503).json({ error: "AI extraction is temporarily unavailable. Please try again later." });
+  }
+
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
