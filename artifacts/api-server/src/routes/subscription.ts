@@ -502,7 +502,7 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
 
   // ── 6. Build and send Paystack payload ───────────────────────────────────
   const appUrl = (process.env["APP_URL"] ?? "").replace(/\/$/, "");
-  const callbackUrl = `${appUrl}/dashboard/billing/verify`;
+  const callbackUrl = `${appUrl}/billing/callback`;
 
   const payload = {
     email,

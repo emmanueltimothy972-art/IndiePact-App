@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Check, X, ArrowLeft, Zap, Brain, Loader2, FileText, Lock } from "lucide-react";
@@ -288,11 +289,17 @@ export default function Pricing() {
         onSuccess: async (reference) => {
           toast({ title: "Payment received!", description: "Verifying your scan credit…" });
           try {
+            const { data: { session: activeSession } } = await supabase.auth.getSession();
             const res = await fetch(
               `${window.location.origin}${base}/api/subscription/verify-payment`,
               {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(activeSession?.access_token
+                    ? { Authorization: `Bearer ${activeSession.access_token}` }
+                    : {}),
+                },
                 body: JSON.stringify({ userId: user.id, reference, planKey: "pay_per_scan" }),
               },
             );

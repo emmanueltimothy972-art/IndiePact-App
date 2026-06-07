@@ -23,6 +23,7 @@ const ClauseArmory = lazy(() => import("@/pages/ClauseArmory"));
 const ShadowNegotiator = lazy(() => import("@/pages/ShadowNegotiator"));
 const EscrowLock = lazy(() => import("@/pages/EscrowLock"));
 const LegalStrategy = lazy(() => import("@/pages/LegalStrategy"));
+const BillingCallback = lazy(() => import("@/pages/BillingCallback"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -54,6 +55,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/pricing" component={Pricing} />
         <Route path="/auth/callback" component={AuthCallback} />
+        <Route path="/billing/callback" component={BillingCallback} />
 
         {/* Semi-public: guests can paste text before signing in */}
         <Route path="/scan" component={DocumentLab} />
