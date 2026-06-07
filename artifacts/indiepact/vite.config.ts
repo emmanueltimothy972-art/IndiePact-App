@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 // PORT is required for the dev server but not for `vite build` (static output).
 // Use a safe fallback so Vercel and other CI build environments don't throw.
@@ -12,6 +11,12 @@ const port = rawPort ? Number(rawPort) : 3000;
 // BASE_PATH controls the Vite base URL. Defaults to "/" for standard deploys
 // (Vercel, Netlify). The Replit artifact runner sets BASE_PATH explicitly.
 const basePath = process.env.BASE_PATH ?? "/";
+
+// Replit-only dev plugins — loaded lazily so they are never bundled into
+// production builds or imported on Vercel / CI environments.
+const isReplitDev =
+  process.env.NODE_ENV !== "production" &&
+  process.env.REPL_ID !== undefined;
 
 export default defineConfig({
   base: basePath,
@@ -24,10 +29,13 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
+    // Replit dev-only plugins — all three are guarded by the same condition so
+    // none of them are imported or invoked in Vercel / production builds.
+    ...(isReplitDev
       ? [
+          await import("@replit/vite-plugin-runtime-error-modal").then((m) =>
+            m.default(),
+          ),
           await import("@replit/vite-plugin-cartographer").then((m) =>
             m.cartographer({
               root: path.resolve(import.meta.dirname, ".."),
@@ -42,7 +50,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
-      "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+      // @assets intentionally omitted — attached_assets is a Replit-specific
+      // directory that does not exist in production builds. No source file
+      // imports from @assets; the alias is removed to prevent accidental use.
     },
     dedupe: ["react", "react-dom"],
   },
