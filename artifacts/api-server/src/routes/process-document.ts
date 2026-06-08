@@ -187,32 +187,36 @@ router.post(
         "Downloading file from Vercel Blob",
       );
 
-      try {
-        // Type as globalThis.Response (DOM Fetch API) to prevent collision with
-        // Express's `Response` type in TypeScript environments where the name
-        // `Response` is ambiguous. `lib: ["es2022", "dom"]` in api/tsconfig.json
-        // guarantees globalThis.Response = DOM Fetch Response.
-        const upstreamResponse: globalThis.Response = await fetch(blobUrl, {
-          headers: { "User-Agent": "IndiePact/1.0 document-processor" },
-        });
+      const upstreamResponse = await fetch(blobUrl, {
+  headers: {
+    "User-Agent": "IndiePact/1.0 document-processor",
+  },
+});
 
-        if (!upstreamResponse.ok) {
-          req.log.error(
-            { blobUrl, status: upstreamResponse.status, event: "blob_download_failed" },
-            `Blob download failed with HTTP ${upstreamResponse.status}`,
-          );
-          return res.status(502).json({
-            error: "We encountered an issue retrieving your document from upload storage. Please try uploading again.",
-          });
-        }
+if (!upstreamResponse.ok) {
+  console.error(
+    `[DOCUMENT_FETCH_FAILED] Status: ${upstreamResponse.status}`
+  );
 
-        const arrayBuffer = await upstreamResponse.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        const mime = upstreamResponse.headers.get("content-type") ?? "application/octet-stream";
+  return res.status(400).json({
+    error: `Failed to fetch document. Status ${upstreamResponse.status}`,
+  });
+}
 
-        req.log.info(
-          {
-            userId: req.userId,
+const fileArrayBuffer = await upstreamResponse.arrayBuffer();
+
+const fileBuffer = Buffer.from(fileArrayBuffer);
+
+const mime =
+  upstreamResponse.headers.get("content-type") || "";
+
+console.log("[blob_download_complete]", {
+  userId: req.userId,
+  blobUrl,
+  sizeBytes: fileBuffer.length,
+  downloadMs: Date.now() - startMs,
+  event: "blob_download_complete",
+});
             blobUrl,
             sizeBytes: buffer.length,
             downloadMs: Date.now() - startMs,
