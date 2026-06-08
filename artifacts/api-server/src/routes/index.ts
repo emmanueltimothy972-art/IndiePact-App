@@ -1,44 +1,33 @@
+import { Router } from "express";
 
-import { Router, type IRouter } from "express";
-import { getAuth } from "firebase-admin/auth";
-import { firebaseApp } from "../config/firebase";
-
-// Routes
 import healthRouter from "./health.js";
-import contractsRouter from "./contracts.js";
+import analyzeRouter from "./analyze.js";
 import authRouter from "./auth.js";
-import usersRouter from "./users.js";
+import chatRouter from "./chat.js";
+import clausesRouter from "./clauses.js";
+import dashboardRouter from "./dashboard.js";
+import extractRouter from "./extract.js";
+import legalStrategyRouter from "./legal-strategy.js";
+import processDocumentRouter from "./process-document.js";
+import scansRouter from "./scans.js";
+import subscriptionRouter from "./subscription.js";
+import uploadTokenRouter from "./upload-token.js";
+import webhookRouter from "./webhook.js";
 
-const router: IRouter = Router();
+const router = Router();
 
-// Public routes
-router.use("/health", healthRouter);
-
-// Protected routes middleware
-router.use(async (req: any, res: any, next: any) => {
-  try {
-    const authHeader = req.headers?.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized - No token provided" });
-    }
-
-    const token = authHeader.split("Bearer ")[1];
-    if (!token) {
-      return res.status(401).json({ error: "Unauthorized - Malformed token" });
-    }
-
-    const decodedToken = await getAuth(firebaseApp as any).verifyIdToken(token);
-    req.user = decodedToken;
-    return next();
-  } catch (error) {
-    console.error("Auth error:", error);
-    return res.status(401).json({ error: "Unauthorized - Invalid token" });
-  }
-});
-
-// Protected routes
-router.use("/auth", authRouter);
-router.use("/users", usersRouter);
-router.use("/contracts", contractsRouter);
+router.use(healthRouter);
+router.use(analyzeRouter);
+router.use(authRouter);
+router.use(chatRouter);
+router.use(clausesRouter);
+router.use(dashboardRouter);
+router.use(extractRouter);
+router.use(legalStrategyRouter);
+router.use(processDocumentRouter);
+router.use(scansRouter);
+router.use(subscriptionRouter);
+router.use(uploadTokenRouter);
+router.use(webhookRouter);
 
 export default router;
