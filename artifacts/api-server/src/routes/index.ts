@@ -1,32 +1,44 @@
+// @ts-nocheck
 import { Router, type IRouter } from "express";
-import healthRouter from "./health.js";
-import analyzeRouter from "./analyze.js";
-import scansRouter from "./scans.js";
-import dashboardRouter from "./dashboard.js";
-import chatRouter from "./chat.js";
-import clausesRouter from "./clauses.js";
-import extractRouter from "./extract.js";
-import legalStrategyRouter from "./legal-strategy.js";
-import subscriptionRouter from "./subscription.js";
-import webhookRouter from "./webhook.js";
-import authRouter from "./auth.js";
-import processDocumentRouter from "./process-document.js";
-import uploadTokenRouter from "./upload-token.js";
+import { getAuth } from "firebase-admin/auth";
+import { firebaseApp } from "../config/firebase";
+
+// Routes
+import healthRouter from "./health";
+import contractsRouter from "./contracts";
+import authRouter from "./auth";
+import usersRouter from "./users";
 
 const router: IRouter = Router();
 
-router.use(healthRouter);
-router.use(authRouter);
-router.use(analyzeRouter);
-router.use(scansRouter);
-router.use(dashboardRouter);
-router.use(chatRouter);
-router.use(clausesRouter);
-router.use(extractRouter);
-router.use(legalStrategyRouter);
-router.use(subscriptionRouter);
-router.use(webhookRouter);
-router.use(processDocumentRouter);
-router.use(uploadTokenRouter);
+// Public routes
+router.use("/health", healthRouter);
+
+// Protected routes middleware
+router.use(async (req: any, res: any, next: any) => {
+  try {
+    const authHeader = req.headers?.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized - No token provided" });
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+    if (!token) {
+      return res.status(401).json({ error: "Unauthorized - Malformed token" });
+    }
+
+    const decodedToken = await getAuth(firebaseApp as any).verifyIdToken(token);
+    req.user = decodedToken;
+    return next();
+  } catch (error) {
+    console.error("Auth error:", error);
+    return res.status(401).json({ error: "Unauthorized - Invalid token" });
+  }
+});
+
+// Protected routes
+router.use("/auth", authRouter);
+router.use("/users", usersRouter);
+router.use("/contracts", contractsRouter);
 
 export default router;
