@@ -188,27 +188,27 @@ router.post(
       );
 
       try {
-        // Explicit type prevents collision with Express's `Response` type that
-        // TypeScript may resolve in some compilation environments (Vercel/NodeNext).
-        // `Awaited<ReturnType<typeof fetch>>` derives the type directly from the
-        // fetch function signature — no reliance on any named `Response` global.
-        const blobRes: Awaited<ReturnType<typeof fetch>> = await fetch(blobUrl, {
+        // Type as globalThis.Response (DOM Fetch API) to prevent collision with
+        // Express's `Response` type in TypeScript environments where the name
+        // `Response` is ambiguous. `lib: ["es2022", "dom"]` in api/tsconfig.json
+        // guarantees globalThis.Response = DOM Fetch Response.
+        const upstreamResponse: globalThis.Response = await fetch(blobUrl, {
           headers: { "User-Agent": "IndiePact/1.0 document-processor" },
         });
 
-        if (!blobRes.ok) {
+        if (!upstreamResponse.ok) {
           req.log.error(
-            { blobUrl, status: blobRes.status, event: "blob_download_failed" },
-            `Blob download failed with HTTP ${blobRes.status}`,
+            { blobUrl, status: upstreamResponse.status, event: "blob_download_failed" },
+            `Blob download failed with HTTP ${upstreamResponse.status}`,
           );
           return res.status(502).json({
             error: "We encountered an issue retrieving your document from upload storage. Please try uploading again.",
           });
         }
 
-        const arrayBuffer = await blobRes.arrayBuffer();
+        const arrayBuffer = await upstreamResponse.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        const mime = blobRes.headers.get("content-type") ?? "application/octet-stream";
+        const mime = upstreamResponse.headers.get("content-type") ?? "application/octet-stream";
 
         req.log.info(
           {
