@@ -188,7 +188,11 @@ router.post(
       );
 
       try {
-        const blobRes = await fetch(blobUrl, {
+        // Explicit type prevents collision with Express's `Response` type that
+        // TypeScript may resolve in some compilation environments (Vercel/NodeNext).
+        // `Awaited<ReturnType<typeof fetch>>` derives the type directly from the
+        // fetch function signature — no reliance on any named `Response` global.
+        const blobRes: Awaited<ReturnType<typeof fetch>> = await fetch(blobUrl, {
           headers: { "User-Agent": "IndiePact/1.0 document-processor" },
         });
 
