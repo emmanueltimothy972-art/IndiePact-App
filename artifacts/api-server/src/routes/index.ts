@@ -1,13 +1,13 @@
-// @ts-nocheck
+
 import { Router, type IRouter } from "express";
 import { getAuth } from "firebase-admin/auth";
 import { firebaseApp } from "../config/firebase";
 
 // Routes
-import healthRouter from "./health";
-import contractsRouter from "./contracts";
-import authRouter from "./auth";
-import usersRouter from "./users";
+import healthRouter from "./health.js";
+import contractsRouter from "./contracts.js";
+import authRouter from "./auth.js";
+import usersRouter from "./users.js";
 
 const router: IRouter = Router();
 
