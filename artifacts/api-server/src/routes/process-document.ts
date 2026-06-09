@@ -202,7 +202,6 @@ if (!upstreamResponse.ok) {
     error: `Failed to fetch document. Status ${upstreamResponse.status}`,
   });
 }
-
 const fileArrayBuffer = await upstreamResponse.arrayBuffer();
 
 const fileBuffer = Buffer.from(fileArrayBuffer);
@@ -217,34 +216,37 @@ console.log("[blob_download_complete]", {
   downloadMs: Date.now() - startMs,
   event: "blob_download_complete",
 });
-            blobUrl,
-            sizeBytes: buffer.length,
-            downloadMs: Date.now() - startMs,
-            event: "blob_download_complete",
-          },
-          `Blob downloaded in ${Date.now() - startMs}ms`,
-        );
 
-        // Process the buffer through the pipeline
-        await processBuffer(buffer, mime, filename, req, res);
+// Process the buffer through the pipeline
+await processBuffer(fileBuffer, mime, filename, req, res);
 
-        // Delete blob after successful processing (fire-and-forget — never blocks response)
-        if (process.env.BLOB_READ_WRITE_TOKEN) {
-          import("@vercel/blob")
-            .then(({ del }) => del(blobUrl))
-            .then(() => req.log.info({ blobUrl, event: "blob_deleted" }, "Blob deleted after processing"))
-            .catch((err: unknown) =>
-              req.log.warn({ err, blobUrl, event: "blob_delete_failed" }, "Failed to delete blob"),
-            );
-        }
+// Delete blob after successful processing (fire-and-forget — never blocks response)
+if (process.env.BLOB_READ_WRITE_TOKEN) {
+  import("@vercel/blob")
+    .then(({ del }) => del(blobUrl))
+    .then(() =>
+      req.log.info(
+        { blobUrl, event: "blob_deleted" },
+        "Blob deleted after processing"
+)
+    .catch((err: unknown) =>
+      req.log.warn(
+        { err, blobUrl, event: "blob_delete_failed" },
+        "Failed to delete blob"
+      )
+    );
+}
 
-        return; // res already sent by processBuffer
-      } catch (err) {
-        req.log.error({ err, blobUrl, event: "blob_mode_error" }, "Blob mode processing error");
-        return res.status(500).json({
-          error: "We encountered an issue processing this document. Please try again or paste the contract text directly.",
-        });
-      }
+return; // res already sent by processBuffer
+} catch (err) {
+  req.log.error(
+    { err, blobUrl, event: "blob_mode_error" },
+    "Blob mode processing error"
+  );
+  return res.status(500).json({
+    error:
+      "We encountered an issue processing this document. Please try again or paste the contract text directly.",
+  });
     }
 
     // ── MODE B: Direct multipart upload ──────────────────────────────────────
