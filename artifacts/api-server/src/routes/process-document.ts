@@ -108,7 +108,9 @@ async function processBuffer(buffer: Buffer, mime: string, filename: string, req
     );
     const statusCode = result.failureReason === "unsupported_format" ? 400 : 422;
     return res.status(statusCode).json({
-      error: result.failureMessage ?? "We couldn't process this document. Please try another file or paste the contract text directly.",
+      error:
+        result.failureMessage ??
+        "We couldn't process this document. Please try another file or paste the contract text directly.",
       format: result.format,
       failureReason: result.failureReason,
     });
@@ -116,11 +118,18 @@ async function processBuffer(buffer: Buffer, mime: string, filename: string, req
 
   if (result.status === "partial_success" && !result.text) {
     req.log.warn(
-      { userId: req.userId, format: result.format, confidence: result.confidenceScore, event: "insufficient_text" },
+      {
+        userId: req.userId,
+        format: result.format,
+        confidence: result.confidenceScore,
+        event: "insufficient_text",
+      },
       "Insufficient text after pipeline",
     );
     return res.status(422).json({
-      error: result.failureMessage ?? "This document appears to be a scanned image without extractable text. For best results, please export a text-based PDF or paste the contract text directly.",
+      error:
+        result.failureMessage ??
+        "This document appears to be a scanned image without extractable text. For best results, please export a text-based PDF or paste the contract text directly.",
       format: result.format,
       requiresOcr: true,
       fallbackUsed: result.fallbackUsed,
@@ -187,66 +196,65 @@ router.post(
         "Downloading file from Vercel Blob",
       );
 
-      const upstreamResponse = await fetch(blobUrl, {
-  headers: {
-    "User-Agent": "IndiePact/1.0 document-processor",
-  },
-});
+      try {
+        const upstreamResponse: globalThis.Response = await fetch(blobUrl, {
+          headers: { "User-Agent": "IndiePact/1.0 document-processor" },
+        });
 
-if (!upstreamResponse.ok) {
-  console.error(
-    `[DOCUMENT_FETCH_FAILED] Status: ${upstreamResponse.status}`
-  );
+        if (!upstreamResponse.ok) {
+          req.log.error(
+            { blobUrl, status: upstreamResponse.status, event: "blob_download_failed" },
+            `Blob download failed with HTTP ${upstreamResponse.status}`,
+          );
+          return res.status(502).json({
+            error:
+              "We encountered an issue retrieving your document from upload storage. Please try uploading again.",
+          });
+        }
 
-  return res.status(400).json({
-    error: `Failed to fetch document. Status ${upstreamResponse.status}`,
-  });
-}
-const fileArrayBuffer = await upstreamResponse.arrayBuffer();
+        const arrayBuffer = await upstreamResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const mime = upstreamResponse.headers.get("content-type") ?? "application/octet-stream";
 
-const fileBuffer = Buffer.from(fileArrayBuffer);
+        req.log.info(
+          {
+            userId: req.userId,
+            blobUrl,
+            sizeBytes: buffer.length,
+            downloadMs: Date.now() - startMs,
+            event: "blob_download_complete",
+          },
+          `Blob downloaded in ${Date.now() - startMs}ms`,
+        );
 
-const mime =
-  upstreamResponse.headers.get("content-type") || "";
+        await processBuffer(buffer, mime, filename, req, res);
 
-console.log("[blob_download_complete]", {
-  userId: req.userId,
-  blobUrl,
-  sizeBytes: fileBuffer.length,
-  downloadMs: Date.now() - startMs,
-  event: "blob_download_complete",
-});
+        // Fire-and-forget blob deletion — never blocks the response.
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+          import("@vercel/blob")
+            .then(({ del }) => del(blobUrl))
+            .then(() =>
+              req.log.info({ blobUrl, event: "blob_deleted" }, "Blob deleted after processing"),
+            )
+            .catch((err: unknown) =>
+              req.log.warn(
+                { err, blobUrl, event: "blob_delete_failed" },
+                "Failed to delete blob",
+              ),
+            );
+        }
 
-// Process the buffer through the pipeline
-await processBuffer(fileBuffer, mime, filename, req, res);
-
-// Delete blob after successful processing (fire-and-forget — never blocks response)
-if (process.env.BLOB_READ_WRITE_TOKEN) {
-  import("@vercel/blob")
-    .then(({ del }) => del(blobUrl))
-    .then(() =>
-      req.log.info(
-        { blobUrl, event: "blob_deleted" },
-        "Blob deleted after processing"
-)
-    .catch((err: unknown) =>
-      req.log.warn(
-        { err, blobUrl, event: "blob_delete_failed" },
-        "Failed to delete blob"
-      )
-    );
-}
-
-return; // res already sent by processBuffer
-} catch (err) {
-  req.log.error(
-    { err, blobUrl, event: "blob_mode_error" },
-    "Blob mode processing error"
-  );
-  return res.status(500).json({
-    error:
-      "We encountered an issue processing this document. Please try again or paste the contract text directly.",
-  });
+        return; // res already sent by processBuffer
+      } catch (err) {
+        req.log.error(
+          { err, blobUrl, event: "blob_mode_error" },
+          "Blob mode processing error",
+        );
+        return res.status(500).json({
+          error:
+            "We encountered an issue processing this document. Please try again or paste the contract text directly.",
+        });
+      }
     }
 
     // ── MODE B: Direct multipart upload ──────────────────────────────────────
@@ -274,7 +282,8 @@ return; // res already sent by processBuffer
       } catch (err) {
         req.log.error({ err, event: "direct_mode_error" }, "Direct mode processing error");
         return res.status(500).json({
-          error: "We encountered an issue processing this document. Please try again or paste the contract text directly.",
+          error:
+            "We encountered an issue processing this document. Please try again or paste the contract text directly.",
         });
       }
     });
