@@ -334,7 +334,7 @@ router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
   }
 
   try {
-    const verifyRes = await fetch(
+    const verifyRes: any = await fetch(
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
       { headers: { Authorization: `Bearer ${secretKey}` } },
     );
@@ -524,7 +524,7 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
     `[PAYSTACK_REQUEST] POST /transaction/initialize — tier=${tierName} ngn=₦${usdPrice * USD_TO_NGN_RATE}`,
   );
 
-  let paystackRes: Response;
+  let paystackRes: any;
   let paystackBody: {
     status: boolean;
     message?: string;
