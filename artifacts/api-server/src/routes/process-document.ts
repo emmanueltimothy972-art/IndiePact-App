@@ -197,12 +197,12 @@ router.post(
       );
 
       try {
-        const upstreamResponse: any = await
-fetch(blobUrl, {
-     headers: { "User-Agent": "ContractKit/1.0" },
-  
+            const upstreamResponse: any = await fetch(blobUrl, {
+        headers: { "User-Agent": "ContractKit/1.0" },
+    });
 
-        if (!upstreamResponse.ok) {
+    if (!upstreamResponse.ok) {
+      
           req.log.error(
             { blobUrl, status: upstreamResponse.status, event: "blob_download_failed" },
             `Blob download failed with HTTP ${upstreamResponse.status}`,
