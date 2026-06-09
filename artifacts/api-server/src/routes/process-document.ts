@@ -197,9 +197,10 @@ router.post(
       );
 
       try {
-        const upstreamResponse: globalThis.Response = await fetch(blobUrl, {
-          headers: { "User-Agent": "IndiePact/1.0 document-processor" },
-        });
+        const upstreamResponse: any = await
+fetch(blobUrl, {
+     headers: { "User-Agent": "ContractKit/1.0" },
+  
 
         if (!upstreamResponse.ok) {
           req.log.error(
