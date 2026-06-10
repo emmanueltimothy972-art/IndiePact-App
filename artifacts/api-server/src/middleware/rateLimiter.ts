@@ -61,7 +61,7 @@ const analyzeRateLimiterOptions: Partial<Options> = {
 
   handler: (_req, res, _next, options) => {
     const retryAfter = Math.ceil((options.windowMs as number) / 1000);
-    res.status(429).json({
+    return res.status(429).json({
       error: "Too many requests",
       message: `You've submitted too many contracts in a short window. Please wait ${retryAfter} seconds before trying again.`,
       retryAfter,

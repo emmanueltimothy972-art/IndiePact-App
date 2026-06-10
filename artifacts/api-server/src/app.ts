@@ -68,4 +68,35 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
 
+// ─── 404 handler ──────────────────────────────────────────────────────────────
+// Catches every request that didn't match a registered route and returns JSON
+// instead of Express's default HTML page — keeps the API surface consistent.
+app.use((_req, res) => {
+  return res.status(404).json({ error: "Not found" });
+});
+
+// ─── Global error handler ─────────────────────────────────────────────────────
+// Express 5 automatically forwards async-handler throws to next(err).
+// Without this, those errors fall through to Express's default HTML error page.
+// The headersSent guard prevents a double-send when errors occur mid-stream.
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const status =
+      typeof err === "object" && err !== null && "status" in err
+        ? Number((err as { status?: unknown }).status) || 500
+        : 500;
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    logger.error({ err, status, event: "unhandled_route_error" }, message);
+    if (!res.headersSent) {
+      res.status(status).json({ error: message });
+    }
+  },
+);
+
 export default app;

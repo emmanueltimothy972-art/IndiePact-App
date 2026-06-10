@@ -42,8 +42,9 @@ export async function requireAuth(
 
     req.userId = user.id;
     req.userEmail = user.email;
-    next();
+    return void next();
   } catch {
     res.status(503).json({ error: "Authentication service unavailable." });
+    return;
   }
 }
