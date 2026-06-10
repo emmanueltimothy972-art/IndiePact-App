@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response as ExpressResponse, NextFunction } from "express";
 import { requireSupabase } from "../lib/supabase.js";
 
 declare global {
@@ -12,7 +12,7 @@ declare global {
 
 export async function requireAuth(
   req: Request,
-  res: Response,
+  res: ExpressResponse,
   next: NextFunction,
 ): Promise<void> {
   const authHeader = req.headers["authorization"];
