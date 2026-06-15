@@ -32,12 +32,25 @@
 //   The recommended vercel.json settings (60s timeout, 1024 MB memory) are
 //   for pipeline processing time and PDF decompression, not upload size.
 
+import { createRequire } from "node:module";
 import { Router } from "express";
-// multer 2 ships no @types — import as any.
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const multer = require("multer") as any;
 import { requireAuth } from "../middleware/requireAuth.js";
 import { runExtractionPipeline } from "../lib/extraction-pipeline.js";
+
+// multer 2 ships no @types and has no native ESM export.
+//
+// WHY createRequire instead of bare require():
+// This package has "type": "module" — Node.js (and @vercel/node) treats all
+// .js output as ESM. In ESM, `require` is not defined as a global.
+// The local build.mjs injects `globalThis.require` via esbuild's `banner`
+// option, so bare require() works in local dev. @vercel/node does NOT apply
+// that banner, so bare require() throws ReferenceError at module load time on
+// Vercel, crashing the entire function before Express can handle any request.
+//
+// createRequire(import.meta.url) is the standard Node.js way to call require()
+// from an ES module — it works correctly in both Vercel and local environments.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const multer = createRequire(import.meta.url)("multer") as any;
 
 // Local interface for the Vercel Blob HTTP response.
 // Using a local interface (rather than the global `Response`) avoids the
