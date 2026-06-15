@@ -19,6 +19,24 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+// Local minimal interface for the Resend HTTP response.
+//
+// WHY NOT use the global `Response` type directly?
+// @types/node's fetch.d.ts uses a conditional to decide what `Response` is:
+//
+//   type _Response = typeof globalThis extends { onmessage: any }
+//     ? {}            ← DOM lib included  → Response = {} (no properties!)
+//     : undici.Response;  ← Node-only lib → Response = full Fetch type
+//
+// If any tsconfig in the compilation includes "lib": ["dom"], globalThis gains
+// `onmessage` and _Response collapses to {}, stripping ok / status / text().
+// Casting to this local interface sidesteps that ambient type entirely.
+interface ResendHttpResponse {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+}
+
 const RESEND_API = "https://api.resend.com/emails";
 
 const FROM_FALLBACK = "IndiePact <onboarding@resend.dev>"; // Resend sandbox
@@ -41,7 +59,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
 
   const from = process.env["AUTH_FROM_EMAIL"] ?? FROM_FALLBACK;
 
-  const res = await fetch(RESEND_API, {
+  const res = (await fetch(RESEND_API, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -54,7 +72,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
       html: buildOtpHtml(otp),
       text: buildOtpText(otp),
     }),
-  });
+  })) as unknown as ResendHttpResponse;
 
   if (!res.ok) {
     const body = await res.text().catch(() => "(no body)");
