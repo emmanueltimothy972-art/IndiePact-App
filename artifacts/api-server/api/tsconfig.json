@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es2022",
-    "lib": ["es2022", "dom"],
+    "lib": ["es2022"],
     "module": "preserve",
     "moduleResolution": "bundler",
     "esModuleInterop": true,

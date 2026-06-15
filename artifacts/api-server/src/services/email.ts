@@ -41,7 +41,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
 
   const from = process.env["AUTH_FROM_EMAIL"] ?? FROM_FALLBACK;
 
-  const res: globalThis.Response = await fetch(RESEND_API, {
+  const res = await fetch(RESEND_API, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
