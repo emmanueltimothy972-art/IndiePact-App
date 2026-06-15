@@ -39,6 +39,17 @@ const multer = require("multer") as any;
 import { requireAuth } from "../middleware/requireAuth.js";
 import { runExtractionPipeline } from "../lib/extraction-pipeline.js";
 
+// Local interface for the Vercel Blob HTTP response.
+// Using a local interface (rather than the global `Response`) avoids the
+// @types/node conditional type collapse that strips ok/status/arrayBuffer()/
+// headers.get() whenever "lib": ["dom"] is present anywhere in the compilation.
+interface BlobHttpResponse {
+  ok: boolean;
+  status: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  headers: { get(name: string): string | null };
+}
+
 const router = Router();
 
 // ─── Multer (direct multipart mode) ──────────────────────────────────────────
@@ -197,9 +208,9 @@ router.post(
       );
 
       try {
-            const upstreamResponse: any = await fetch(blobUrl, {
-        headers: { "User-Agent": "ContractKit/1.0" },
-    });
+        const upstreamResponse = (await fetch(blobUrl, {
+          headers: { "User-Agent": "ContractKit/1.0" },
+        })) as unknown as BlobHttpResponse;
 
     if (!upstreamResponse.ok) {
       

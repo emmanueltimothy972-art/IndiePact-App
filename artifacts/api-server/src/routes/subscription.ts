@@ -3,6 +3,16 @@ import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
+// Local interface for Paystack HTTP responses.
+// Using a local interface (rather than the global `Response`) avoids the
+// @types/node conditional type collapse that strips ok/status/json() whenever
+// "lib": ["dom"] is present anywhere in the compilation.
+interface PaystackHttpResponse {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
 const router = Router();
 
 // ─── Admin override ───────────────────────────────────────────────────────────
@@ -334,10 +344,10 @@ router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
   }
 
   try {
-    const verifyRes: any = await fetch(
+    const verifyRes = (await fetch(
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
       { headers: { Authorization: `Bearer ${secretKey}` } },
-    );
+    )) as unknown as PaystackHttpResponse;
 
     if (!verifyRes.ok) {
       return res.status(400).json({ error: "Paystack verification request failed" });
@@ -524,7 +534,7 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
     `[PAYSTACK_REQUEST] POST /transaction/initialize — tier=${tierName} ngn=₦${usdPrice * USD_TO_NGN_RATE}`,
   );
 
-  let paystackRes: any;
+  let paystackRes: PaystackHttpResponse;
   let paystackBody: {
     status: boolean;
     message?: string;
@@ -532,14 +542,14 @@ router.post("/subscription/initialize", requireAuth, async (req, res) => {
   };
 
   try {
-    paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
+    paystackRes = (await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
         Authorization:  `Bearer ${secretKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-    });
+    })) as unknown as PaystackHttpResponse;
     paystackBody = await paystackRes.json() as typeof paystackBody;
   } catch (networkErr) {
     // Log error object but never expose it to the client
