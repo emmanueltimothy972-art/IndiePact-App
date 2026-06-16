@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Generated build artifacts (created by pnpm run build — do not commit)
+artifacts/api-server/api/index.js
