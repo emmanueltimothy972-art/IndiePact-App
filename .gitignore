@@ -49,4 +49,6 @@ Thumbs.db
 .local/
 
 # Generated build artifacts (created by pnpm run build — do not commit)
-artifacts/api-server/api/index.js
+artifacts/api-server/api/*.js
+artifacts/api-server/api/*.mjs
+artifacts/api-server/api/*.map

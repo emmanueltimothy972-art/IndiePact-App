@@ -10,8 +10,10 @@ globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── Shared config ────────────────────────────────────────────────────────────
-// Packages that cannot be bundled (native addons, dynamic file loaders, etc.)
+// ─── Packages that can never be bundled ───────────────────────────────────────
+// Native addons (.node), rarely-installed system libraries, and cloud-SDK
+// behemoths that use dynamic file traversal.  Everything else is bundled so
+// both the dev-server output and the Vercel handler are fully self-contained.
 const BASE_EXTERNALS = [
   "*.node",
   "sharp",
@@ -106,7 +108,7 @@ async function buildAll() {
 
   // ── Build 1: Replit dev server ───────────────────────────────────────────
   // Entry:  src/index.ts  (calls app.listen — starts the HTTP server)
-  // Output: dist/index.mjs
+  // Output: dist/index.mjs  +  dist/pino-worker.mjs  etc.
   // Used by: pnpm run start (local Replit environment)
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
@@ -118,62 +120,47 @@ async function buildAll() {
     logLevel: "info",
     external: BASE_EXTERNALS,
     sourcemap: "linked",
-    plugins: [
-      // pino relies on workers to handle logging; the plugin bundles them
-      // alongside the output so they are resolvable at runtime.
-      esbuildPluginPino({ transports: ["pino-pretty"] }),
-    ],
+    plugins: [esbuildPluginPino({ transports: ["pino-pretty"] })],
     banner: ESM_BANNER,
   });
 
   // ── Build 2: Vercel serverless handler ──────────────────────────────────
   // Entry:  api/index.ts  (exports Express app — no listen() call)
-  // Output: api/index.js  (single self-contained ESM bundle)
-  // Used by: Vercel @vercel/node — the function file referenced in vercel.json.
+  // Output: api/index.mjs  +  api/pino-worker.mjs  etc.
+  // Used by: Vercel — the function file referenced in vercel.json.
   //
-  // WHY a separate pre-built bundle instead of letting @vercel/node compile
-  // api/index.ts directly?
+  // DESIGN DECISIONS
+  // ────────────────
+  // • We pre-bundle instead of letting @vercel/node compile api/index.ts:
+  //   @vercel/node's transpile-only mode leaves bare directory imports and
+  //   createRequire() calls unresolved, crashing the Lambda on startup.
   //
-  // @vercel/node transpiles TypeScript files individually (transpile-only mode)
-  // and relies on Node.js ESM resolution at runtime.  This causes two classes
-  // of failures that our own esbuild avoids:
+  // • We use outdir (not outfile) and include esbuildPluginPino so pino's
+  //   worker thread files (pino-worker.mjs, thread-stream-worker.mjs, …)
+  //   are co-located with the handler.  Without them pino can fail to spawn
+  //   its async transport worker and throw on the first log statement.
   //
-  //   1. ERR_UNSUPPORTED_DIR_IMPORT — bare directory imports that Node.js ESM
-  //      refuses to resolve automatically.
-  //   2. CJS/ESM interop failures — packages like multer (CJS-only) loaded via
-  //      createRequire() don't survive @vercel/node's transpilation cleanly.
+  // • All application packages (multer, pino, pino-http, express, …) are
+  //   bundled directly into api/index.mjs.  No package is externalized beyond
+  //   BASE_EXTERNALS (native addons and cloud SDKs).  This makes the Lambda
+  //   fully self-contained — Vercel's file tracer does not need to trace any
+  //   application-level package, so "Cannot find module" is impossible.
   //
-  // By pre-bundling here we get a single, fully-resolved, self-contained JS
-  // file that Vercel simply executes — no TypeScript compilation needed.
-  //
-  // multer and pino are externalised so they are loaded from Vercel's
-  // node_modules at runtime:
-  //   • multer  — the route uses createRequire() to load it; bundling it AND
-  //               calling createRequire() for it would create two instances.
-  //   • pino    — relies on worker threads (thread-stream).  Without the pino
-  //               esbuild plugin the workers won't be co-located; externalising
-  //               lets pino load its own workers from node_modules correctly.
+  // • api/index.mjs and the worker files are build artifacts; they are listed
+  //   in .gitignore and recreated on every build (including Vercel's build).
+  const apiDir = path.resolve(artifactDir, "api");
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "api/index.ts")],
+    entryPoints: [path.resolve(apiDir, "index.ts")],
     platform: "node",
     bundle: true,
     format: "esm",
-    outfile: path.resolve(artifactDir, "api/index.js"),
+    outdir: apiDir,
+    outExtension: { ".js": ".mjs" },
     allowOverwrite: true,
     logLevel: "info",
-    external: [
-      ...BASE_EXTERNALS,
-      // Externalise multer — loaded at runtime via createRequire() in
-      // src/routes/process-document.ts; bundling it would create two instances.
-      "multer",
-      // Externalise pino family — worker threads need to be loaded from the
-      // same node_modules tree; bundling breaks the thread-stream path lookup.
-      "pino",
-      "pino-http",
-      "pino-pretty",
-      "thread-stream",
-    ],
+    external: BASE_EXTERNALS,
     sourcemap: false,
+    plugins: [esbuildPluginPino({ transports: ["pino-pretty"] })],
     banner: ESM_BANNER,
   });
 }
