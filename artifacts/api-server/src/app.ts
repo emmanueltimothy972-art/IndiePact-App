@@ -66,6 +66,18 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true }));
 
+// ─── Top-level health endpoint ────────────────────────────────────────────────
+// Accessible directly at https://<api-domain>/health (no /api prefix).
+// Used for deployment verification and uptime monitors.
+// Also mirrored under /api/health (in routes/health.ts) for frontend use.
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    service: "IndiePact API",
+    environment: process.env["NODE_ENV"] ?? "production",
+  });
+});
+
 app.use("/api", router);
 
 // ─── 404 handler ──────────────────────────────────────────────────────────────
