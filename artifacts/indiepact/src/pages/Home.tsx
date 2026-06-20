@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -269,11 +269,12 @@ export default function Home() {
   const statRefs = [stat0.ref, stat1.ref, stat2.ref, stat3.ref];
   const statVals = [stat0.val, stat1.val, stat2.val, stat3.val];
 
+  const [, navigate] = useLocation();
+
   const handleReviewCta = () => {
-    // Navigate directly to the contract workspace — auth is deferred until
-    // the user actually clicks "Review Contract", so they can paste first.
-    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    window.location.href = `${window.location.origin}${base}/scan`;
+    // Client-side navigation — avoids a full page reload that could 404
+    // on environments where the server doesn't handle SPA subroutes.
+    navigate("/scan");
   };
 
   return (

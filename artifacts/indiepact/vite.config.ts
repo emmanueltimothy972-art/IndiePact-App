@@ -66,6 +66,24 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
+    // In Replit dev the frontend and API run as separate workflows on different
+    // ports. The browser calls ${basePath}/api/* but Vite knows nothing about
+    // /api routes, so they 404 — which triggers the offline banner.
+    // This proxy forwards those requests to the local API server so the health
+    // check and any API calls work correctly during development.
+    // In production (Vercel) the vercel.json rewrite rule handles this instead.
+    ...(isReplitDev && process.env.API_SERVER_PORT
+      ? {
+          proxy: {
+            [`${basePath}api`]: {
+              target: `http://localhost:${process.env.API_SERVER_PORT}`,
+              changeOrigin: true,
+              rewrite: (p: string) =>
+                "/api" + p.slice(`${basePath}api`.length),
+            },
+          },
+        }
+      : {}),
     fs: {
       strict: false,
       allow: [path.resolve(import.meta.dirname, "../..")],
