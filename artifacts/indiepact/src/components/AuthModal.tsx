@@ -24,16 +24,10 @@ function BrandMark({ step }: { step: Step }) {
   }
   return (
     <div
-      className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#0f1f18] to-[#0a1510] border border-emerald-900/40 flex items-center justify-center"
+      className="h-12 w-12 rounded-2xl bg-[#050505] border border-emerald-900/40 flex items-center justify-center"
       style={{ boxShadow: "0 0 0 1px rgba(16,185,129,0.06), 0 4px 16px rgba(0,0,0,0.5)" }}
     >
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-        <rect x="4.5" y="2.5" width="13" height="17" rx="2" stroke="#10b981" strokeWidth="1.4" strokeOpacity="0.75" />
-        <line x1="7.5" y1="7.5" x2="14.5" y2="7.5" stroke="#10b981" strokeWidth="1.1" strokeLinecap="round" strokeOpacity="0.45" />
-        <line x1="7.5" y1="10.5" x2="14.5" y2="10.5" stroke="#10b981" strokeWidth="1.1" strokeLinecap="round" strokeOpacity="0.45" />
-        <line x1="7.5" y1="13.5" x2="11.5" y2="13.5" stroke="#10b981" strokeWidth="1.1" strokeLinecap="round" strokeOpacity="0.45" />
-        <path d="M11.5 16.5l1.5 1.5 3-3" stroke="#10b981" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <img src="/logo-icon.svg" alt="IndiePact" className="h-9 w-9 object-contain" />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  FileText, History, LayoutDashboard, ShieldCheck,
+  FileText, History, LayoutDashboard,
   FileOutput, Loader2, Menu, Shield, MessageSquare, Lock,
   LogIn, LogOut, Brain, FlaskConical,
 } from "lucide-react";
@@ -111,7 +111,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="hidden lg:flex w-64 border-r border-border bg-sidebar flex-col">
         <div className="h-16 flex items-center px-5 border-b border-border">
           <Link href="/" className="flex items-center gap-2 font-bold text-base tracking-tight text-emerald-400">
-            <ShieldCheck className="h-5 w-5" />
+            <img src="/logo-icon.svg" alt="IndiePact" className="h-7 w-7 object-contain" />
             <span>IndiePact</span>
           </Link>
         </div>
@@ -183,7 +183,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <SheetContent side="left" className="w-72 p-0 bg-sidebar border-r border-border flex flex-col">
                 <div className="h-14 flex items-center px-5 border-b border-border">
                   <Link href="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-2 font-bold text-base text-emerald-400">
-                    <ShieldCheck className="h-5 w-5" />
+                    <img src="/logo-icon.svg" alt="IndiePact" className="h-7 w-7 object-contain" />
                     IndiePact
                   </Link>
                 </div>

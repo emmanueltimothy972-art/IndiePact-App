@@ -5,7 +5,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useRef, useState } from "react";
 import {
-  ShieldCheck, ArrowRight, Upload, Zap, MessageSquare,
+  ArrowRight, Upload, Zap, MessageSquare,
   FileSearch, AlertTriangle, CheckCircle2, DollarSign,
   FileText, Lock, Star, ChevronRight, ScanSearch, FileDown,
 } from "lucide-react";
@@ -282,7 +282,7 @@ export default function Home() {
       {/* ── HEADER ────────────────────────────────────────────────── */}
       <header className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/60 bg-[#050505]/90 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-emerald-400">
-          <ShieldCheck className="h-5 w-5" />
+          <img src="/logo-icon.svg" alt="IndiePact" className="h-7 w-7 object-contain" />
           IndiePact
         </div>
 
@@ -603,7 +603,7 @@ export default function Home() {
       <footer className="border-t border-slate-800/50 px-6 py-8">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2 font-bold text-emerald-400">
-            <ShieldCheck className="h-5 w-5" />
+            <img src="/logo-icon.svg" alt="IndiePact" className="h-6 w-6 object-contain" />
             IndiePact
           </div>
           <div className="flex items-center gap-6 text-xs text-slate-500">
