@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "cd ../.. && pnpm install && pnpm --filter @workspace/api-server run build && mkdir -p artifacts/indiepact/api && cp artifacts/api-server/api/*.mjs artifacts/indiepact/api/ && cd artifacts/indiepact && pnpm run build",
+  "installCommand": "cd ../.. && pnpm install",
+  "buildCommand": "pnpm --filter @workspace/api-server run build && mkdir -p api && cp ../api-server/api/*.mjs api/ && pnpm run build",
   "outputDirectory": "dist/public",
   "functions": {
     "api/index.mjs": {
