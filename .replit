@@ -56,3 +56,8 @@ localPort = 22119
 externalPort = 80
 
 [nix]
+
+[userenv]
+
+[userenv.development]
+API_SERVER_PORT = "8082"
