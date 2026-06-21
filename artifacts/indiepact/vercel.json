@@ -3,11 +3,6 @@
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "cd ../api-server && node build.mjs && cp api/*.mjs ../indiepact/api/ && cd ../indiepact && pnpm run build",
   "outputDirectory": "dist/public",
-  "functions": {
-    "api/index.mjs": {
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
