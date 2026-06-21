@@ -9,7 +9,6 @@ import { AuthModal } from "@/components/AuthModal";
 import { Layout } from "@/components/Layout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { ApiOfflineBanner } from "@/components/ApiOfflineBanner";
 import { Loader2 } from "lucide-react";
 
 const Home = lazy(() => import("@/pages/Home"));
@@ -102,7 +101,6 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ApiOfflineBanner />
       <TooltipProvider>
         <AuthProvider>
           <ScanProvider>
