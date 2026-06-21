@@ -52,3 +52,6 @@ Thumbs.db
 artifacts/api-server/api/*.js
 artifacts/api-server/api/*.mjs
 artifacts/api-server/api/*.map
+
+# Vercel Build Output API (produced by scripts/vercel-build.sh — do not commit)
+artifacts/indiepact/.vercel/output/
