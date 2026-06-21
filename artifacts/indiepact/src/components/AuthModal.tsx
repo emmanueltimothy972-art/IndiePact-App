@@ -351,14 +351,15 @@ export function AuthModal() {
     setError(null);
     setIsEmailLoading(true);
     try {
-      const { error: otpErr } = await supabase.auth.signInWithOtp({
-        email: targetEmail,
-        options: {
-          shouldCreateUser: true,
-        },
+      const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+      const res = await fetch(`${window.location.origin}${base}/api/auth/otp/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail }),
       });
-      if (otpErr) {
-        setError(otpErr.message ?? "Failed to send code. Please try again.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? "Failed to send code. Please try again.");
         return false;
       }
       return true;
