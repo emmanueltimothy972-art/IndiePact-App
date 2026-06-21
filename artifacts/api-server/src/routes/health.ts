@@ -6,6 +6,15 @@ const startedAt = Date.now();
 const commitSha = process.env["VERCEL_GIT_COMMIT_SHA"] ?? process.env["GIT_COMMIT"] ?? "local";
 
 /**
+ * GET /api/ping
+ * Minimal smoke-test — no database, no auth, no external services.
+ * First route verified after a deployment to prove the function is alive.
+ */
+router.get("/ping", (_req: any, res: any) => {
+  return res.json({ status: "alive" });
+});
+
+/**
  * GET /api/health
  * GET /api/healthz  (alias — used by the frontend offline-detection banner)
  *
