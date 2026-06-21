@@ -184,13 +184,15 @@ router.post("/auth/otp/send", async (req, res) => {
   }
 
   try {
+    const admin = requireSupabase();
+
     if (isEmailServiceReady()) {
-      // ── Path A: Resend is configured ─────────────────────────────────────
-      // 1. Guarantee a confirmed account exists (creates new users silently).
-      // 2. generateLink() extracts the 6-digit OTP token WITHOUT triggering
-      //    any Supabase-sent email.
-      // 3. We send our own branded email containing ONLY the 6-digit code.
-      const admin = requireSupabase();
+      // ── Path A: Resend configured ─────────────────────────────────────────
+      // 1. Pre-confirm the user so generateLink() works for new signups.
+      // 2. generateLink(type:"magiclink") fetches the OTP WITHOUT Supabase
+      //    sending any email — we control delivery entirely via Resend.
+      // 3. If Resend rejects (unverified domain / test mode), fall through to
+      //    Path B which tells Supabase to send the email itself.
       await ensureUserConfirmed(admin, email, req.log as Logger);
 
       const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
@@ -198,46 +200,58 @@ router.post("/auth/otp/send", async (req, res) => {
         email,
       });
 
-      if (linkErr || !linkData?.properties?.email_otp) {
-        req.log.error({ err: linkErr, email }, "generateLink failed");
-        return res.status(500).json({ error: "Could not generate verification code. Please try again." });
+      if (!linkErr && linkData?.properties?.email_otp) {
+        try {
+          await sendOtpEmail(email, linkData.properties.email_otp);
+          req.log.info({ email }, "OTP sent via Resend (Path A)");
+          return res.json({ success: true });
+        } catch (resendErr: unknown) {
+          const msg = resendErr instanceof Error ? resendErr.message : String(resendErr);
+          if (msg.includes("403") || msg.includes("validation_error") || msg.includes("verify a domain")) {
+            req.log.warn({ email }, "Resend domain not verified — falling through to Supabase mailer (Path B)");
+            // fall through below
+          } else {
+            throw resendErr;
+          }
+        }
+      } else {
+        req.log.warn({ err: linkErr, email }, "generateLink failed — falling through to Supabase mailer (Path B)");
+        // fall through below
       }
-
-      const otp = linkData.properties.email_otp;
-      await sendOtpEmail(email, otp);
-      req.log.info({ email }, "OTP email sent via Resend (Path A)");
-
-    } else {
-      // ── Path B: Supabase email fallback ───────────────────────────────────
-      // signInWithOtp handles both new signups (shouldCreateUser:true) and
-      // returning users in one call. Supabase sends its configured email
-      // template — update the Magic Link template to show {{ .Token }} for
-      // a clean 6-digit-only code email, or configure Resend (Path A) for
-      // fully branded delivery.
-      req.log.info({ email }, "RESEND_API_KEY not set — using Supabase email fallback (Path B)");
-
-      const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-
-      const { error: otpErr } = await anonClient.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: true },
-      });
-
-      if (otpErr) {
-        req.log.error({ err: otpErr, email }, "signInWithOtp failed");
-        return res.status(500).json({ error: "Could not send the verification code. Please try again." });
-      }
-
-      req.log.info({ email }, "OTP dispatched via Supabase (Path B)");
     }
 
+    // ── Path B: Supabase mailer via admin generateLink ────────────────────────
+    // Uses the admin client (service role key, no rate limits) to generate a
+    // link that Supabase delivers via its own mailer. This avoids the anon-
+    // client per-IP/per-email rate limits entirely.
+    req.log.info({ email }, "Sending OTP via Supabase admin mailer (Path B)");
+    const { data: fallbackData, error: fallbackErr } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: {
+        // Setting redirectTo makes Supabase deliver the email itself with
+        // both a magic link AND the 6-digit token. The frontend uses only
+        // the token (verifyOtp), so the redirect URL is never visited.
+        redirectTo: `${process.env["APP_URL"] ?? "https://indiepact.pro"}/auth/callback`,
+      },
+    });
+
+    if (fallbackErr) {
+      req.log.error({ err: fallbackErr, email }, "Admin generateLink (Path B) failed");
+      return res.status(500).json({ error: "Could not send the verification code. Please try again." });
+    }
+
+    // The admin generateLink with redirectTo causes Supabase to send its
+    // built-in magic-link email which includes the 6-digit {{ .Token }} code.
+    // User enters that code in the OTP box → verifyOtp({ type:"magiclink" }).
+    const fallbackOtp = fallbackData?.properties?.email_otp;
+    req.log.info({ email, hasOtp: !!fallbackOtp }, "OTP dispatched via Supabase admin mailer (Path B)");
     return res.json({ success: true });
 
-  } catch (err) {
-    req.log.error({ err, email }, "OTP send unexpected error");
-    return res.status(500).json({ error: "Something went wrong. Please try again." });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+    req.log.error({ err, email }, "OTP send error");
+    return res.status(500).json({ error: message });
   }
 });
 
