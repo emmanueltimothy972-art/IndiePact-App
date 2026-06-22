@@ -179,6 +179,19 @@ router.post("/auth/otp/send", async (req, res) => {
   const supabaseUrl = process.env["SUPABASE_URL"];
   const supabaseAnonKey = process.env["SUPABASE_ANON_KEY"];
 
+  // ── Debug: log env var presence (values are never logged) ─────────────────
+  req.log.info({
+    env: {
+      SUPABASE_URL:              !!supabaseUrl,
+      SUPABASE_ANON_KEY:         !!supabaseAnonKey,
+      SUPABASE_SERVICE_ROLE_KEY: !!process.env["SUPABASE_SERVICE_ROLE_KEY"],
+      RESEND_API_KEY:            !!process.env["RESEND_API_KEY"],
+      AUTH_FROM_EMAIL:           !!process.env["AUTH_FROM_EMAIL"],
+      APP_URL:                   !!process.env["APP_URL"],
+    },
+    email,
+  }, "otp/send: env check");
+
   if (!supabaseUrl || !supabaseAnonKey) {
     return res.status(503).json({ error: "Email service is not configured." });
   }

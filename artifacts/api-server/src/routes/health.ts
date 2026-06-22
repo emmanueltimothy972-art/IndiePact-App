@@ -42,4 +42,21 @@ router.get("/healthz", (_req: any, res: any) => {
   });
 });
 
+/**
+ * GET /api/debug/env
+ * Returns which environment variables are present (true/false only — no values).
+ * Used to diagnose OTP/email failures without exposing secrets.
+ * Remove this endpoint once the production issue is resolved.
+ */
+router.get("/debug/env", (_req: any, res: any) => {
+  return res.json({
+    supabaseUrl:         !!process.env["SUPABASE_URL"],
+    supabaseAnon:        !!process.env["SUPABASE_ANON_KEY"],
+    supabaseServiceRole: !!process.env["SUPABASE_SERVICE_ROLE_KEY"],
+    resendKey:           !!process.env["RESEND_API_KEY"],
+    authFromEmail:       !!process.env["AUTH_FROM_EMAIL"],
+    appUrl:              !!process.env["APP_URL"],
+  });
+});
+
 export default router;
