@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { runLegalStrategyAnalysis } from "../lib/openai.js";
@@ -49,7 +49,7 @@ function buildEmptyStrategyResponse() {
   };
 }
 
-router.post("/legal-strategy", requireAuth, async (req, res) => {
+router.post("/legal-strategy", requireAuth, async (req: Request, res: Response) => {
   const parse = LegalStrategyBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { hashContractText } from "../lib/contract-hash.js";
@@ -34,7 +34,7 @@ const GetScanQuerySchema = z.object({ userId: z.string().min(1) });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-router.get("/scans", requireAuth, async (req, res) => {
+router.get("/scans", requireAuth, async (req: Request, res: Response) => {
   const parse = ListScansQuerySchema.safeParse(req.query);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid query", details: parse.error.message });
@@ -75,7 +75,7 @@ router.get("/scans", requireAuth, async (req, res) => {
 
 // ── Save scan ───────────────────────────────────────────────────────────────
 
-router.post("/scans", requireAuth, async (req, res) => {
+router.post("/scans", requireAuth, async (req: Request, res: Response) => {
   const parse = SaveScanBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
@@ -166,7 +166,7 @@ router.post("/scans", requireAuth, async (req, res) => {
 
 // ── Get scan by ID ──────────────────────────────────────────────────────────
 
-router.get("/scans/:scanId", requireAuth, async (req, res) => {
+router.get("/scans/:scanId", requireAuth, async (req: Request, res: Response) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
 
@@ -197,7 +197,7 @@ router.get("/scans/:scanId", requireAuth, async (req, res) => {
 
 // ── Delete scan ─────────────────────────────────────────────────────────────
 
-router.delete("/scans/:scanId", requireAuth, async (req, res) => {
+router.delete("/scans/:scanId", requireAuth, async (req: Request, res: Response) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
 
@@ -228,7 +228,7 @@ router.delete("/scans/:scanId", requireAuth, async (req, res) => {
 
 // ── Report ──────────────────────────────────────────────────────────────────
 
-router.get("/report/:scanId", requireAuth, async (req, res) => {
+router.get("/report/:scanId", requireAuth, async (req: Request, res: Response) => {
   const paramParse = GetScanParamsSchema.safeParse(req.params);
   const queryParse = GetScanQuerySchema.safeParse(req.query);
 

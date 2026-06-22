@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { extractRiskyClauses, truncateForAI } from "../lib/prefilter.js";
 import { analyzeContractClauses, buildFallbackResult } from "../lib/openai.js";
@@ -19,7 +19,7 @@ const AnalyzeBodySchema = z.object({
   contractName: z.string().optional(),
 });
 
-router.post("/analyze", analyzeRateLimiter, requireAuth, async (req, res) => {
+router.post("/analyze", analyzeRateLimiter, requireAuth, async (req: Request, res: Response) => {
   const startMs = Date.now();
 
   const parse = AnalyzeBodySchema.safeParse(req.body);

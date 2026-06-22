@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 
 const router = Router();
 
@@ -77,7 +77,7 @@ const BULLETPROOF_CLAUSES = [
   },
 ];
 
-router.get("/clauses", (req, res) => {
+router.get("/clauses", (req: Request, res: Response) => {
   const { search, category } = req.query as Record<string, string>;
   let results = BULLETPROOF_CLAUSES;
 

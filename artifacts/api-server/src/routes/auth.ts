@@ -33,7 +33,7 @@
  *     4. Copy the HMAC secret → set as SUPABASE_WEBHOOK_SECRET env var
  */
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabase } from "../lib/supabase.js";
@@ -129,7 +129,7 @@ async function ensureUserConfirmed(
 // Supabase JS client (detectSessionInUrl:true + flowType:"pkce") completes
 // the exchange automatically and fires onAuthStateChange(SIGNED_IN).
 
-router.get("/auth/callback", (req, res) => {
+router.get("/auth/callback", (req: Request, res: Response) => {
   const code = req.query["code"] as string | undefined;
   // state is part of the PKCE flow — the Supabase client wrote it to
   // sessionStorage before the redirect and validates it on return to
@@ -169,7 +169,7 @@ router.get("/auth/callback", (req, res) => {
 
 // ─── POST /api/auth/otp/send ──────────────────────────────────────────────────
 
-router.post("/auth/otp/send", async (req, res) => {
+router.post("/auth/otp/send", async (req: Request, res: Response) => {
   const parse = SendOtpSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Please enter a valid email address." });
@@ -301,7 +301,7 @@ router.post("/auth/otp/send", async (req, res) => {
  * Security: Supabase signs every request with HMAC-SHA256. Set
  * SUPABASE_WEBHOOK_SECRET to enable signature verification.
  */
-router.post("/auth/email-hook", async (req, res) => {
+router.post("/auth/email-hook", async (req: Request, res: Response) => {
   // Signature verification
   const signature = req.headers["x-supabase-signature"] as string | undefined;
   const rawBody = JSON.stringify(req.body);

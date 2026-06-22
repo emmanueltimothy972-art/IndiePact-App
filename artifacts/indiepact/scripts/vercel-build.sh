@@ -23,6 +23,13 @@ OUTPUT_DIR="$INDIEPACT_DIR/.vercel/output"
 FUNC_DIR="$OUTPUT_DIR/functions/api/index.func"
 
 echo "──────────────────────────────────────────"
+echo "Step 0: TypeScript typecheck (entire workspace)"
+echo "──────────────────────────────────────────"
+cd "$(dirname "$(dirname "$SCRIPT_DIR")")"
+pnpm run typecheck
+
+echo ""
+echo "──────────────────────────────────────────"
 echo "Step 1: Build API server bundle"
 echo "  dir: $API_SERVER_DIR"
 echo "──────────────────────────────────────────"

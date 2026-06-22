@@ -1,4 +1,5 @@
-import express, { type Express } from "express";
+import express from "express";
+import type { Application } from "express";
 import cors from "cors";
 import { pinoHttp } from "pino-http";
 import router from "./routes/index.js";
@@ -25,7 +26,7 @@ declare global {
   }
 }
 
-const app: Express = express();
+const app: Application = express();
 
 app.use(
   pinoHttp({
@@ -70,7 +71,7 @@ app.use(express.urlencoded({ extended: true }));
 // Accessible directly at https://<api-domain>/health (no /api prefix).
 // Used for deployment verification and uptime monitors.
 // Also mirrored under /api/health (in routes/health.ts) for frontend use.
-app.get("/health", (_req, res) => {
+app.get("/health", (_req: express.Request, res: express.Response) => {
   res.json({
     status: "ok",
     service: "IndiePact API",
@@ -83,7 +84,7 @@ app.use("/api", router);
 // ─── 404 handler ──────────────────────────────────────────────────────────────
 // Catches every request that didn't match a registered route and returns JSON
 // instead of Express's default HTML page — keeps the API surface consistent.
-app.use((_req, res) => {
+app.use((_req: express.Request, res: express.Response) => {
   return res.status(404).json({ error: "Not found" });
 });
 

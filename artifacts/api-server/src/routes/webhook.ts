@@ -26,7 +26,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { requireSupabase } from "../lib/supabase.js";
 import { logger } from "../lib/logger.js";
 
@@ -342,7 +342,7 @@ async function handleInvoicePaymentFailed(data: PaystackEventData): Promise<void
 // No requireAuth — called by Paystack servers, not authenticated users.
 // Protected by HMAC SHA-512 signature verification over the raw request body.
 
-router.post("/paystack/webhook", async (req, res) => {
+router.post("/paystack/webhook", async (req: Request, res: Response) => {
   const secret    = process.env["PAYSTACK_SECRET_KEY"];
   const rawBody   = req.rawBody;
   const signature = req.headers["x-paystack-signature"] as string | undefined;

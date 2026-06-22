@@ -34,7 +34,7 @@
 //   upload — existing behaviour, works fine in Replit where Express is a real
 //   long-running server (not serverless).
 
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
@@ -57,7 +57,7 @@ const BLOB_MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
 
 // ─── GET /api/upload-config ───────────────────────────────────────────────────
 
-router.get("/upload-config", requireAuth, (_req, res) => {
+router.get("/upload-config", requireAuth, (_req: Request, res: Response) => {
   const blobConfigured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
   return res.json({
     mode: blobConfigured ? "blob" : "direct",
@@ -69,7 +69,7 @@ router.get("/upload-config", requireAuth, (_req, res) => {
 // Called by @vercel/blob/client's upload() SDK during client-side upload.
 // Handles both the token-generation phase and the upload-completed phase.
 
-router.post("/upload-token", requireAuth, async (req, res) => {
+router.post("/upload-token", requireAuth, async (req: Request, res: Response) => {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return res.status(503).json({
       error: "Vercel Blob is not configured on this server.",

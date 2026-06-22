@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 
 const router: IRouter = Router();
 
@@ -10,7 +10,7 @@ const commitSha = process.env["VERCEL_GIT_COMMIT_SHA"] ?? process.env["GIT_COMMI
  * Minimal smoke-test — no database, no auth, no external services.
  * First route verified after a deployment to prove the function is alive.
  */
-router.get("/ping", (_req: any, res: any) => {
+router.get("/ping", (_req: Request, res: Response) => {
   return res.json({ status: "alive" });
 });
 
@@ -22,7 +22,7 @@ router.get("/ping", (_req: any, res: any) => {
  * requested for deployment verification; /healthz preserves the richer
  * format used by the frontend hook.
  */
-router.get("/health", (_req: any, res: any) => {
+router.get("/health", (_req: Request, res: Response) => {
   return res.json({
     status: "ok",
     service: "IndiePact API",
@@ -30,7 +30,7 @@ router.get("/health", (_req: any, res: any) => {
   });
 });
 
-router.get("/healthz", (_req: any, res: any) => {
+router.get("/healthz", (_req: Request, res: Response) => {
   const uptimeSeconds = Math.floor((Date.now() - startedAt) / 1000);
   return res.json({
     status: "ok",
@@ -48,7 +48,7 @@ router.get("/healthz", (_req: any, res: any) => {
  * Used to diagnose OTP/email failures without exposing secrets.
  * Remove this endpoint once the production issue is resolved.
  */
-router.get("/debug/env", (_req: any, res: any) => {
+router.get("/debug/env", (_req: Request, res: Response) => {
   return res.json({
     supabaseUrl:         !!process.env["SUPABASE_URL"],
     supabaseAnon:        !!process.env["SUPABASE_ANON_KEY"],

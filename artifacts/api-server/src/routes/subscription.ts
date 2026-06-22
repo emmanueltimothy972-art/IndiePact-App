@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -304,7 +304,7 @@ async function getOrCreateSubscription(userId: string, log: ReqLog) {
 
 // ─── GET /subscription ────────────────────────────────────────────────────────
 
-router.get("/subscription", requireAuth, async (req, res) => {
+router.get("/subscription", requireAuth, async (req: Request, res: Response) => {
   const userId = req.userId!;
 
   try {
@@ -327,7 +327,7 @@ router.get("/subscription", requireAuth, async (req, res) => {
 
 // ─── POST /subscription/verify-payment ────────────────────────────────────────
 
-router.post("/subscription/verify-payment", requireAuth, async (req, res) => {
+router.post("/subscription/verify-payment", requireAuth, async (req: Request, res: Response) => {
   const parse = VerifyPaymentSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
@@ -401,7 +401,7 @@ const InitializeSchema = z.object({
   tierName: z.enum(["starter", "pro", "business", "agency", "enterprise"]),
 });
 
-router.post("/subscription/initialize", requireAuth, async (req, res) => {
+router.post("/subscription/initialize", requireAuth, async (req: Request, res: Response) => {
   const parse = InitializeSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({

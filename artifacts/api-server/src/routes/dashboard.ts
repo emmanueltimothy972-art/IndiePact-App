@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireSupabase } from "../lib/supabase.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -10,7 +10,7 @@ const RiskTrendsQuerySchema = z.object({
   days: z.coerce.number().int().positive().default(30),
 });
 
-router.get("/dashboard/summary", requireAuth, async (req, res) => {
+router.get("/dashboard/summary", requireAuth, async (req: Request, res: Response) => {
   const userId = req.userId!;
 
   const { data, error } = await requireSupabase()
@@ -67,7 +67,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
   });
 });
 
-router.get("/dashboard/risk-trends", requireAuth, async (req, res) => {
+router.get("/dashboard/risk-trends", requireAuth, async (req: Request, res: Response) => {
   const parse = RiskTrendsQuerySchema.safeParse(req.query);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid query" });

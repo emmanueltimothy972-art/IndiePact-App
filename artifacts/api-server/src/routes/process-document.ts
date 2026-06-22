@@ -32,7 +32,7 @@
 //   The recommended vercel.json settings (60s timeout, 1024 MB memory) are
 //   for pipeline processing time and PDF decompression, not upload size.
 
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { runExtractionPipeline } from "../lib/extraction-pipeline.js";
 
@@ -201,7 +201,7 @@ function isTrustedBlobUrl(raw: string): boolean {
 router.post(
   "/process-document",
   requireAuth,
-  async (req, res, next) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     // ── MODE A: Vercel Blob (JSON body with blobUrl) ──────────────────────────
     const blobUrl = (req.body as Record<string, unknown>)?.blobUrl;
     const filename = String((req.body as Record<string, unknown>)?.filename ?? "document");

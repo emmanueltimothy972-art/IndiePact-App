@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { runNegotiatorChat, runProsecutorChat } from "../lib/openai.js";
 import { getUserPlan, hasBackendFeature } from "../lib/userPlan.js";
@@ -19,7 +19,7 @@ const ChatBodySchema = z.object({
   history: z.array(ChatMessageSchema).max(20).default([]),
 });
 
-router.post("/chat", requireAuth, async (req, res) => {
+router.post("/chat", requireAuth, async (req: Request, res: Response) => {
   const parse = ChatBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });
@@ -71,7 +71,7 @@ const ProsecutorBodySchema = z.object({
   }).optional(),
 });
 
-router.post("/prosecutor", requireAuth, async (req, res) => {
+router.post("/prosecutor", requireAuth, async (req: Request, res: Response) => {
   const parse = ProsecutorBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request", details: parse.error.message });

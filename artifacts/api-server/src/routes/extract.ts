@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { openai } from "../lib/openai.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -13,7 +13,7 @@ const ExtractBodySchema = z.object({
   mimeType: z.string().optional(),
 });
 
-router.post("/extract-file", requireAuth, async (req, res) => {
+router.post("/extract-file", requireAuth, async (req: Request, res: Response) => {
   const parse = ExtractBodySchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ error: "Invalid request" });
