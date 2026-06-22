@@ -262,9 +262,15 @@ router.post("/auth/otp/send", async (req, res) => {
     return res.json({ success: true });
 
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-    req.log.error({ err, email }, "OTP send error");
-    return res.status(500).json({ error: message });
+    const status =
+      typeof err === "object" && err !== null && "statusCode" in err
+        ? Number((err as { statusCode: unknown }).statusCode) || 500
+        : 500;
+    const message = err instanceof Error
+      ? err.message
+      : "Something went wrong. Please try again.";
+    req.log.error({ err, email, statusCode: status }, "OTP send error");
+    return res.status(status).json({ error: message });
   }
 });
 
