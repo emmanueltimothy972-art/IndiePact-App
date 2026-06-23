@@ -5,7 +5,7 @@
  *   Sends a 6-digit verification code to the user's email.
  *   Two paths depending on whether RESEND_API_KEY is configured:
  *
- *   Path A — RESEND_API_KEY is set (recommended, production-ready):
+ *   Path A — RESEND_API_KEY AND AUTH_FROM_EMAIL are both set (recommended):
  *     1. Ensure the Supabase Auth account exists and is email-confirmed.
  *        (admin.createUser with email_confirm:true for new users, no email sent)
  *     2. Call admin.generateLink() to obtain the OTP token WITHOUT Supabase
@@ -13,9 +13,15 @@
  *     3. Send a branded IndiePact email via Resend containing ONLY the
  *        6-digit code. No magic link, no "Follow this link" button.
  *
- *   Path B — no RESEND_API_KEY (fallback):
- *     1. Call signInWithOtp() with shouldCreateUser:true so both new and
- *        returning users are handled.
+ *   NOTE: BOTH RESEND_API_KEY and AUTH_FROM_EMAIL must be set for Path A.
+ *   If only RESEND_API_KEY is set, the code would silently use Resend's sandbox
+ *   sender (onboarding@resend.dev), which only delivers to the Resend account
+ *   owner. All other users would receive nothing despite the API returning 200.
+ *   isEmailServiceReady() now guards against this by requiring both vars.
+ *
+ *   Path B — RESEND_API_KEY or AUTH_FROM_EMAIL is missing (fallback):
+ *     1. Call admin.generateLink() with redirectTo so Supabase sends its own
+ *        email. Both new and returning users are handled.
  *     2. Supabase sends its own email. Update the "Magic Link" template in
  *        Supabase Dashboard → Auth → Email Templates to display {{ .Token }}
  *        if you want a plain 6-digit-only email without configuring Resend.
@@ -38,6 +44,7 @@ import { z } from "zod";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabase } from "../lib/supabase.js";
 import {
+  activeEmailProvider,
   isEmailServiceReady,
   sendOtpEmail,
   verifySupabaseHmac,
@@ -179,16 +186,30 @@ router.post("/auth/otp/send", async (req: Request, res: Response) => {
   const supabaseUrl = process.env["SUPABASE_URL"];
   const supabaseAnonKey = process.env["SUPABASE_ANON_KEY"];
 
-  // ── Debug: log env var presence (values are never logged) ─────────────────
+  // ── Debug: log env var presence and derived email path ────────────────────
+  // Values are never logged — only presence (true/false).
+  const hasResendKey    = !!process.env["RESEND_API_KEY"];
+  const hasFromEmail    = !!process.env["AUTH_FROM_EMAIL"];
+  const emailProvider   = activeEmailProvider(); // "resend" | "supabase"
   req.log.info({
     env: {
       SUPABASE_URL:              !!supabaseUrl,
       SUPABASE_ANON_KEY:         !!supabaseAnonKey,
       SUPABASE_SERVICE_ROLE_KEY: !!process.env["SUPABASE_SERVICE_ROLE_KEY"],
-      RESEND_API_KEY:            !!process.env["RESEND_API_KEY"],
-      AUTH_FROM_EMAIL:           !!process.env["AUTH_FROM_EMAIL"],
+      RESEND_API_KEY:            hasResendKey,
+      AUTH_FROM_EMAIL:           hasFromEmail,
       APP_URL:                   !!process.env["APP_URL"],
     },
+    emailProvider,
+    // Highlight the misconfiguration that caused silent delivery failure:
+    // RESEND_API_KEY alone is not enough — AUTH_FROM_EMAIL must also be set.
+    // Without it the code would use onboarding@resend.dev (Resend sandbox)
+    // which only delivers to the Resend account owner's inbox.
+    emailProviderReason: hasResendKey && !hasFromEmail
+      ? "AUTH_FROM_EMAIL missing: bypassing Resend sandbox, using Supabase mailer"
+      : hasResendKey && hasFromEmail
+        ? "Both RESEND_API_KEY and AUTH_FROM_EMAIL set: using Resend"
+        : "RESEND_API_KEY not set: using Supabase mailer",
     email,
   }, "otp/send: env check");
 

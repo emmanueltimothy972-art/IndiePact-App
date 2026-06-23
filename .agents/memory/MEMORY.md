@@ -3,3 +3,4 @@
 - [Supabase PromiseLike chain](supabase-promise-chain.md) — Supabase client returns PromiseLike not Promise; wrap in Promise.resolve() before .catch()
 - [IndiePact billing arch](indiepact-billing.md) — NGN/kobo payments, PLAN_PRICES + USD_TO_NGN_RATE=1500, BILLING_TEST_EMAIL bypass, CORS via APP_URL env var
 - [ESM require on Vercel](esm-require-vercel.md) — bare require() crashes on Vercel; use createRequire(import.meta.url) for CJS packages in ESM packages
+- [Resend sandbox silent drop](resend-sandbox-silent-drop.md) — onboarding@resend.dev only delivers to account owner; isEmailServiceReady() must require AUTH_FROM_EMAIL too

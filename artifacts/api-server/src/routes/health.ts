@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { activeEmailProvider } from "../services/email.js";
 
 const router: IRouter = Router();
 
@@ -44,18 +45,29 @@ router.get("/healthz", (_req: Request, res: Response) => {
 
 /**
  * GET /api/debug/env
- * Returns which environment variables are present (true/false only — no values).
+ * Returns which environment variables are present (true/false only — no values)
+ * plus the derived email provider that will be used for OTP delivery.
  * Used to diagnose OTP/email failures without exposing secrets.
- * Remove this endpoint once the production issue is resolved.
  */
 router.get("/debug/env", (_req: Request, res: Response) => {
+  const resendKey    = !!process.env["RESEND_API_KEY"];
+  const authFromEmail = !!process.env["AUTH_FROM_EMAIL"];
+  const emailProvider = activeEmailProvider();
+
   return res.json({
     supabaseUrl:         !!process.env["SUPABASE_URL"],
     supabaseAnon:        !!process.env["SUPABASE_ANON_KEY"],
     supabaseServiceRole: !!process.env["SUPABASE_SERVICE_ROLE_KEY"],
-    resendKey:           !!process.env["RESEND_API_KEY"],
-    authFromEmail:       !!process.env["AUTH_FROM_EMAIL"],
+    resendKey,
+    authFromEmail,
     appUrl:              !!process.env["APP_URL"],
+    // Derived: which OTP path will be used
+    // "resend"   = Path A (branded Resend email) — requires BOTH resendKey + authFromEmail
+    // "supabase" = Path B (Supabase built-in mailer) — active when either var is missing
+    emailProvider,
+    emailProviderNote: emailProvider === "supabase" && resendKey && !authFromEmail
+      ? "RESEND_API_KEY is set but AUTH_FROM_EMAIL is missing — falling back to Supabase mailer to avoid silent sandbox delivery failure"
+      : undefined,
   });
 });
 

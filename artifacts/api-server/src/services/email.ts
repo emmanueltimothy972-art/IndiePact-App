@@ -1,17 +1,25 @@
 /**
  * Email Service — IndiePact
  *
- * Centralised email delivery for auth OTP codes. Uses Resend when
- * RESEND_API_KEY is set; falls back to Supabase's own mailer otherwise.
+ * Centralised email delivery for auth OTP codes. Uses Resend when BOTH
+ * RESEND_API_KEY and AUTH_FROM_EMAIL are set; falls back to Supabase's own
+ * mailer otherwise.
+ *
+ * IMPORTANT: BOTH variables must be set for Resend path (Path A) to activate.
+ * If only RESEND_API_KEY is set but AUTH_FROM_EMAIL is not, the code would
+ * silently fall back to `onboarding@resend.dev` (Resend sandbox sender), which
+ * ONLY delivers to the Resend account owner's email — all other recipients are
+ * silently discarded even though Resend returns HTTP 200. The fix is to require
+ * AUTH_FROM_EMAIL explicitly so we never enter the sandbox sender path.
  *
  * To switch providers later, update `sendOtpEmail()` only — every call
  * site stays unchanged.
  *
  * Environment variables:
  *   RESEND_API_KEY          — Resend secret key (enables branded emails)
- *   AUTH_FROM_EMAIL         — e.g. "IndiePact <auth@indiepact.pro>"
- *                             Defaults to Resend sandbox address until a
- *                             verified domain is configured.
+ *   AUTH_FROM_EMAIL         — REQUIRED for Resend path. e.g. "IndiePact <auth@indiepact.pro>"
+ *                             The sending domain must be verified in Resend.
+ *                             If unset, falls back to Supabase mailer (Path B).
  *   SUPABASE_WEBHOOK_SECRET — HMAC secret shown by Supabase when you register
  *                             the /api/auth/email-hook as an Auth Hook.
  *                             Required to verify hook requests are genuine.
@@ -43,8 +51,28 @@ const FROM_FALLBACK = "IndiePact <onboarding@resend.dev>"; // Resend sandbox
 
 // ─── Capability check ─────────────────────────────────────────────────────────
 
+/**
+ * Returns true only when BOTH RESEND_API_KEY and AUTH_FROM_EMAIL are set.
+ *
+ * Requiring AUTH_FROM_EMAIL prevents the silent-delivery failure caused by the
+ * Resend sandbox sender (`onboarding@resend.dev`): Resend accepts the API call
+ * and returns HTTP 200, but only delivers the email to the Resend account
+ * owner's address. All other recipients silently receive nothing.
+ *
+ * When this returns false, the OTP route falls through to Path B (Supabase
+ * built-in mailer) which does not have this restriction.
+ */
 export function isEmailServiceReady(): boolean {
-  return !!process.env["RESEND_API_KEY"];
+  return !!process.env["RESEND_API_KEY"] && !!process.env["AUTH_FROM_EMAIL"];
+}
+
+/**
+ * Returns a string describing the active email provider for diagnostics.
+ * "resend"    — RESEND_API_KEY + AUTH_FROM_EMAIL both set (Path A)
+ * "supabase"  — missing one or both Resend vars (Path B fallback)
+ */
+export function activeEmailProvider(): "resend" | "supabase" {
+  return isEmailServiceReady() ? "resend" : "supabase";
 }
 
 // ─── OTP email ────────────────────────────────────────────────────────────────
