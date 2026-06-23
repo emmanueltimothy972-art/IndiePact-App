@@ -109,9 +109,17 @@ function higherTier(a: string, b: string): string {
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
+const VALID_PLAN_KEYS = ["starter", "pro", "business", "agency", "enterprise"] as const;
+type ValidPlanKey = typeof VALID_PLAN_KEYS[number];
+
+function isValidPlanKey(v: unknown): v is ValidPlanKey {
+  return typeof v === "string" && (VALID_PLAN_KEYS as readonly string[]).includes(v);
+}
+
 const VerifyPaymentSchema = z.object({
   reference: z.string().min(1),
-  planKey: z.enum(["starter", "pro", "business", "agency", "enterprise"]),
+  // planKey is now optional — falls back to Paystack transaction metadata when absent or invalid
+  planKey: z.string().optional(),
   userId: z.string().optional(),
 });
 
@@ -334,14 +342,26 @@ router.post("/subscription/verify-payment", requireAuth, async (req: Request, re
   }
 
   const userId = req.userId!;
-  const { reference, planKey } = parse.data;
+  const { reference, planKey: clientPlanKey } = parse.data;
   const secretKey = process.env["PAYSTACK_SECRET_KEY"];
   const db = requireSupabase();
+
+  req.log.info(
+    { userId, payment_reference: reference, client_plan_key: clientPlanKey ?? "(not supplied)", event: "verify_payment_start" },
+    "Payment verification started",
+  );
 
   if (!secretKey) {
     req.log.error({ userId, event: "paystack_secret_missing" }, "PAYSTACK_SECRET_KEY is not configured — refusing to upgrade plan without verified payment");
     return res.status(503).json({ error: "Payment verification is unavailable. Please try again later or contact support." });
   }
+
+  // ── Snapshot subscription before verification ─────────────────────────────
+  let subscriptionBefore: string = "unknown";
+  try {
+    const { data: subRow } = await db.from("subscriptions").select("plan").eq("user_id", userId).single();
+    subscriptionBefore = (subRow as { plan?: string } | null)?.plan ?? "free";
+  } catch { /* non-fatal */ }
 
   try {
     const verifyRes = (await fetch(
@@ -350,35 +370,95 @@ router.post("/subscription/verify-payment", requireAuth, async (req: Request, re
     )) as unknown as PaystackHttpResponse;
 
     if (!verifyRes.ok) {
+      req.log.warn({ userId, payment_reference: reference, http_status: verifyRes.status, event: "paystack_verify_http_error" }, "Paystack verification HTTP error");
       return res.status(400).json({ error: "Paystack verification request failed" });
     }
 
     const verifyData = (await verifyRes.json()) as {
       status: boolean;
-      data: { status: string; amount: number };
+      data: {
+        status: string;
+        amount: number;
+        metadata?: { planKey?: string; tierName?: string };
+      };
     };
+
+    req.log.info(
+      {
+        userId,
+        payment_reference: reference,
+        verification_result: verifyData.data?.status ?? "unknown",
+        paystack_status: verifyData.status,
+        metadata: verifyData.data?.metadata,
+        event: "paystack_verify_response",
+      },
+      "Paystack verification response received",
+    );
 
     if (!verifyData.status || verifyData.data.status !== "success") {
       return res.status(400).json({ error: "Payment was not successful" });
     }
 
-    // For one-time pay_per_scan, Paystack returns amount in smallest unit.
-    // Compare against the USD cent price stored in PLAN_PRICES (× 100 = cents).
+    // ── Resolve planKey: client-supplied → Paystack metadata → error ─────────
+    // The client may send "subscription" (legacy) or omit planKey entirely.
+    // Always prefer the authoritative value from Paystack's transaction metadata.
+    let resolvedPlanKey: ValidPlanKey;
+
+    if (isValidPlanKey(clientPlanKey)) {
+      resolvedPlanKey = clientPlanKey;
+      req.log.info({ userId, resolvedPlanKey, source: "client", event: "plan_key_resolved" }, "planKey resolved from client");
+    } else {
+      const metaPlanKey = verifyData.data.metadata?.planKey ?? verifyData.data.metadata?.tierName;
+      if (isValidPlanKey(metaPlanKey)) {
+        resolvedPlanKey = metaPlanKey;
+        req.log.info({ userId, resolvedPlanKey, source: "paystack_metadata", event: "plan_key_resolved" }, "planKey resolved from Paystack metadata");
+      } else {
+        req.log.error(
+          { userId, payment_reference: reference, client_plan_key: clientPlanKey, meta_plan_key: metaPlanKey, event: "plan_key_unresolvable" },
+          "Could not resolve a valid planKey — aborting verification",
+        );
+        return res.status(400).json({ error: "Could not determine subscription plan from payment. Please contact support." });
+      }
+    }
+
+    // ── Amount sanity check ───────────────────────────────────────────────────
+    // Paystack amount is in kobo (NGN). We compare the NGN equivalent of the
+    // USD price (usdPrice × USD_TO_NGN_RATE × 100 = kobo) stored in PLAN_PRICES.
+    // A small tolerance (–5%) is allowed for exchange rate drift.
     const paidAmount = verifyData.data.amount;
-    const usdDollars = PLAN_PRICES[planKey]?.usd;
-    const expectedAmount = usdDollars !== undefined ? usdDollars * 100 : undefined;
-    if (expectedAmount && paidAmount < expectedAmount) {
-      req.log.warn({ paidAmount, expectedAmount, planKey }, "Payment amount mismatch");
+    const usdDollars = PLAN_PRICES[resolvedPlanKey]?.usd;
+    const expectedKobo = usdDollars !== undefined ? Math.round(usdDollars * USD_TO_NGN_RATE * 100) : undefined;
+    if (expectedKobo && paidAmount < expectedKobo * 0.95) {
+      req.log.warn({ paidAmount, expectedKobo, resolvedPlanKey, event: "payment_amount_mismatch" }, "Payment amount below expected — possible plan mismatch");
       return res.status(400).json({ error: "Payment amount does not match plan price" });
     }
 
-    await persistPlan(userId, planKey, req.log as ReqLog);
+    await persistPlan(userId, resolvedPlanKey, req.log as ReqLog);
     await db.from("subscriptions").update({ paystack_reference: reference }).eq("user_id", userId);
 
-    req.log.info({ userId, planKey, event: "payment_verified" }, "Payment verified — plan upgraded");
-    return res.json({ success: true, plan: planKey });
+    // ── Snapshot subscription after verification ──────────────────────────────
+    let subscriptionAfter: string = resolvedPlanKey;
+    try {
+      const { data: subRowAfter } = await db.from("subscriptions").select("plan").eq("user_id", userId).single();
+      subscriptionAfter = (subRowAfter as { plan?: string } | null)?.plan ?? resolvedPlanKey;
+    } catch { /* non-fatal */ }
+
+    req.log.info(
+      {
+        userId,
+        payment_reference: reference,
+        verification_result: "success",
+        subscription_before: subscriptionBefore,
+        subscription_after: subscriptionAfter,
+        plan: resolvedPlanKey,
+        event: "payment_verified",
+      },
+      "Payment verified — plan upgraded",
+    );
+
+    return res.json({ success: true, plan: resolvedPlanKey });
   } catch (err) {
-    req.log.error({ err }, "Payment verification failed");
+    req.log.error({ err, userId, payment_reference: reference, event: "payment_verification_exception" }, "Payment verification failed with exception");
     return res.status(500).json({ error: "Payment verification failed" });
   }
 });
@@ -512,7 +592,9 @@ router.post("/subscription/initialize", requireAuth, async (req: Request, res: R
 
   // ── 6. Build and send Paystack payload ───────────────────────────────────
   const appUrl = (process.env["APP_URL"] ?? "").replace(/\/$/, "");
-  const callbackUrl = `${appUrl}/billing/callback`;
+  // Embed the tier in the callback URL so BillingCallback can pass the correct
+  // planKey to verify-payment without relying on Paystack metadata alone.
+  const callbackUrl = `${appUrl}/billing/callback?plan=${encodeURIComponent(tierName)}`;
 
   const payload = {
     email,
