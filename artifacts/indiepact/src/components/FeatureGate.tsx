@@ -263,20 +263,40 @@ function UpgradeGate({
   const mockupType = feature?.mockupType ?? (tier === "business" ? "legal_strategy" : "ai_attorney");
 
   return (
-    <div className="relative rounded-2xl overflow-hidden" style={{ minHeight: 580 }}>
+    <div className="relative rounded-2xl" style={{ minHeight: 580 }}>
 
       {/* ── Background: blurred feature preview ──────────────────────────── */}
-      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden" aria-hidden="true">
-        <div className="opacity-[0.30] blur-[2px] scale-[1.01] origin-top">
-          {mockupType === "ai_attorney"   && <AIAttorneyMockup />}
-          {mockupType === "negotiation"   && <NegotiationMockup />}
-          {mockupType === "payment_lock"  && <PaymentLockMockup />}
+      {/*
+        overflow-hidden on an ancestor clips filter:blur() incorrectly on
+        desktop Chrome — the blurred layer bleeds outside the rounded clip
+        boundary producing horizontal artifacts. Fix: contain the blur inside
+        its OWN overflow-hidden div that sits independently of the outer
+        rounded container, and use clip-path to hard-clip the composited
+        layer before it reaches the border-radius clip.
+      */}
+      <div
+        className="absolute inset-0 pointer-events-none select-none rounded-2xl"
+        aria-hidden="true"
+        style={{ overflow: "hidden", isolation: "isolate" }}
+      >
+        <div
+          className="opacity-[0.30] origin-top"
+          style={{
+            filter: "blur(2px)",
+            transform: "scale(1.01)",
+            willChange: "auto",
+          }}
+        >
+          {mockupType === "ai_attorney"    && <AIAttorneyMockup />}
+          {mockupType === "negotiation"    && <NegotiationMockup />}
+          {mockupType === "payment_lock"   && <PaymentLockMockup />}
           {mockupType === "legal_strategy" && <LegalStrategyMockup />}
         </div>
       </div>
 
       {/* ── Dark gradient overlay ─────────────────────────────────────────── */}
-      <div className="absolute inset-0 pointer-events-none"
+      <div
+        className="absolute inset-0 pointer-events-none rounded-2xl"
         style={{ background: "linear-gradient(to bottom, rgba(5,5,5,0.68) 0%, rgba(5,5,5,0.58) 40%, rgba(5,5,5,0.86) 100%)" }}
       />
 

@@ -185,7 +185,7 @@ export default function TheBar() {
   const selectedRisk = filteredRisks[clampedIdx] ?? null;
 
   return (
-    <PageTransition className="space-y-5 max-w-5xl mx-auto">
+    <PageTransition className="space-y-5 max-w-5xl mx-auto overflow-x-hidden min-w-0">
       <FeatureGate
         requires="pro"
         featureName="AI Attorney"
@@ -387,7 +387,14 @@ export default function TheBar() {
               </div>
 
               {/* ── Clause Risk Matrix ───────────────────────────────── */}
-              <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] overflow-hidden">
+              {/*
+                overflow-hidden is intentionally NOT on the outer container:
+                combining overflow-hidden with a nested overflow-x-auto scroll
+                container triggers GPU compositing artifacts on desktop Chrome
+                (scrollbar paints at the clip boundary, causing horizontal
+                glitch lines). The rounded-2xl border is preserved without it.
+              */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] isolate">
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-slate-800 flex items-center gap-2">
                   <Shield className="h-4 w-4 text-slate-500" />
@@ -412,9 +419,14 @@ export default function TheBar() {
                   </div>
                 ) : (
                   <>
-                    {/* Desktop table */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full text-xs border-collapse">
+                    {/* Desktop table
+                      min-w-0 ensures this flex child can shrink below its
+                      intrinsic width so overflow-x-auto works correctly.
+                      rounded-b-2xl clips the bottom corners since the parent
+                      no longer uses overflow-hidden.
+                    */}
+                    <div className="hidden md:block overflow-x-auto min-w-0 w-full rounded-b-2xl">
+                      <table className="w-full min-w-[700px] text-xs border-collapse">
                         <thead>
                           <tr className="border-b border-slate-800">
                             {["Clause Excerpt", "Category", "Severity", "Score", "Recommended Rewrite", ""].map((h) => (
@@ -639,24 +651,30 @@ export default function TheBar() {
                     </div>
                   )}
 
-                  {/* Before / After */}
+                  {/* Before / After
+                    min-w-0 on each panel prevents the grid cells from
+                    expanding beyond the grid container width on desktop,
+                    which would push the second panel off-screen or overlap.
+                    overflow-hidden on each panel clips long monospace text
+                    so it wraps within the card rather than escaping the grid.
+                  */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-red-900/30 bg-[#0a0a0a] flex flex-col">
-                      <div className="px-4 py-3 border-b border-red-900/20 flex items-center gap-2">
-                        <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+                    <div className="rounded-xl border border-red-900/30 bg-[#0a0a0a] flex flex-col min-w-0 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-red-900/20 flex items-center gap-2 shrink-0">
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
                         <span className="text-xs font-semibold text-red-400">Client's Version</span>
                       </div>
-                      <div className="p-5 font-mono text-xs leading-relaxed text-slate-400">
+                      <div className="p-5 font-mono text-xs leading-relaxed text-slate-400 break-words">
                         {selectedRisk.explanation || selectedRisk.title || "No clause excerpt available."}
                       </div>
                     </div>
 
-                    <div className="rounded-xl border border-slate-700/50 bg-[#0a0a0a] flex flex-col">
-                      <div className="px-4 py-3 border-b border-slate-700/50 flex items-center gap-2">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="rounded-xl border border-slate-700/50 bg-[#0a0a0a] flex flex-col min-w-0 overflow-hidden">
+                      <div className="px-4 py-3 border-b border-slate-700/50 flex items-center gap-2 shrink-0">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                         <span className="text-xs font-semibold text-slate-300">Protected Version</span>
                       </div>
-                      <div className="p-5 font-mono text-xs leading-relaxed text-slate-300">
+                      <div className="p-5 font-mono text-xs leading-relaxed text-slate-300 break-words">
                         {selectedRisk.fixes?.rewrittenClause || "No replacement clause available for this risk."}
                       </div>
                     </div>
