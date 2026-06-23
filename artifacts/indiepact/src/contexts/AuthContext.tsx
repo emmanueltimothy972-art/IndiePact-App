@@ -4,6 +4,11 @@ import { supabase } from "@/lib/supabase";
 import { DEMO_USER_ID, PLAN_LIMITS } from "@/lib/constants";
 import { DEV_AUTH_BYPASS, DEV_MOCK_USER } from "@/lib/devMode";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
+import {
+  loadOtpPending,
+  saveReturnTo as savePendingReturnTo,
+  consumeReturnTo as consumePendingReturnTo,
+} from "@/lib/auth-pending";
 
 // ─── Dev tier override (localStorage) ────────────────────────────────────────
 
@@ -19,29 +24,25 @@ function writeDevTier(tier: string) {
   try { localStorage.setItem(DEV_TIER_KEY, tier); } catch {}
 }
 
-// ─── Return-to intent (sessionStorage) ───────────────────────────────────────
-// Saved when the auth modal opens so the OTP flow
-// can redirect the user back to what they were doing after sign-in.
-
-export const RETURN_TO_KEY = "indiepact_return_to";
+// ─── Return-to intent (localStorage, 30-min TTL) ─────────────────────────────
+// Saved when the auth modal opens so the OTP flow can redirect the user back
+// to what they were doing after sign-in.
+//
+// Uses localStorage (not sessionStorage) so it survives iOS Safari tab eviction.
+// Re-exported here for backward compat — callers import from AuthContext.
 
 export function saveReturnTo(returnTo?: string): void {
-  try {
-    const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
-    // Strip the Vite base prefix from the current pathname so we store an
-    // app-relative path (e.g. "/scan") that works in both Replit and Vercel.
-    const fallback = window.location.pathname.replace(base, "") || "/";
-    sessionStorage.setItem(RETURN_TO_KEY, returnTo ?? fallback);
-  } catch {}
+  const base = (import.meta.env.BASE_URL as string).replace(/\/$/, "");
+  const fallback = window.location.pathname.replace(base, "") || "/";
+  savePendingReturnTo(returnTo ?? fallback);
 }
 
 export function consumeReturnTo(): string | null {
-  try {
-    const val = sessionStorage.getItem(RETURN_TO_KEY);
-    sessionStorage.removeItem(RETURN_TO_KEY);
-    return val;
-  } catch { return null; }
+  return consumePendingReturnTo();
 }
+
+// Kept for any legacy callers that reference the key directly.
+export const RETURN_TO_KEY = "indiepact_return_to";
 
 // ─── Subscription state ───────────────────────────────────────────────────────
 
@@ -176,7 +177,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
-      if (session?.user) void fetchSubscription(session.user.id, session.access_token).then(setSubscription);
+      if (session?.user) {
+        void fetchSubscription(session.user.id, session.access_token).then(setSubscription);
+      } else {
+        // ── Auto-restore OTP flow after page refresh / iOS tab reload ─────────
+        // If the user was in the middle of OTP verification when the page was
+        // refreshed (or iOS Safari evicted the tab), the pending state in
+        // localStorage tells us to re-open the modal so they can still enter
+        // their code. This is the ONLY place that re-opens the modal
+        // automatically — AuthModal's own restore effect requires the modal to
+        // already be open (showAuthModal=true), so we must trigger it here.
+        const pending = loadOtpPending();
+        if (pending) {
+          console.log(
+            "[AuthContext] Pending OTP found on page load — auto-restoring modal",
+            { email: pending.email, route: window.location.pathname },
+          );
+          setShowAuthModal(true);
+        } else {
+          console.log(
+            "[AuthContext] No pending OTP — guest session, modal stays closed",
+            { route: window.location.pathname },
+          );
+        }
+      }
     });
 
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((_event, session) => {

@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useAuth, consumeReturnTo } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { consumeReturnTo, saveOtpPending, loadOtpPending, clearOtpPending } from "@/lib/auth-pending";
 import { Lock, ArrowLeft, Mail, CheckCircle2, Timer, Info, X } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -204,25 +205,8 @@ function validateEmail(raw: string): string | null {
 
 type Step = "initial" | "verify" | "success";
 
-const SESSION_KEY = "ip_auth_pending";
 // 3-minute resend cooldown — reduces unnecessary resend requests and Resend API usage
 const RESEND_COOLDOWN = 180;
-
-interface PendingAuth { email: string; sentAt: number }
-
-function savePending(email: string) {
-  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ email, sentAt: Date.now() })); } catch {}
-}
-function loadPending(): PendingAuth | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PendingAuth;
-  } catch { return null; }
-}
-function clearPending() {
-  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
-}
 
 function navigateToReturnTo() {
   const returnTo = consumeReturnTo();
@@ -283,14 +267,22 @@ export function AuthModal() {
   // ── Restore pending OTP session on modal open (survives page refresh) ──────
   useEffect(() => {
     if (!showAuthModal) return;
-    const pending = loadPending();
+    const pending = loadOtpPending();
     if (pending) {
       const elapsedSec = Math.floor((Date.now() - pending.sentAt) / 1000);
       const remaining = RESEND_COOLDOWN - elapsedSec;
+      console.log("[AuthModal] Restoring OTP screen from localStorage", {
+        email: pending.email,
+        elapsedSec,
+        remainingCooldownSec: Math.max(0, remaining),
+        step: "verify",
+      });
       setEmail(pending.email);
       setStep("verify");
       setOtp("");
       if (remaining > 0) countdown.start(remaining);
+    } else {
+      console.log("[AuthModal] Modal opened, no pending OTP state found");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAuthModal]);
@@ -304,7 +296,7 @@ export function AuthModal() {
     setIsEmailLoading(false);
     setShowForgotInfo(false);
     countdown.reset();
-    clearPending();
+    clearOtpPending();
   }, [countdown]);
 
   const handleClose = () => {
@@ -331,7 +323,7 @@ export function AuthModal() {
         setIsEmailLoading(false);
         return;
       }
-      clearPending();
+      clearOtpPending();
       setStep("success");
       setTimeout(navigateToReturnTo, 900);
     } catch {
@@ -388,7 +380,7 @@ export function AuthModal() {
       setOtp("");
       setError(null);
       setShowForgotInfo(false);
-      savePending(trimmed);
+      saveOtpPending(trimmed);
       setStep("verify");
       countdown.start(RESEND_COOLDOWN);
     }
@@ -402,7 +394,7 @@ export function AuthModal() {
     if (ok) {
       setOtp("");
       setError(null);
-      savePending(email.trim().toLowerCase());
+      saveOtpPending(email.trim().toLowerCase());
       countdown.start(RESEND_COOLDOWN);
     }
   };
@@ -564,7 +556,7 @@ export function AuthModal() {
                       setOtp("");
                       setStep("initial");
                       countdown.reset();
-                      clearPending();
+                      clearOtpPending();
                     }}
                     className="flex items-center gap-1.5 text-slate-600 hover:text-slate-400 transition-colors"
                   >
