@@ -242,7 +242,7 @@ export default function TheBar() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-5 isolate">
           {/* ── Scan Selector ─────────────────────────────────────────── */}
           {allScans.length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-4 space-y-3">
@@ -425,7 +425,7 @@ export default function TheBar() {
                       rounded-b-2xl clips the bottom corners since the parent
                       no longer uses overflow-hidden.
                     */}
-                    <div className="hidden md:block overflow-x-auto min-w-0 w-full rounded-b-2xl">
+                    <div className="hidden md:block overflow-x-auto min-w-0 w-full rounded-b-2xl [contain:paint]">
                       <table className="w-full min-w-[700px] text-xs border-collapse">
                         <thead>
                           <tr className="border-b border-slate-800">
@@ -445,7 +445,7 @@ export default function TheBar() {
                               <tr
                                 key={idx}
                                 onClick={() => setSelectedRiskIdx(idx)}
-                                className={`cursor-pointer border-b border-slate-800/60 last:border-b-0 transition-colors ${isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/50"}`}
+                                className={`cursor-pointer border-b border-slate-800/60 last:border-b-0 transition-[background-color] duration-150 ${isSelected ? "bg-slate-800/40" : "hover:bg-slate-900/50"}`}
                               >
                                 <td className="px-4 py-4 align-top w-[28%]">
                                   <p className="font-mono text-xs text-slate-400 leading-relaxed">
@@ -567,7 +567,7 @@ export default function TheBar() {
 
               {/* ── Clause Deep-Dive ─────────────────────────────────── */}
               {selectedRisk && (
-                <div className="space-y-3">
+                <div className="space-y-3 isolate transform-gpu">
                   <div className="flex items-center gap-2 px-1 flex-wrap">
                     <TrendingDown className="h-4 w-4 text-slate-500" />
                     <h2 className="font-semibold text-white text-sm">
