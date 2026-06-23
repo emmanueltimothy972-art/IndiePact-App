@@ -144,7 +144,30 @@ export function verifySupabaseHmac(
 // ─── Email templates ──────────────────────────────────────────────────────────
 
 function buildOtpHtml(otp: string): string {
-  const digits = otp.split("").join("</span>&thinsp;<span style=\"display:inline-block;\">");
+  //
+  // ROOT CAUSE OF PREVIOUS WRAPPING BUG:
+  //   Each digit was wrapped in its own display:inline-block <span> separated by
+  //   &thinsp; (thin space). Email clients — especially Gmail on Android — treat
+  //   inline-block elements as individual inline boxes with line-break
+  //   opportunities at every thin-space. At 38px on a narrow mobile viewport
+  //   (~360px) 3–4 digits overflow the line, causing the "1 9 4 / 5 1 / 3" wrap.
+  //
+  // FIX: one <td> per digit inside a single-row <table>.
+  //   Table cells in a <tr> are physically incapable of wrapping to the next line
+  //   in any email client (Gmail, Outlook, Apple Mail, Android Gmail).
+  //   No flexbox, no inline-block, no word-break — just table layout.
+  //
+  const digitCells = otp
+    .split("")
+    .map(
+      (d) =>
+        `<td style="font-size:40px;font-weight:800;color:#10b981;` +
+        `font-family:'Courier New',Courier,monospace;` +
+        `text-align:center;vertical-align:middle;` +
+        `line-height:1;padding:0 5px;">${d}</td>`,
+    )
+    .join("\n        ");
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -169,10 +192,10 @@ function buildOtpHtml(otp: string): string {
                     <table cellpadding="0" cellspacing="0" role="presentation">
                       <tr>
                         <td style="width:36px;height:36px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.28);border-radius:10px;text-align:center;vertical-align:middle;">
-                          <span style="font-size:18px;line-height:36px;">🛡️</span>
+                          <span style="font-size:18px;line-height:36px;">&#x1F6E1;&#xFE0F;</span>
                         </td>
                         <td style="padding-left:10px;vertical-align:middle;">
-                          <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">IndiePact</span>
+                          <span style="color:#ffffff;font-size:18px;font-weight:700;">IndiePact</span>
                         </td>
                       </tr>
                     </table>
@@ -181,30 +204,42 @@ function buildOtpHtml(otp: string): string {
               </table>
 
               <!-- Heading -->
-              <p style="color:#ffffff;font-size:22px;font-weight:700;margin:0 0 8px;letter-spacing:-0.5px;">Your verification code</p>
+              <p style="color:#ffffff;font-size:22px;font-weight:700;margin:0 0 8px;">Your verification code</p>
               <p style="color:#6b7280;font-size:14px;margin:0 0 28px;line-height:1.6;">
                 Enter this 6-digit code in IndiePact to continue. It expires in 10&nbsp;minutes.
               </p>
 
-              <!-- OTP box -->
+              <!-- OTP box
+                   Each digit occupies its own <td> in a single <tr>.
+                   A table row cannot wrap — this guarantees one horizontal line
+                   in every email client regardless of viewport width.
+              -->
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td style="background:rgba(16,185,129,0.07);border:1.5px solid rgba(16,185,129,0.28);border-radius:12px;padding:24px;text-align:center;">
-                    <span style="font-size:38px;font-weight:800;letter-spacing:10px;color:#10b981;font-family:'Courier New',Courier,monospace;">
-                      <span style="display:inline-block;">${digits}</span>
-                    </span>
+                  <td style="background:rgba(16,185,129,0.07);border:1.5px solid rgba(16,185,129,0.28);border-radius:12px;padding:24px 16px;text-align:center;">
+                    <table cellpadding="0" cellspacing="0" role="presentation"
+                           style="margin:0 auto;border-collapse:separate;border-spacing:0;">
+                      <tr>
+                        ${digitCells}
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
 
+              <!-- Hint: copy-paste friendly plain code below the box -->
+              <p style="color:#374151;font-size:12px;text-align:center;margin:10px 0 24px;letter-spacing:0.5px;">
+                Code: <span style="color:#6b7280;font-family:'Courier New',Courier,monospace;">${otp}</span>
+              </p>
+
               <!-- Divider -->
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-                <tr><td style="border-top:1px solid rgba(255,255,255,0.07);padding:28px 0 0;"></td></tr>
+                <tr><td style="border-top:1px solid rgba(255,255,255,0.07);padding:4px 0 0;"></td></tr>
               </table>
 
               <!-- Footer note -->
-              <p style="color:#4b5563;font-size:13px;margin:0;line-height:1.6;">
-                If you didn't request this, you can safely ignore this email.
+              <p style="color:#4b5563;font-size:13px;margin:20px 0 0;line-height:1.6;">
+                If you didn&#39;t request this, you can safely ignore this email.
                 Never share this code with anyone.
               </p>
               <p style="color:#374151;font-size:12px;margin:16px 0 0;">
