@@ -170,6 +170,16 @@ JSON structure (return ONLY this, nothing else):
 }`;
 }
 
+// ─── Token cost constants (gpt-4o-mini pricing, June 2025) ───────────────────
+// Used for per-call cost telemetry. Update when OpenAI pricing changes.
+const COST_PER_1M_INPUT  = 0.15; // USD
+const COST_PER_1M_OUTPUT = 0.60; // USD
+
+export function estimateCallCostUSD(inputTokens: number, outputTokens: number): number {
+  return (inputTokens / 1_000_000) * COST_PER_1M_INPUT
+       + (outputTokens / 1_000_000) * COST_PER_1M_OUTPUT;
+}
+
 // ─── Route A: Contract Analysis (Educational) ─────────────────────────────────
 
 export async function analyzeContractClauses(
@@ -192,9 +202,20 @@ Return your JSON intelligence report now.`;
       { role: "user", content: userMessage },
     ],
     temperature: 0.2,
-    max_tokens: 3000,
+    // Reduced from 3000: real analysis of ≤8 risks with all fix fields
+    // averages 1400–1900 tokens. 2200 gives headroom without over-reserving.
+    max_tokens: 2200,
     response_format: { type: "json_object" },
   });
+
+  const usage = completion.usage;
+  if (usage) {
+    const costUSD = estimateCallCostUSD(usage.prompt_tokens, usage.completion_tokens);
+    console.info(
+      `[AI:analyze] input=${usage.prompt_tokens} output=${usage.completion_tokens} ` +
+      `total=${usage.total_tokens} est_cost=$${costUSD.toFixed(5)}`
+    );
+  }
 
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("No response from AI");
@@ -264,6 +285,12 @@ Goal: Give the user a realistic rehearsal partner. When they make a strong, lega
 Keep responses concise — 2-4 sentences maximum. This is a dialogue, not a monologue.
 Never break character. Never explain that you are an AI.`;
 
+// Maximum history messages to include in chat context.
+// Each message is ~100–300 tokens. Older turns add cost without improving
+// negotiation quality — the scenario + current message carry the most signal.
+const NEGOTIATOR_HISTORY_LIMIT = 10;
+const PROSECUTOR_HISTORY_LIMIT = 15;
+
 export async function runNegotiatorChat(
   messages: ChatMessage[],
   scenario: string
@@ -271,15 +298,28 @@ export async function runNegotiatorChat(
   const client = requireOpenAI();
   const systemContent = `${NEGOTIATOR_SYSTEM_PROMPT}\n\nScenario: ${scenario}`;
 
+  // Keep only the last N messages to bound context window cost.
+  // Older turns rarely change the negotiation trajectory.
+  const trimmedMessages = messages.slice(-NEGOTIATOR_HISTORY_LIMIT);
+
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemContent },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ...trimmedMessages.map((m) => ({ role: m.role, content: m.content })),
     ],
     temperature: 0.7,
     max_tokens: 300,
   });
+
+  const usage = completion.usage;
+  if (usage) {
+    const costUSD = estimateCallCostUSD(usage.prompt_tokens, usage.completion_tokens);
+    console.info(
+      `[AI:negotiator] input=${usage.prompt_tokens} output=${usage.completion_tokens} ` +
+      `history=${trimmedMessages.length}msgs est_cost=$${costUSD.toFixed(5)}`
+    );
+  }
 
   return completion.choices[0]?.message?.content ?? "I understand your position. Let me consider that.";
 }
@@ -298,16 +338,29 @@ export async function runProsecutorChat(
 
   const systemContent = `${buildSystemPrompt("warroom")}\n\n${contextBlock}`;
 
+  // Trim history to bound cost on long conversations.
+  // The case context + current message carry all necessary signal.
+  const trimmedMessages = messages.slice(-PROSECUTOR_HISTORY_LIMIT);
+
   const completion = await client.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemContent },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ...trimmedMessages.map((m) => ({ role: m.role, content: m.content })),
     ],
     temperature: 0.3,
     max_tokens: 800,
     response_format: { type: "json_object" },
   });
+
+  const usage = completion.usage;
+  if (usage) {
+    const costUSD = estimateCallCostUSD(usage.prompt_tokens, usage.completion_tokens);
+    console.info(
+      `[AI:prosecutor] input=${usage.prompt_tokens} output=${usage.completion_tokens} ` +
+      `history=${trimmedMessages.length}msgs est_cost=$${costUSD.toFixed(5)}`
+    );
+  }
 
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("No response from AI");
@@ -392,9 +445,21 @@ export async function runLegalStrategyAnalysis(
       { role: "user", content: userMessage },
     ],
     temperature: 0.25,
-    max_tokens: 2500,
+    // Reduced from 2500: a full strategy for 8 risks (priorityRisks, negotiationOrder
+    // 3–5 steps, 5–7 questions, 3 redFlags, 7–10 checklist items) averages
+    // 1,200–1,600 tokens. 1800 gives comfortable headroom.
+    max_tokens: 1800,
     response_format: { type: "json_object" },
   });
+
+  const usage = completion.usage;
+  if (usage) {
+    const costUSD = estimateCallCostUSD(usage.prompt_tokens, usage.completion_tokens);
+    console.info(
+      `[AI:legal-strategy] input=${usage.prompt_tokens} output=${usage.completion_tokens} ` +
+      `est_cost=$${costUSD.toFixed(5)}`
+    );
+  }
 
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("No response from AI");

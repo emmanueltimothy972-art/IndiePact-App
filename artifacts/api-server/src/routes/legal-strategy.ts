@@ -4,6 +4,7 @@ import { requireSupabase } from "../lib/supabase.js";
 import { runLegalStrategyAnalysis } from "../lib/openai.js";
 import { getUserPlan, hasBackendFeature } from "../lib/userPlan.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { strategyCache } from "../lib/result-cache.js";
 
 const router = Router();
 
@@ -119,9 +120,31 @@ router.post("/legal-strategy", requireAuth, async (req: Request, res: Response) 
     return res.json(buildEmptyStrategyResponse());
   }
 
+  // ── Cache check ────────────────────────────────────────────────────────────
+  // Legal strategy is deterministic: same scanId + same user → same output.
+  // Cache for 30 minutes to eliminate repeat OpenAI calls when users revisit
+  // the page or navigate back. Key is user-scoped to prevent cross-user leaks.
+  //
+  // contractData path uses a content hash of the risks array as key, since
+  // there is no stable scanId.
+  const cacheKey = scanId !== "__active__" && scanId
+    ? `${userId}:${scanId}`
+    : `${userId}:inline:${Buffer.from(JSON.stringify(risks)).toString("base64").slice(0, 32)}`;
+
+  const cached = strategyCache.get(cacheKey);
+  if (cached) {
+    req.log.info({ userId, scanId, cacheKey, event: "strategy_cache_hit" },
+      "Legal strategy cache hit — no OpenAI call");
+    return res.json({ ...cached, _cached: true });
+  }
+
   try {
     req.log.info({ userId, scanId, riskCount: risks.length }, "Running legal strategy analysis");
     const strategy = await runLegalStrategyAnalysis(risks, protectionScore, moneyImpactSummary);
+
+    // Store in cache — fire-and-forget, never blocks the response.
+    strategyCache.set(cacheKey, strategy);
+
     return res.json(strategy);
   } catch (err) {
     req.log.error({ err }, "Legal strategy analysis failed");

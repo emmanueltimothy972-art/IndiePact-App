@@ -66,20 +66,36 @@ router.post("/extract-file", requireAuth, async (req: Request, res: Response) =>
           content: [
             {
               type: "text",
-              text: "Extract all text from this contract document image. Return ONLY the raw extracted text, preserving paragraph structure. Do not summarize or analyze — just extract.",
+              // Tighter instruction: no filler, structured output only.
+              text: "Extract all text from this contract document image. Output ONLY the raw text preserving paragraph breaks. No summaries, no commentary, no preamble.",
             },
             {
               type: "image_url",
               image_url: {
                 url: `data:${mimeType};base64,${imageBase64}`,
-                detail: "high",
+                // "auto" lets the model choose tile count based on image content.
+                // For dense text (contracts), it will use high detail automatically.
+                // For simple/sparse images, it falls back to low (85 tokens vs 765+).
+                detail: "auto",
               },
             },
           ],
         },
       ],
-      max_tokens: 4000,
+      // Reduced from 4000: a single contract page extracts to ~400–900 tokens
+      // of text. 2000 handles even dense multi-column layouts with headroom.
+      max_tokens: 2000,
     });
+
+    const usage = completion.usage;
+    if (usage) {
+      const { estimateCallCostUSD } = await import("../lib/openai.js");
+      const costUSD = estimateCallCostUSD(usage.prompt_tokens, usage.completion_tokens);
+      req.log.info(
+        { input: usage.prompt_tokens, output: usage.completion_tokens, costUSD },
+        "[AI:ocr] extraction token usage"
+      );
+    }
 
     const extractedText = completion.choices[0]?.message?.content ?? "";
     return res.json({ extractedText, characterCount: extractedText.length });
