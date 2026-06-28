@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+# Private / auth-gated routes — no indexing value
+Disallow: /dashboard
+Disallow: /history
+Disallow: /bar
+Disallow: /armory
+Disallow: /negotiator
+Disallow: /escrow
+Disallow: /legal-strategy
+Disallow: /scan/
+Disallow: /auth/
+Disallow: /billing/
+
+Sitemap: https://indiepact.pro/sitemap.xml

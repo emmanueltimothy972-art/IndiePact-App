@@ -1,7 +1,61 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import fs from "fs";
+
+// ─── Sitemap generator plugin ─────────────────────────────────────────────────
+// Runs only during production builds (not dev server).
+// Writes sitemap.xml into outDir so it is included in the Vercel static output.
+//
+// Public routes included:
+//   /          — Homepage      (priority 1.0, weekly)
+//   /pricing   — Pricing       (priority 0.9, monthly)
+//   /scan      — Document Lab  (priority 0.7, monthly — publicly accessible)
+//
+// Excluded: all ProtectedRoute pages (dashboard, history, bar, armory,
+//   negotiator, escrow, legal-strategy, scan/:id) and callback routes.
+
+const BASE_URL = "https://indiepact.pro";
+
+const SITEMAP_ROUTES: Array<{
+  path: string;
+  changefreq: string;
+  priority: string;
+}> = [
+  { path: "/",        changefreq: "weekly",  priority: "1.0" },
+  { path: "/pricing", changefreq: "monthly", priority: "0.9" },
+  { path: "/scan",    changefreq: "monthly", priority: "0.7" },
+];
+
+function sitemapPlugin(): Plugin {
+  return {
+    name: "generate-sitemap",
+    apply: "build",
+    closeBundle() {
+      const outDir = path.resolve(import.meta.dirname, "dist/public");
+      const lastmod = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+      const urlEntries = SITEMAP_ROUTES.map(
+        ({ path: p, changefreq, priority }) => `
+  <url>
+    <loc>${BASE_URL}${p}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`
+      ).join("");
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlEntries}
+</urlset>
+`;
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, "sitemap.xml"), xml, "utf-8");
+      console.log(`\n✓ sitemap.xml written to ${outDir} (lastmod: ${lastmod})\n`);
+    },
+  };
+}
 
 // PORT is required for the dev server but not for `vite build` (static output).
 // Use a safe fallback so Vercel and other CI build environments don't throw.
@@ -29,6 +83,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    sitemapPlugin(),
     // Replit dev-only plugins — all three are guarded by the same condition so
     // none of them are imported or invoked in Vercel / production builds.
     ...(isReplitDev
