@@ -37,6 +37,32 @@ mkdir -p "$OUTPUT_DIR/static"
 echo "  Copying static files from dist/public..."
 cp -r "$INDIEPACT_DIR/dist/public/." "$OUTPUT_DIR/static/"
 
+# Write sitemap.xml directly to the Vercel output directory.
+# This is the definitive backstop — it runs after all file copies and
+# ensures the file exists regardless of Vite plugin hook ordering.
+# robots.txt is reliable because it lives in public/; sitemap.xml now
+# takes the same path (public/ → dist/public/ → here) AND is written
+# explicitly here so there is no single point of failure.
+echo "  Writing sitemap.xml..."
+SITEMAP_LASTMOD=$(date +%Y-%m-%d)
+cat > "$OUTPUT_DIR/static/sitemap.xml" << SITEMAPEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://indiepact.pro/</loc>
+    <lastmod>${SITEMAP_LASTMOD}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://indiepact.pro/pricing</loc>
+    <lastmod>${SITEMAP_LASTMOD}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+</urlset>
+SITEMAPEOF
+
 echo "  Writing config.json..."
 cat > "$OUTPUT_DIR/config.json" <<'ROUTECONFIG'
 {

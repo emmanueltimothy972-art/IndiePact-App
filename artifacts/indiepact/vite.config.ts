@@ -25,34 +25,49 @@ const SITEMAP_ROUTES: Array<{
 }> = [
   { path: "/",        changefreq: "weekly",  priority: "1.0" },
   { path: "/pricing", changefreq: "monthly", priority: "0.9" },
-  { path: "/scan",    changefreq: "monthly", priority: "0.7" },
 ];
 
-function sitemapPlugin(): Plugin {
-  return {
-    name: "generate-sitemap",
-    apply: "build",
-    closeBundle() {
-      const outDir = path.resolve(import.meta.dirname, "dist/public");
-      const lastmod = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-
-      const urlEntries = SITEMAP_ROUTES.map(
-        ({ path: p, changefreq, priority }) => `
-  <url>
+function buildSitemapXml(lastmod: string): string {
+  const urlEntries = SITEMAP_ROUTES.map(
+    ({ path: p, changefreq, priority }) =>
+`  <url>
     <loc>${BASE_URL}${p}</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`
-      ).join("");
+  ).join("\n");
 
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlEntries}
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urlEntries}
 </urlset>
 `;
-      fs.mkdirSync(outDir, { recursive: true });
-      fs.writeFileSync(path.join(outDir, "sitemap.xml"), xml, "utf-8");
-      console.log(`\n✓ sitemap.xml written to ${outDir} (lastmod: ${lastmod})\n`);
+}
+
+function sitemapPlugin(): Plugin {
+  // Capture the resolved project root so buildStart can write to public/.
+  let projectRoot: string;
+
+  return {
+    name: "generate-sitemap",
+    apply: "build",
+
+    configResolved(config) {
+      projectRoot = config.root;
+    },
+
+    // Write to public/ in buildStart so Vite picks it up when it copies
+    // public/ → outDir during the write phase — exactly the same pipeline
+    // that makes robots.txt reliable. closeBundle writes to outDir would
+    // be wiped or missed if emptyOutDir races with the copy on Vercel.
+    buildStart() {
+      const publicDir = path.join(projectRoot, "public");
+      const lastmod = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const xml = buildSitemapXml(lastmod);
+      fs.mkdirSync(publicDir, { recursive: true });
+      fs.writeFileSync(path.join(publicDir, "sitemap.xml"), xml, "utf-8");
+      console.log(`[sitemap] public/sitemap.xml refreshed (lastmod: ${lastmod})`);
     },
   };
 }
