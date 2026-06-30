@@ -200,7 +200,7 @@ function StrategyResults({ result, contractName }: { result: LegalStrategyResult
         </div>
         <p className="text-slate-300 text-sm leading-relaxed">{result.overallAssessment}</p>
         <p className="text-xs text-slate-600 italic border-t border-slate-800/60 pt-3">
-          This is AI-assisted strategy, not legal advice. Consult a qualified attorney for complex matters.
+          IndiePact provides informational insights only. For advice specific to your situation, consult a qualified legal professional.
         </p>
       </div>
 
@@ -501,21 +501,21 @@ export default function LegalStrategy() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-bold tracking-tight">AI Legal Strategy</h1>
+                  <h1 className="text-xl font-bold tracking-tight">Contract Strategy</h1>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/30 border border-emerald-800/30 text-emerald-500/80 uppercase tracking-wider">
                     NEW
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">Your AI legal strategy partner — not a replacement for a lawyer, but a smarter way to prepare</p>
+                <p className="text-xs text-slate-500 mt-0.5">Your AI contract analysis partner — not a replacement for professional legal counsel, but a smarter way to prepare</p>
               </div>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed mt-3 max-w-2xl">
-              AI Legal Strategy analyzes your contract review results and builds a complete negotiation plan —
+              Contract Strategy analyzes your contract review results and builds a complete negotiation plan —
               risk priorities, power balance, negotiation order, questions to ask, and your recommended first move.
               All in plain English.
             </p>
             <p className="text-xs text-slate-600 mt-2 italic">
-              Example: A founder uses AI Legal Strategy before an investor meeting to know exactly which clauses to challenge first.
+              Example: A founder uses Contract Strategy before an investor meeting to know exactly which clauses to challenge first.
             </p>
           </div>
           <div className="shrink-0 space-y-2">
@@ -537,13 +537,13 @@ export default function LegalStrategy() {
       {/* Feature Gate */}
       <FeatureGate
         requires="auth"
-        featureName="AI Legal Strategy"
-        featureDescription="Sign in to build a complete legal strategy for any contract you've reviewed. Understand your negotiating position, risk priorities, and the exact questions to ask before signing."
+        featureName="Contract Strategy"
+        featureDescription="Sign in to build a complete contract strategy for any contract you've reviewed. Understand your negotiating position, risk priorities, and the exact questions to ask before signing."
       >
         <FeatureGate
           requires="business"
-          featureName="AI Legal Strategy"
-          featureDescription="AI Legal Strategy is available on the Business plan and above. Upgrade to unlock power balance analysis, negotiation roadmaps, and pre-signing checklists for every contract."
+          featureName="Contract Strategy"
+          featureDescription="Contract Strategy is available on the Business plan and above. Upgrade to unlock power balance analysis, negotiation roadmaps, and pre-signing checklists for every contract."
         >
           {/* Scan Selector */}
           {!result && (
@@ -551,7 +551,7 @@ export default function LegalStrategy() {
               <div>
                 <h2 className="font-semibold text-white mb-1">Select a contract to analyze</h2>
                 <p className="text-slate-500 text-sm">
-                  Choose a contract you've already reviewed. AI Legal Strategy will build a complete negotiation plan from it.
+                  Choose a contract you've already reviewed. Contract Strategy will build a complete negotiation plan from it.
                 </p>
               </div>
 
@@ -564,7 +564,7 @@ export default function LegalStrategy() {
                 <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
                   <FileSearch className="h-10 w-10 text-slate-600 mx-auto mb-3" />
                   <p className="text-slate-400 font-medium mb-1">No contracts reviewed yet</p>
-                  <p className="text-slate-600 text-sm mb-5">Review a contract first, then come back here for AI Legal Strategy.</p>
+                  <p className="text-slate-600 text-sm mb-5">Review a contract first, then come back here for Contract Strategy.</p>
                   <a
                     href="/scan"
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-800/60 hover:bg-emerald-700/60 text-emerald-200 font-medium text-sm transition-colors border border-emerald-800/40"
@@ -632,7 +632,7 @@ export default function LegalStrategy() {
                     {isAnalyzing ? (
                       <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Building your strategy...</>
                     ) : (
-                      <><Brain className="mr-2 h-4 w-4" />Generate AI Legal Strategy</>
+                      <><Brain className="mr-2 h-4 w-4" />Generate Contract Strategy</>
                     )}
                   </Button>
 

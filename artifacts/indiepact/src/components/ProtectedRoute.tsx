@@ -135,15 +135,15 @@ function GuestGate({
 // ─── Feature-specific subtext (short auth-focused version) ────────────────────
 
 const FEATURE_SUB: Record<string, string> = {
-  "AI Attorney":
-    "Sign in to analyze hidden legal risks, detect dangerous clauses, and receive rewrite recommendations before signing.",
+  "Contract Intelligence":
+    "Sign in to identify hidden contract risks, detect dangerous clauses, and receive rewrite recommendations before signing.",
   "Negotiation War Room":
     "Sign in to generate leverage-focused negotiation responses, counter risky clauses, and prepare before every deal.",
   "Payment Lock":
     "Sign in to protect milestones, reduce scope creep, and strengthen payment enforcement before work begins.",
   "Clause Armory":
     "Sign in to access battle-tested protective clauses built for freelancers and consultants.",
-  "AI Legal Strategy":
+  "Contract Strategy":
     "Sign in to analyze your negotiating position, rank priority risks, and build a strategic playbook for any deal.",
 };
 
@@ -151,11 +151,11 @@ const FEATURE_SUB: Record<string, string> = {
 // Inline JSX per feature name. Keep markup lean — it will be blurred and faded.
 
 const FEATURE_MOCKUP: Record<string, ReactNode> = {
-  "AI Attorney": <AIAttorneyPreview />,
+  "Contract Intelligence": <AIAttorneyPreview />,
   "Negotiation War Room": <NegotiationPreview />,
   "Payment Lock": <PaymentLockPreview />,
   "Clause Armory": <AIAttorneyPreview />,
-  "AI Legal Strategy": <LegalStrategyPreview />,
+  "Contract Strategy": <LegalStrategyPreview />,
 };
 
 // ─── Preview components ───────────────────────────────────────────────────────

@@ -73,7 +73,7 @@ function Router() {
 
         {/* Premium routes — ProtectedRoute handles auth; FeatureGate inside handles plan */}
         <Route path="/bar">
-          {() => <ProtectedRoute featureName="AI Attorney" featureTier="Pro"><TheBar /></ProtectedRoute>}
+          {() => <ProtectedRoute featureName="Contract Intelligence" featureTier="Pro"><TheBar /></ProtectedRoute>}
         </Route>
         <Route path="/armory">
           {() => <ProtectedRoute featureName="Clause Armory" featureTier="Pro"><ClauseArmory /></ProtectedRoute>}
@@ -85,7 +85,7 @@ function Router() {
           {() => <ProtectedRoute featureName="Payment Lock" featureTier="Pro"><EscrowLock /></ProtectedRoute>}
         </Route>
         <Route path="/legal-strategy">
-          {() => <ProtectedRoute featureName="AI Legal Strategy" featureTier="Business"><LegalStrategy /></ProtectedRoute>}
+          {() => <ProtectedRoute featureName="Contract Strategy" featureTier="Business"><LegalStrategy /></ProtectedRoute>}
         </Route>
 
         <Route component={NotFound} />

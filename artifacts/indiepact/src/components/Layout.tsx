@@ -53,8 +53,8 @@ export function Layout({ children }: { children: ReactNode }) {
     { href: "/scan",         icon: <FileText size={17} />,        label: "Review Contract",    sub: "Analyze a contract" },
     { href: "/history",      icon: <History size={17} />,         label: "My Reviews",         sub: "Past contract reviews" },
     { href: "/escrow",       icon: <Lock size={17} />,            label: "Payment Lock",       sub: "Protect your payments" },
-    { href: "/legal-strategy", icon: <Brain size={17} />,         label: "AI Legal Strategy",  sub: "Negotiation planning", isNew: true },
-    { href: "/bar",          icon: <Brain size={17} />,           label: "AI Attorney",        sub: "Deep clause intelligence", isPro: true },
+    { href: "/legal-strategy", icon: <Brain size={17} />,         label: "Contract Strategy",  sub: "Negotiation planning", isNew: true },
+    { href: "/bar",          icon: <Brain size={17} />,           label: "Contract Intelligence", sub: "Deep clause analysis", isPro: true },
     { href: "/armory",       icon: <Shield size={17} />,          label: "Clause Armory",      sub: "Battle-tested clause library" },
     { href: "/negotiator",   icon: <MessageSquare size={17} />,   label: "Negotiation Room",   sub: "AI negotiation coach" },
   ];

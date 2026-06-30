@@ -119,7 +119,7 @@ const TESTIMONIALS = [
     rating: 5,
   },
   {
-    quote: "As a startup founder reviewing investor agreements, IndiePact gave me clarity I would have paid $500/hr to a lawyer for. I understood every clause and negotiated two of them successfully.",
+    quote: "As a startup founder reviewing investor agreements, IndiePact gave me the same clarity I would have paid $500/hr for. I understood every clause and negotiated two of them successfully.",
     name: "James T.",
     role: "Startup Founder",
     rating: 5,
@@ -134,8 +134,8 @@ const TESTIMONIALS = [
 
 const FAQS = [
   {
-    q: "Is IndiePact a lawyer?",
-    a: "No. IndiePact is an AI tool that helps you understand and review contracts. It provides information and suggestions, not legal advice. For complex situations, we always recommend consulting a qualified attorney.",
+    q: "Is IndiePact a law firm?",
+    a: "No. IndiePact is an AI-powered contract analysis platform. It provides informational insights to help you understand contracts and prepare for negotiations — not legal advice. For advice specific to your situation, consult a qualified legal professional.",
   },
   {
     q: "What types of contracts can I review?",
@@ -359,7 +359,7 @@ export default function Home() {
             className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed mt-6"
           >
             IndiePact reads your contracts, spots the risks, and helps you negotiate better deals —
-            all explained in plain English. No lawyers needed.
+            all explained in plain English. No jargon, no complexity.
           </motion.p>
 
           <motion.div
@@ -612,7 +612,12 @@ export default function Home() {
             <Link href="/scan" className="hover:text-slate-300 transition-colors">Review a Contract</Link>
           </div>
           <p className="text-xs text-slate-700">
-            © 2025 IndiePact · AI contract protection for independent professionals
+            © 2025 IndiePact · AI contract analysis for independent professionals
+          </p>
+        </div>
+        <div className="max-w-5xl mx-auto mt-5 pt-5 border-t border-slate-800/40">
+          <p className="text-[11px] text-slate-700 leading-relaxed text-center">
+            IndiePact is an AI-powered contract analysis platform. It provides informational insights to help users understand contracts and prepare for negotiations. It is not a law firm and does not provide legal advice. For legal advice specific to your situation, consult a qualified legal professional.
           </p>
         </div>
       </footer>

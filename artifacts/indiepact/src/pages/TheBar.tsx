@@ -188,8 +188,8 @@ export default function TheBar() {
     <PageTransition className="space-y-5 max-w-5xl mx-auto overflow-x-hidden min-w-0">
       <FeatureGate
         requires="pro"
-        featureName="AI Attorney"
-        featureDescription="AI Attorney is available on the Pro plan and above. Upgrade to get clause-by-clause risk scoring, priority rankings, and ready-to-use protective rewrites for every flagged clause."
+        featureName="Contract Intelligence"
+        featureDescription="Contract Intelligence is available on the Pro plan and above. Upgrade to get clause-by-clause risk scoring, priority rankings, and ready-to-use protective rewrites for every flagged clause."
       >
       {/* Header */}
       <div className="rounded-2xl border border-slate-800 bg-[#0a0a0a] p-6">
@@ -199,7 +199,7 @@ export default function TheBar() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-bold tracking-tight text-white">AI Attorney</h1>
+              <h1 className="text-xl font-bold tracking-tight text-white">Contract Intelligence</h1>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 uppercase tracking-wider">
                 Pro
               </span>

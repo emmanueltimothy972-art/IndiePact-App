@@ -53,10 +53,10 @@ interface FeatureGateConfig {
 }
 
 const FEATURE_GATES: Record<string, FeatureGateConfig> = {
-  "AI Attorney": {
+  "Contract Intelligence": {
     icon: <Brain className="h-4.5 w-4.5 text-slate-400" />,
     headline: "Your Second Chair During Contract Review",
-    sub: "Analyze hidden legal risks, identify dangerous language, and receive professional-grade rewrite recommendations before signing.",
+    sub: "Identify hidden contract risks, flag dangerous language, and receive professional-grade rewrite recommendations before signing.",
     exampleOutputs: [
       { text: "5 high-severity clauses identified", severity: "high" },
       { text: "IP ownership transfers without payment protection", severity: "high" },
@@ -121,10 +121,10 @@ const FEATURE_GATES: Record<string, FeatureGateConfig> = {
     mockupType: "ai_attorney",
   },
 
-  "AI Legal Strategy": {
+  "Contract Strategy": {
     icon: <Scale className="h-4.5 w-4.5 text-slate-400" />,
     headline: "Contract Intelligence For Business Decisions",
-    sub: "Move beyond contract review and understand negotiation patterns, operational risk exposure, and strategic legal positioning.",
+    sub: "Move beyond contract review and understand negotiation patterns, operational risk exposure, and strategic positioning on every deal.",
     exampleOutputs: [
       { text: "Power balance score: 38/100 — unfavorable position", severity: "high" },
       { text: "6 priority issues ranked by negotiation urgency", severity: "medium" },
