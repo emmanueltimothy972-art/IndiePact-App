@@ -13,4 +13,4 @@ Disallow: /scan/
 Disallow: /auth/
 Disallow: /billing/
 
-Sitemap: https://indiepact.pro/sitemap.xml
+Sitemap: https://www.indiepact.pro/sitemap.xml

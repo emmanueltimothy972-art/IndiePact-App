@@ -16,7 +16,7 @@ import fs from "fs";
 // Excluded: all ProtectedRoute pages (dashboard, history, bar, armory,
 //   negotiator, escrow, legal-strategy, scan/:id) and callback routes.
 
-const BASE_URL = "https://indiepact.pro";
+const BASE_URL = "https://www.indiepact.pro";
 
 const SITEMAP_ROUTES: Array<{
   path: string;
